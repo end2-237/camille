@@ -1,0 +1,252 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// lib/generateSystemPrompt.ts — Camille by Buyticle
+// Prompt Engineering Engine: transforms AgentFormData into a structured,
+// model-optimised system prompt block.
+// Compatible with GPT-4o and Claude 3.5 Sonnet instruction formats.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import type {
+  AgentFormData,
+  AgentModel,
+  BrandTone,
+  BusinessSector,
+  SupportedLanguage,
+  SystemPromptConfig,
+  FAQEntry,
+} from "@/types/agent";
+
+// ── Tone descriptor maps ──────────────────────────────────────────────────────
+
+const TONE_DESCRIPTORS: Record<BrandTone, string> = {
+  professional:
+    "You communicate with precision, clarity, and formal courtesy. Use polished vocabulary. Avoid colloquialisms.",
+  friendly:
+    "You communicate in a warm, approachable way. Use first names when known, include light encouragement.",
+  casual:
+    "You speak naturally and conversationally, as a knowledgeable friend would. Keep sentences short and punchy.",
+  luxury:
+    "You embody refinement and exclusivity. Every word is deliberate, evocative, and premium. Never rush.",
+  technical:
+    "You are precise and data-driven. Prefer structured responses with numbered steps or bullet points.",
+  empathetic:
+    "You lead with understanding. Acknowledge feelings before solutions. Use affirming, compassionate language.",
+  authoritative:
+    "You speak with confidence and expertise. State facts clearly. You are the trusted authority in your domain.",
+};
+
+const SECTOR_CONTEXT: Record<BusinessSector, string> = {
+  ecommerce:
+    "online retail, product recommendations, order tracking, returns, and customer satisfaction",
+  hospitality:
+    "reservations, check-in/out, amenities, local recommendations, and guest experience",
+  healthcare:
+    "appointment scheduling, general wellness guidance, and directing to qualified professionals when needed",
+  finance:
+    "financial products, account inquiries, and compliance-aware guidance — always defer complex advice to licensed advisors",
+  education:
+    "course information, enrollment, academic support, and learning resources",
+  real_estate:
+    "property listings, visits, negotiations, legal procedures, and market insights",
+  legal:
+    "preliminary legal information only — always direct to a licensed attorney for specific advice",
+  beauty_wellness:
+    "treatments, bookings, product recommendations, and wellness guidance",
+  food_beverage:
+    "menu inquiries, reservations, dietary requirements, delivery, and special offers",
+  tech_saas:
+    "product features, onboarding, technical support, and pricing plans",
+  consulting:
+    "service offerings, methodologies, case studies, and scheduling discovery calls",
+  nonprofit:
+    "mission, programs, volunteering, donations, and impact stories",
+  other: "general business inquiries and customer support",
+};
+
+const LANGUAGE_INSTRUCTIONS: Record<SupportedLanguage, string> = {
+  fr: "Respond primarily in French. Use 'vous' by default unless the user explicitly uses 'tu'.",
+  en: "Respond primarily in English. Adapt to British or American spelling based on the user's preference.",
+  es: "Respond primarily in Spanish. Use 'usted' for formal contexts.",
+  ar: "Respond primarily in Modern Standard Arabic (MSA). Adapt to dialect if the user initiates informally.",
+  pt: "Respond primarily in Portuguese. Adapt to Brazilian or European Portuguese based on context.",
+  de: "Respond primarily in German. Use formal 'Sie' unless the user switches to 'du'.",
+  it: "Respond primarily in Italian. Use formal 'Lei' in professional contexts.",
+  nl: "Respond primarily in Dutch. Use formal 'u' in professional contexts.",
+};
+
+// ── Token estimator (rough: 1 token ≈ 4 chars) ───────────────────────────────
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+// ── FAQ block builder ─────────────────────────────────────────────────────────
+
+function buildFAQBlock(entries: FAQEntry[]): string {
+  if (!entries.length) return "";
+  const lines = entries
+    .map((e, i) => `  Q${i + 1}: ${e.question}\n  A${i + 1}: ${e.answer}`)
+    .join("\n\n");
+  return `\n## FREQUENTLY ASKED QUESTIONS\n${lines}`;
+}
+
+// ── Capabilities instructions ─────────────────────────────────────────────────
+
+function buildCapabilitiesBlock(data: AgentFormData): string {
+  const active: string[] = [];
+  const { capabilities } = data;
+
+  if (capabilities.support_whatsapp)
+    active.push(
+      "- WhatsApp Support: Handle inbound messages, respond naturally within conversational context."
+    );
+  if (capabilities.content_generation)
+    active.push(
+      "- Content Generation: Draft posts, captions, newsletters, and copy on request."
+    );
+  if (capabilities.image_creation)
+    active.push(
+      "- Image Creation: Describe or generate visual concepts for the brand when asked."
+    );
+  if (capabilities.community_management)
+    active.push(
+      "- Community Management: Moderate tone, reply to comments, build community engagement."
+    );
+  if (capabilities.strategy_advisor)
+    active.push(
+      "- Strategy Advisory: Provide data-informed recommendations and strategic insight summaries."
+    );
+  if (capabilities.lead_capture)
+    active.push(
+      "- Lead Capture: Naturally collect name, email, and intent during conversation for CRM."
+    );
+  if (capabilities.proactive_messaging)
+    active.push(
+      "- Proactive Messaging: Initiate follow-ups and broadcast relevant updates when authorised."
+    );
+
+  return active.length
+    ? `\n## YOUR ACTIVE CAPABILITIES\n${active.join("\n")}`
+    : "";
+}
+
+// ── Core constraint block ─────────────────────────────────────────────────────
+
+function buildConstraintsBlock(forbidden: string[]): string {
+  const base = [
+    "- Never fabricate facts, prices, or availability. If uncertain, say so and offer to verify.",
+    "- Never discuss competitor brands unless explicitly asked, and even then remain neutral.",
+    "- Never collect sensitive data (passwords, payment card numbers, government IDs).",
+    "- If a request falls outside your scope, politely acknowledge and offer to connect to a human agent.",
+    "- Maintain your assigned persona at all times. Do not break character.",
+    "- Keep responses concise: default to ≤3 sentences unless a detailed explanation is warranted.",
+  ];
+
+  if (forbidden.length) {
+    base.push(
+      `- Strictly avoid the following topics: ${forbidden.join(", ")}.`
+    );
+  }
+
+  return `\n## CONSTRAINTS & GUARDRAILS\n${base.join("\n")}`;
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+
+/**
+ * Generates a fully-structured system prompt from the multi-step form data.
+ *
+ * @param data     - Collected AgentFormData from the configurator stepper.
+ * @param model    - Target LLM model (affects formatting hints).
+ * @returns        - A complete SystemPromptConfig ready for persistence.
+ *
+ * @example
+ * const config = generateSystemPrompt(formData, "claude-3-5-sonnet-20241022");
+ * await saveAgentPrompt(agentId, config);
+ */
+export function generateSystemPrompt(
+  data: AgentFormData,
+  model: AgentModel = "claude-3-5-sonnet-20241022"
+): SystemPromptConfig {
+  const {
+    agent_name,
+    agent_tagline,
+    brand_voice,
+    primary_language,
+    secondary_languages = [],
+    business_name,
+    sector,
+    description,
+    website_url,
+    location,
+    target_audience,
+    products_services,
+    pricing_info,
+    business_hours,
+    policies,
+    faq = [],
+    forbidden_topics = [],
+  } = data;
+
+  const secondaryLangNote =
+    secondary_languages.length > 0
+      ? `\nYou may also communicate in: ${secondary_languages.join(", ")} if the user writes in that language.`
+      : "";
+
+  const compiled_prompt = `# SYSTEM IDENTITY
+You are **${agent_name}**${agent_tagline ? ` — ${agent_tagline}` : ""}.
+You are the official AI assistant for **${business_name}**, operating in the ${SECTOR_CONTEXT[sector]} space.
+
+## YOUR PERSONA
+${TONE_DESCRIPTORS[brand_voice]}
+Your name is always ${agent_name}. Never reveal that you are powered by an external AI model.
+
+## LANGUAGE PROTOCOL
+${LANGUAGE_INSTRUCTIONS[primary_language]}${secondaryLangNote}
+
+## BUSINESS CONTEXT
+- **Company**: ${business_name}
+- **Sector**: ${sector}
+- **About**: ${description}${website_url ? `\n- **Website**: ${website_url}` : ""}${location ? `\n- **Location**: ${location}` : ""}${target_audience ? `\n- **Audience**: ${target_audience}` : ""}${
+    products_services
+      ? `\n\n### Products & Services\n${products_services}`
+      : ""
+  }${pricing_info ? `\n\n### Pricing\n${pricing_info}` : ""}${
+    business_hours
+      ? `\n\n### Business Hours\n${business_hours}`
+      : ""
+  }${policies ? `\n\n### Policies\n${policies}` : ""}${buildFAQBlock(faq)}${buildCapabilitiesBlock(data)}${buildConstraintsBlock(forbidden_topics)}
+
+## RESPONSE FORMAT
+- Begin every first response in a new conversation with a warm, branded greeting.
+- Use markdown sparingly on WhatsApp (bold **text** is acceptable, avoid complex tables).
+- For lists of 3+ items, prefer numbered or bulleted formats.
+- Sign off supportive exchanges with a brief, brand-aligned closing line.
+
+## ESCALATION PROTOCOL
+If a user expresses frustration, legal concerns, or requests to speak to a human, respond with empathy and offer: "Je vous mets en relation avec notre équipe / I'll connect you with our team right away."
+
+---
+*Agent: ${agent_name} | Business: ${business_name} | Model target: ${model}*
+`;
+
+  return {
+    compiled_prompt: compiled_prompt.trim(),
+    generated_at: new Date().toISOString(),
+    target_model: model,
+    estimated_tokens: estimateTokens(compiled_prompt),
+    version: 1,
+  };
+}
+
+// ── Diff / re-generate helper ─────────────────────────────────────────────────
+
+/**
+ * Bumps the version and regenerates the prompt when form data changes.
+ */
+export function regenerateSystemPrompt(
+  data: AgentFormData,
+  previous: SystemPromptConfig
+): SystemPromptConfig {
+  const fresh = generateSystemPrompt(data, previous.target_model);
+  return { ...fresh, version: previous.version + 1 };
+}

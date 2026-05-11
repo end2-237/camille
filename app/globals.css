@@ -1,0 +1,442 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   globals.css — Camille by Buyticle
+   Dark Luxury SaaS · Midnight Charcoal + Gold
+   Thème adaptatif dark / light via [data-theme] sur <html>.
+   Polices :
+     • Inter       → UI app (défaut partout, dashboard inclus)
+     • Cube        → mots branding courts ≤ 6 lettres (hero, marketing)
+     • Good Timing → mots branding longs + logo (hero, marketing)
+   Version : 2026 — proportions compactes, vibe SaaS premium.
+───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Cube — mots courts ≤6 lettres (sections marketing uniquement) ───────── */
+@font-face {
+  font-family: "Cube";
+  src: url("/fonts/cube/Cube.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Good Timing — mots longs branding + logo (sections marketing uniquement) ── */
+@font-face {
+  font-family: "GoodTiming";
+  src: url("/fonts/good-timing/GoodTimingBold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TOKENS PARTAGÉS (thème-agnostic)
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Polices */
+  --font-sans:     "Inter Variable", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-cube:        "Cube",        -apple-system, system-ui, sans-serif;
+  --font-good-timing: "GoodTiming",  -apple-system, system-ui, sans-serif;
+  --font-mono:     "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace;
+
+  /* Radius — compact SaaS */
+  --radius-xs:  3px;
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-xl:  18px;
+  --radius-2xl: 24px;
+
+  /* Z-index */
+  --z-base:    0;
+  --z-raised:  10;
+  --z-overlay: 100;
+  --z-modal:   200;
+  --z-toast:   300;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   THÈME SOMBRE — "Midnight Charcoal" (défaut)
+   Fond profond bleu-gris, texte ivoire chaud, accents or.
+   Référence : Linear / ElevenLabs / Vercel dashboard
+   ══════════════════════════════════════════════════════════════════════════ */
+:root,
+[data-theme="dark"],
+.dark {
+  /* Gold — légèrement plus vif sur fond sombre */
+  --color-gold:        #D4AF37;
+  --color-gold-light:  #EDD96A;
+  --color-gold-dark:   #A8881A;
+  --color-gold-subtle: rgba(212, 175, 55, 0.10);
+
+  /* Backgrounds — charcoal profond, pas pur noir */
+  --bg-base:        #09090E;
+  --bg-subtle:      #0E0E15;
+  --bg-muted:       #131319;
+  --bg-elevated:    #17171E;
+  --bg-overlay:     #1D1D25;
+
+  /* Texte — ivoire chaud, pas blanc pur */
+  --text-primary:   #F0EDE6;
+  --text-secondary: rgba(240, 237, 230, 0.62);
+  --text-tertiary:  rgba(240, 237, 230, 0.36);
+  --text-disabled:  rgba(240, 237, 230, 0.20);
+
+  /* Borders */
+  --border-default: rgba(255, 255, 255, 0.07);
+  --border-subtle:  rgba(255, 255, 255, 0.04);
+  --border-strong:  rgba(255, 255, 255, 0.12);
+  --border-gold:    rgba(212, 175, 55, 0.26);
+
+  /* Surfaces */
+  --surface-glass:       rgba(255, 255, 255, 0.035);
+  --surface-glass-hover: rgba(255, 255, 255, 0.065);
+  --surface-gold:        rgba(212, 175, 55, 0.08);
+  --surface-gold-hover:  rgba(212, 175, 55, 0.14);
+
+  /* Shadows */
+  --shadow-glass: 0 1px 0 rgba(255,255,255,0.05) inset,
+                  0 8px 32px rgba(0, 0, 0, 0.52);
+  --shadow-gold:  0 0 0 1px rgba(212, 175, 55, 0.22),
+                  0 4px 24px rgba(212, 175, 55, 0.08);
+
+  /* Ambient glow */
+  --ambient-glow: radial-gradient(
+    ellipse 70% 45% at 50% 0%,
+    rgba(212, 175, 55, 0.10) 0%,
+    transparent 70%
+  );
+
+  color-scheme: dark;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   THÈME CLAIR — "Sand & Ivory"
+   Fond sable chaud, texte quasi-noir, or foncé pour le contraste.
+   Référence : Notion / Linear light / Liveblocks
+   ══════════════════════════════════════════════════════════════════════════ */
+[data-theme="light"],
+.light {
+  /* Gold plus foncé pour lisibilité sur fond clair */
+  --color-gold:        #9A7B18;
+  --color-gold-light:  #C4961E;
+  --color-gold-dark:   #6B5510;
+  --color-gold-subtle: rgba(154, 123, 24, 0.10);
+
+  /* Backgrounds — sable chaud structuré */
+  --bg-base:        #F5F4EF;
+  --bg-subtle:      #EEECE7;
+  --bg-muted:       #E5E3DC;
+  --bg-elevated:    #FFFFFF;
+  --bg-overlay:     #FAF9F6;
+
+  /* Texte — quasi-noir chaud */
+  --text-primary:   #111010;
+  --text-secondary: rgba(17, 16, 16, 0.64);
+  --text-tertiary:  rgba(17, 16, 16, 0.40);
+  --text-disabled:  rgba(17, 16, 16, 0.24);
+
+  /* Borders — subtils sur fond clair */
+  --border-default: rgba(0, 0, 0, 0.10);
+  --border-subtle:  rgba(0, 0, 0, 0.06);
+  --border-strong:  rgba(0, 0, 0, 0.18);
+  --border-gold:    rgba(154, 123, 24, 0.32);
+
+  /* Surfaces — semi-opaques pour vrai effet carte */
+  --surface-glass:       rgba(255, 255, 255, 0.82);
+  --surface-glass-hover: rgba(255, 255, 255, 0.96);
+  --surface-gold:        rgba(154, 123, 24, 0.08);
+  --surface-gold-hover:  rgba(154, 123, 24, 0.15);
+
+  /* Shadows — légères et chaudes */
+  --shadow-glass: 0 1px 0 rgba(255,255,255,1.00) inset,
+                  0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-gold:  0 0 0 1px rgba(154, 123, 24, 0.24),
+                  0 4px 16px rgba(154, 123, 24, 0.10);
+
+  /* Ambient glow — discret */
+  --ambient-glow: radial-gradient(
+    ellipse 70% 45% at 50% 0%,
+    rgba(154, 123, 24, 0.06) 0%,
+    transparent 70%
+  );
+
+  color-scheme: light;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BASE RESET
+   ══════════════════════════════════════════════════════════════════════════ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem; /* 14px base — compact SaaS */
+  line-height: 1.5;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+::selection {
+  background-color: rgba(212, 175, 55, 0.20);
+  color: var(--text-primary);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar        { width: 3px; height: 3px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--border-default); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-gold); }
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   UTILITY LAYER
+   ══════════════════════════════════════════════════════════════════════════ */
+@layer utilities {
+
+  /* ── Glass ───────────────────────────────────────────────────────────── */
+  .glass {
+    background: var(--surface-glass);
+    backdrop-filter: blur(16px) saturate(1.6);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-glass);
+  }
+
+  /* Light mode : glass blanc semi-opaque lisible */
+  [data-theme="light"] .glass,
+  .light .glass {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(0, 0, 0, 0.07);
+    box-shadow: 0 1px 0 #fff inset, 0 2px 12px rgba(0,0,0,0.06);
+  }
+
+  .glass-gold {
+    background: var(--surface-gold);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-gold);
+  }
+
+  /* Light mode */
+  [data-theme="light"] .glass-gold,
+  .light .glass-gold {
+    background: rgba(154, 123, 24, 0.07);
+    border-color: rgba(154, 123, 24, 0.28);
+  }
+
+  /* ── Text ────────────────────────────────────────────────────────────── */
+  .text-primary   { color: var(--text-primary)   !important; }
+  .text-secondary { color: var(--text-secondary) !important; }
+  .text-tertiary  { color: var(--text-tertiary)  !important; }
+
+  .text-gold-gradient {
+    background: linear-gradient(135deg, #D4AF37 0%, #EDD96A 50%, #A8881A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Light : gold gradient plus foncé pour lisibilité */
+  [data-theme="light"] .text-gold-gradient,
+  .light .text-gold-gradient {
+    background: linear-gradient(135deg, #9A7B18 0%, #C4961E 50%, #6B5510 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Border gradient ─────────────────────────────────────────────────── */
+  .border-gold-gradient { position: relative; }
+  .border-gold-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgba(212,175,55,0.50) 0%,
+      rgba(242,220,135,0.16) 50%,
+      rgba(168,136,26,0.50) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask:         linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ── Shimmer skeleton ────────────────────────────────────────────────── */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--bg-muted) 0%,
+      var(--surface-gold) 50%,
+      var(--bg-muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* ── Ambient glow ────────────────────────────────────────────────────── */
+  .ambient-glow {
+    background: var(--ambient-glow);
+    pointer-events: none;
+  }
+
+  /* ── No scrollbar ────────────────────────────────────────────────────── */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   COMPONENT LAYER — tailles compactes 2026
+   ══════════════════════════════════════════════════════════════════════════ */
+@layer components {
+
+  /* ── Button gold ─────────────────────────────────────────────────────── */
+  .btn-gold {
+    @apply relative inline-flex items-center justify-center gap-1.5
+           px-4 py-2 rounded-lg font-semibold text-xs overflow-hidden
+           transition-all duration-200
+           hover:brightness-110 hover:scale-[1.015]
+           active:scale-[0.985]
+           focus-visible:ring-2 focus-visible:ring-gold/60;
+    background: linear-gradient(135deg, #D4AF37 0%, #EDD96A 48%, #A8881A 100%);
+    color: #000;
+    box-shadow: 0 0 0 1px rgba(212,175,55,0.22), 0 2px 12px rgba(212,175,55,0.12);
+  }
+
+  [data-theme="light"] .btn-gold,
+  .light .btn-gold {
+    background: linear-gradient(135deg, #9A7B18 0%, #C4961E 50%, #6B5510 100%);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(154,123,24,0.30), 0 2px 12px rgba(154,123,24,0.15);
+  }
+
+  /* ── Button ghost ────────────────────────────────────────────────────── */
+  .btn-ghost {
+    @apply relative inline-flex items-center justify-center gap-1.5
+           px-4 py-2 rounded-lg font-medium text-xs
+           transition-all duration-200 active:scale-[0.985];
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
+    background: transparent;
+  }
+  .btn-ghost:hover {
+    color: var(--text-primary);
+    background: var(--surface-glass);
+    border-color: var(--border-strong);
+  }
+
+  /* ── Input ───────────────────────────────────────────────────────────── */
+  .input-midnight {
+    @apply w-full px-3 py-2 rounded-lg text-sm
+           transition-all duration-200
+           focus:outline-none;
+    background: var(--bg-muted);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+  }
+  .input-midnight::placeholder {
+    color: var(--text-disabled);
+  }
+  .input-midnight:focus {
+    border-color: rgba(212, 175, 55, 0.45);
+    background: var(--bg-elevated);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.08);
+  }
+
+  [data-theme="light"] .input-midnight:focus,
+  .light .input-midnight:focus {
+    border-color: rgba(154, 123, 24, 0.50);
+    box-shadow: 0 0 0 3px rgba(154, 123, 24, 0.08);
+  }
+
+  /* Select */
+  select.input-midnight {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23D4AF37' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+  [data-theme="light"] select.input-midnight,
+  .light select.input-midnight {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239A7B18' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  }
+  select.input-midnight option {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+  }
+
+  /* ── Headings marketing (hero, landing) ─────────────────────────────── */
+  .heading-display {
+    @apply text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.12];
+    /* Pas de font-family forcée ici : chaque mot choisit Cube ou Good Timing */
+    color: var(--text-primary);
+  }
+
+  /* Classes polices branding — NE PAS utiliser dans le dashboard */
+  .font-cube        { font-family: var(--font-cube);        }
+  .font-good-timing { font-family: var(--font-good-timing); }
+
+  /* ── Stepper ─────────────────────────────────────────────────────────── */
+  .step-connector {
+    @apply flex-1 h-px mx-2 transition-colors duration-400;
+    background: var(--border-default);
+  }
+  .step-connector.active {
+    background: rgba(212, 175, 55, 0.35);
+  }
+
+  /* ── Card ────────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   KEYFRAMES
+   ══════════════════════════════════════════════════════════════════════════ */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes fade-up {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(212,175,55,0.25); }
+  50%       { box-shadow: 0 0 20px rgba(212,175,55,0.55); }
+}

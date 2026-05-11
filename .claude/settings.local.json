@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes)",
+      "Bash(npm config *)",
+      "Bash(npm install *)",
+      "Bash(npm ping *)",
+      "Bash(curl -s --max-time 10 https://registry.npmjs.org/next)",
+      "Bash(curl -v --max-time 10 https://registry.npmjs.org/)",
+      "Bash(curl -s --max-time 10 --ssl-no-revoke https://registry.npmjs.org/next)",
+      "Bash(wmic logicaldisk *)",
+      "Bash(npm_config_cache=\"D:\\\\\\\\npm-cache\" npm_config_tmp=\"D:\\\\\\\\npm-tmp\" npm_config_strict_ssl=\"false\" npm install)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npm_config_cache=\"D:\\\\\\\\npm-cache\" npm_config_tmp=\"D:\\\\\\\\npm-tmp\" npm run type-check)",
+      "Bash(npm_config_cache=\"D:\\\\\\\\npm-cache\" npm_config_tmp=\"D:\\\\\\\\npm-tmp\" npm run dev)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(cd /d D:\\\\font)",
+      "Bash(powershell -command \"Expand-Archive -Path 'cube.zip' -DestinationPath 'cube_extracted' -Force\")",
+      "Bash(dir cube_extracted /s /b)",
+      "Bash(npx tsc *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/configure)",
+      "Bash(curl -s -o /dev/null -w \" %{http_code}\" http://localhost:3000/company)",
+      "Bash(curl -s -o /dev/null -w \" %{http_code}\" http://localhost:3000/policies)"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "camille-marketing-vfx",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev":    "npx remotion studio",
+    "render": "npx remotion render",
+    "build":  "npx remotion render WhatsAppFlow out/whatsapp-flow.mp4 --codec=h264"
+  },
+  "dependencies": {
+    "remotion": "^4.0.275",
+    "@remotion/player": "^4.0.275",
+    "@remotion/cli": "^4.0.275",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5"
+  },
+  "remotion": {
+    "entryPoint": "src/index.ts",
+    "fps": 30,
+    "width": 1080,
+    "height": 1920
+  }
+}
