@@ -119,11 +119,10 @@ export function NewsletterSection() {
               <div className="flex -space-x-2">
                 {["OB", "FK", "AM", "DS"].map((init, i) => (
                   <div key={init}
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold ring-2"
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold ring-2 ring-[var(--bg-base)]"
                     style={{
                       background: `hsl(${i * 55 + 30}, 40%, 18%)`,
                       color: `hsl(${i * 55 + 30}, 70%, 70%)`,
-                      ringColor: "var(--bg-base)",
                     }}>
                     {init}
                   </div>
