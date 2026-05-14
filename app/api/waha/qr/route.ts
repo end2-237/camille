@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "QR non disponible" }, { status: 503 });
   }
 
-  return new NextResponse(qrBuffer, {
+  return new NextResponse(new Uint8Array(qrBuffer), {
     headers: {
       "Content-Type": "image/png",
       "Cache-Control": "no-store",
