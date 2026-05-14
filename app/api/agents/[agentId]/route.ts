@@ -100,20 +100,62 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
   try {
     const updates = await req.json();
-
-    // Accept nested Agent fields and flatten them
     const flat: Record<string, unknown> = {};
-    if (updates.status) flat.status = updates.status;
+
+    // Flat scalar fields
+    if (updates.status !== undefined)       flat.status = updates.status;
+    if (updates.target_model !== undefined) flat.target_model = updates.target_model;
+
+    // identity → flat columns
     if (updates.identity) {
-      if (updates.identity.name)             flat.name = updates.identity.name;
-      if (updates.identity.tagline)          flat.agent_tagline = updates.identity.tagline;
-      if (updates.identity.brand_voice)      flat.brand_voice = updates.identity.brand_voice;
-      if (updates.identity.primary_language) flat.primary_language = updates.identity.primary_language;
-      if (updates.identity.avatar_emoji)     flat.avatar_emoji = updates.identity.avatar_emoji;
+      const id = updates.identity;
+      if (id.name !== undefined)               flat.name = id.name;
+      if (id.tagline !== undefined)            flat.agent_tagline = id.tagline;
+      if (id.brand_voice !== undefined)        flat.brand_voice = id.brand_voice;
+      if (id.primary_language !== undefined)   flat.primary_language = id.primary_language;
+      if (id.secondary_languages !== undefined) flat.secondary_languages = JSON.stringify(id.secondary_languages);
+      if (id.avatar_emoji !== undefined)       flat.avatar_emoji = id.avatar_emoji;
     }
-    // Also accept raw flat fields directly
+
+    // business_context → flat columns
+    if (updates.business_context) {
+      const bc = updates.business_context;
+      if (bc.business_name !== undefined)   flat.business_name = bc.business_name;
+      if (bc.sector !== undefined)          flat.sector = bc.sector;
+      if (bc.description !== undefined)     flat.description = bc.description;
+      if (bc.website_url !== undefined)     flat.website_url = bc.website_url;
+      if (bc.location !== undefined)        flat.location = bc.location;
+      if (bc.target_audience !== undefined) flat.target_audience = bc.target_audience;
+      if (bc.owner_name !== undefined)      flat.owner_name = bc.owner_name;
+      if (bc.owner_email !== undefined)     flat.owner_email = bc.owner_email;
+      if (bc.whatsapp_number !== undefined) flat.whatsapp_number = bc.whatsapp_number;
+    }
+
+    // knowledge_base → flat columns
+    if (updates.knowledge_base) {
+      const kb = updates.knowledge_base;
+      if (kb.products_services !== undefined) flat.products_services = kb.products_services;
+      if (kb.pricing_info !== undefined)      flat.pricing_info = kb.pricing_info;
+      if (kb.business_hours !== undefined)    flat.business_hours = kb.business_hours;
+      if (kb.policies !== undefined)          flat.policies = kb.policies;
+      if (kb.faq !== undefined)               flat.faq = JSON.stringify(kb.faq);
+      if (kb.forbidden_topics !== undefined)  flat.forbidden_topics = JSON.stringify(kb.forbidden_topics);
+    }
+
+    // capabilities → json column
+    if (updates.capabilities !== undefined) {
+      flat.capabilities = JSON.stringify(updates.capabilities);
+    }
+
+    // system_prompt → compiled_prompt column
+    if (updates.system_prompt !== undefined) {
+      flat.compiled_prompt = updates.system_prompt.compiled_prompt;
+      if (updates.system_prompt.target_model) flat.target_model = updates.system_prompt.target_model;
+    }
+
+    // Raw flat fields (fallback)
     for (const [k, v] of Object.entries(updates)) {
-      if (ALLOWED_PATCH_FIELDS.has(k)) flat[k] = v;
+      if (ALLOWED_PATCH_FIELDS.has(k) && flat[k] === undefined) flat[k] = v;
     }
 
     const filtered = Object.entries(flat).filter(([key]) => ALLOWED_PATCH_FIELDS.has(key));

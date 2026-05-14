@@ -16,10 +16,10 @@ import {
   MessageCircle, Globe, Phone, Clock,
   Users, ChevronDown, LayoutDashboard,
 } from "lucide-react";
-import { toast }                   from "sonner";
-import { useLocalAgent }           from "@/hooks/useLocalAgents";
-import { useLocalAuth }            from "@/hooks/useLocalAuth";
-import { generateSystemPrompt }    from "@/lib/generateSystemPrompt";
+import { toast }                from "sonner";
+import { useAuth }             from "@/hooks/useAuth";
+import { useAgent }            from "@/hooks/useAgent";
+import { generateSystemPrompt } from "@/lib/generateSystemPrompt";
 import { cn }                      from "@/lib/utils";
 import type { Agent, AgentModel, FAQEntry } from "@/types/agent";
 
@@ -681,14 +681,21 @@ function IntegrationTab({ agent }: { agent: Agent }) {
         </div>
         <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
           <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
-            <span className="text-2xs font-mono" style={{ color: "var(--text-disabled)" }}>Exemple</span>
+            <span className="text-2xs font-mono" style={{ color: "var(--text-disabled)" }}>Endpoint n8n — récupérer le system prompt</span>
           </div>
           <pre className="px-4 py-4 text-2xs font-mono overflow-x-auto" style={{ background: "var(--bg-elevated)", color: "var(--text-tertiary)", lineHeight: 1.7 }}>
-{`const agents = JSON.parse(
-  localStorage.getItem('camille-agents') ?? '[]'
-);
-const agent = agents.find(a => a.id === "${agent.id}");
-const prompt = agent?.system_prompt?.compiled_prompt;`}
+{`GET /api/agents/by-session?session=NOM_SESSION_WAHA
+
+// Réponse :
+{
+  "agent": {
+    "id": "${agent.id}",
+    "compiled_prompt": "...",
+    "target_model": "${agent.target_model}",
+    "primary_language": "${agent.identity.primary_language}",
+    "status": "${agent.status}"
+  }
+}`}
           </pre>
         </div>
       </div>
@@ -716,8 +723,8 @@ type TabId = (typeof TABS)[number]["id"];
 export default function AgentConfigPage() {
   const { agentId }                = useParams<{ agentId: string }>();
   const router                     = useRouter();
-  const { isLoggedIn }             = useLocalAuth();
-  const { agent, loading, update } = useLocalAgent(agentId);
+  const { isLoggedIn }             = useAuth();
+  const { agent, loading, update } = useAgent(agentId);
   const [tab, setTab]              = useState<TabId>("overview");
 
   useEffect(() => { if (!isLoggedIn) router.replace("/login"); }, [isLoggedIn, router]);
