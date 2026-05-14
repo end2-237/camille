@@ -50,13 +50,16 @@ export function useAgent(agentId: string): UseAgentReturn {
           body: JSON.stringify(payload),
         });
 
-        if (!res.ok) throw new Error("Update failed");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ error: "Erreur serveur" }));
+          throw new Error(errData.error ?? "Update failed");
+        }
         const { agent: updated } = await res.json();
         setAgent(updated);
         toast.success("Agent mis à jour");
       } catch (e) {
         setAgent(agent);
-        toast.error("Erreur lors de la mise à jour");
+        toast.error(e instanceof Error ? e.message : "Erreur lors de la mise à jour");
         console.error("[useAgent.update]", e);
       }
     },

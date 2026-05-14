@@ -134,6 +134,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     // knowledge_base → flat columns
     if (updates.knowledge_base) {
       const kb = updates.knowledge_base;
+      if (kb.business_description !== undefined) flat.description = kb.business_description;
       if (kb.products_services !== undefined) flat.products_services = kb.products_services;
       if (kb.pricing_info !== undefined)      flat.pricing_info = kb.pricing_info;
       if (kb.business_hours !== undefined)    flat.business_hours = kb.business_hours;
@@ -163,7 +164,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "Aucun champ valide" }, { status: 400 });
     }
 
-    const setClauses = filtered.map(([key], i) => `${key} = $${i + 3}`).join(", ");
+    const setClauses = filtered.map(([key], i) => `"${key}" = $${i + 3}`).join(", ");
     const values = filtered.map(([, val]) =>
       typeof val === "object" && val !== null ? JSON.stringify(val) : val
     );
