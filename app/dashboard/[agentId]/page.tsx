@@ -635,7 +635,7 @@ function IntegrationTab({ agent }: { agent: Agent }) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
-  const authH = token ? { Authorization: `Bearer ${token}` } : {};
+  const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
   const fetchStatus = useCallback(async () => {
     const res = await fetch(`/api/waha/status?agentId=${agent.id}`, { headers: authH });
