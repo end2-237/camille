@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter }             from "next/navigation";
 import { motion, AnimatePresence }          from "framer-motion";
 import {
@@ -463,22 +463,25 @@ function CapabilitiesTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<
       <SaveBar dirty={dirty} onSave={save} />
       {CAPS_META.map(({ key, icon: Icon, label, desc, tag }) => {
         const active = caps[key];
+        const isLive = key === "support_whatsapp";
         return (
-          <div key={key} onClick={() => setCaps((c) => ({ ...c, [key]: !c[key] }))}
-            className="flex items-center gap-4 py-3 cursor-pointer transition-colors duration-100"
+          <div key={key}
+            onClick={isLive ? () => setCaps((c) => ({ ...c, [key]: !c[key] })) : undefined}
+            className={cn("flex items-center gap-4 py-3 transition-colors duration-100", isLive ? "cursor-pointer" : "cursor-not-allowed opacity-50")}
             style={{ borderBottom: "1px solid var(--border-subtle)" }}>
             {/* Toggle */}
             <div className="relative w-8 h-4 rounded-full flex-shrink-0"
-              style={{ background: active ? "var(--color-gold)" : "var(--bg-muted)", border: `1px solid ${active ? "var(--color-gold)" : "var(--border-default)"}` }}>
-              <motion.div animate={{ x: active ? 16 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              style={{ background: isLive && active ? "var(--color-gold)" : "var(--bg-muted)", border: `1px solid ${isLive && active ? "var(--color-gold)" : "var(--border-default)"}` }}>
+              <motion.div animate={{ x: isLive && active ? 16 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 className="absolute top-0.5 w-3 h-3 rounded-full"
-                style={{ background: active ? "#000" : "var(--text-disabled)" }} />
+                style={{ background: isLive && active ? "#000" : "var(--text-disabled)" }} />
             </div>
-            <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
+            <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: isLive && active ? "var(--color-gold)" : "var(--text-disabled)" }} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-xs font-medium" style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>{label}</p>
-                {tag && <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)" }}>{tag}</span>}
+                <p className="text-xs font-medium" style={{ color: isLive && active ? "var(--text-primary)" : "var(--text-secondary)" }}>{label}</p>
+                {isLive && tag && <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)" }}>{tag}</span>}
+                {!isLive && <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-disabled)" }}>Bientôt</span>}
               </div>
               <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>{desc}</p>
             </div>
@@ -618,86 +621,199 @@ function PromptTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>
   );
 }
 
-// ── Tab: Integration ──────────────────────────────────────────────────────────
+// ── Tab: Integration (WhatsApp connection) ────────────────────────────────────
+
+type WahaStatus = "STOPPED" | "STARTING" | "SCAN_QR_CODE" | "WORKING" | "FAILED" | "ERROR" | null;
 
 function IntegrationTab({ agent }: { agent: Agent }) {
+  const [wahaStatus, setWahaStatus] = useState<WahaStatus>(null);
+  const [sessionName, setSessionName] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
+  const authH = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const fetchStatus = useCallback(async () => {
+    const res = await fetch(`/api/waha/status?agentId=${agent.id}`, { headers: authH });
+    if (!res.ok) return;
+    const data = await res.json();
+    setWahaStatus(data.status);
+    setSessionName(data.session_name ?? null);
+    setPhoneNumber(data.phone_number ?? null);
+    if (data.status === "WORKING") {
+      setQrUrl(null);
+      stopPolling();
+    } else if (data.session_name && data.status === "SCAN_QR_CODE") {
+      setQrUrl(`/api/waha/qr?session=${data.session_name}&t=${Date.now()}`);
+    }
+  }, [agent.id]);
+
+  function stopPolling() {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+  }
+
+  function startPolling() {
+    stopPolling();
+    intervalRef.current = setInterval(() => fetchStatus(), 3000);
+  }
+
+  useEffect(() => {
+    fetchStatus();
+    return () => stopPolling();
+  }, [fetchStatus]);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    try {
+      const res = await fetch("/api/waha/connect", {
+        method: "POST",
+        headers: { ...authH, "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: agent.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Erreur connexion"); return; }
+      setSessionName(data.session_name);
+      setWahaStatus("STARTING");
+      startPolling();
+      setTimeout(() => fetchStatus(), 2000);
+    } catch { toast.error("Erreur réseau"); }
+    finally { setConnecting(false); }
+  };
+
+  const handleDisconnect = async () => {
+    stopPolling();
+    await fetch("/api/waha/disconnect", {
+      method: "POST",
+      headers: { ...authH, "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId: agent.id }),
+    });
+    setWahaStatus("STOPPED");
+    setSessionName(null);
+    setPhoneNumber(null);
+    setQrUrl(null);
+    toast.success("Session WhatsApp déconnectée");
+  };
+
   const copyId = async () => {
     await navigator.clipboard.writeText(agent.id);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
+
+  const isWorking = wahaStatus === "WORKING";
+  const isScanning = wahaStatus === "SCAN_QR_CODE";
+  const isStarting = wahaStatus === "STARTING";
+  const isStopped = !wahaStatus || wahaStatus === "STOPPED" || wahaStatus === "FAILED" || wahaStatus === "ERROR";
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl p-6 space-y-4" style={{ background: "var(--surface-glass)", border: "1px solid var(--border-subtle)" }}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.25)" }}>
-            <MessageCircle className="w-5 h-5" style={{ color: "#25D366" }} />
+      {/* WhatsApp connection card */}
+      <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4" style={{ background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.25)" }}>
+            <MessageCircle className="w-4.5 h-4.5" style={{ color: "#25D366" }} />
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>WhatsApp Business</h3>
-            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>Connectez via Meta Cloud API</p>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>WhatsApp</p>
+            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+              {isWorking ? `Connecté · ${phoneNumber ?? ""}` : isScanning ? "Scannez le QR code" : isStarting ? "Démarrage…" : "Non connecté"}
+            </p>
           </div>
-          <span className="px-2.5 py-1 rounded-full text-2xs font-semibold" style={{ background: "rgba(251,191,36,0.12)", color: "#FBBF24" }}>Bientôt</span>
+          <span className="flex items-center gap-1.5 text-xs font-medium"
+            style={{ color: isWorking ? "#34D399" : isScanning || isStarting ? "#FBBF24" : "var(--text-disabled)" }}>
+            <span className={cn("w-1.5 h-1.5 rounded-full", isWorking ? "bg-emerald-400 animate-pulse" : isScanning || isStarting ? "bg-amber-400 animate-pulse" : "bg-white/20")} />
+            {isWorking ? "Actif" : isScanning ? "En attente" : isStarting ? "Démarrage" : "Inactif"}
+          </span>
         </div>
-        {agent.business_context.whatsapp_number ? (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: "rgba(37,211,102,0.06)", border: "1px solid rgba(37,211,102,0.2)" }}>
-            <Phone className="w-4 h-4 flex-shrink-0" style={{ color: "#25D366" }} />
-            <span className="text-sm font-mono" style={{ color: "#25D366" }}>{agent.business_context.whatsapp_number}</span>
-          </div>
-        ) : (
-          <p className="text-sm" style={{ color: "var(--text-disabled)" }}>
-            Aucun numéro configuré. Ajoutez-en un dans <span style={{ color: "var(--color-gold)" }}>Business</span>.
-          </p>
-        )}
-        <div className="space-y-2.5">
-          {["Webhook URL disponible en production (Supabase requis)", "Token de vérification généré automatiquement", "Timeout de session : 30 min par défaut"].map((s, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <span className="w-5 h-5 rounded-full flex items-center justify-center text-2xs font-bold flex-shrink-0 mt-0.5" style={{ background: "var(--bg-muted)", color: "var(--text-disabled)" }}>{i + 1}</span>
-              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>{s}</p>
+
+        {/* QR code */}
+        <AnimatePresence>
+          {isScanning && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="flex flex-col items-center gap-4 py-8 px-6">
+              <p className="text-xs text-center" style={{ color: "var(--text-tertiary)" }}>
+                Ouvrez WhatsApp → Paramètres → Appareils liés → Lier un appareil
+              </p>
+              {qrUrl ? (
+                <div className="rounded-2xl overflow-hidden p-3" style={{ background: "#fff" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qrUrl} alt="QR WhatsApp" width={200} height={200}
+                    onError={() => setTimeout(() => setQrUrl(`/api/waha/qr?session=${sessionName}&t=${Date.now()}`), 2000)} />
+                </div>
+              ) : (
+                <div className="w-[200px] h-[200px] rounded-2xl flex items-center justify-center"
+                  style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
+                  <div className="w-6 h-6 rounded-full border-2 border-t-[var(--color-gold)] border-white/10 animate-spin" />
+                </div>
+              )}
+              <button onClick={() => setQrUrl(`/api/waha/qr?session=${sessionName}&t=${Date.now()}`)}
+                className="text-xs flex items-center gap-1.5 transition-opacity hover:opacity-70"
+                style={{ color: "var(--text-disabled)" }}>
+                <RefreshCw className="w-3 h-3" /> Actualiser le QR
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Connected phone */}
+        <AnimatePresence>
+          {isWorking && phoneNumber && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex items-center gap-3 px-5 py-4">
+              <Phone className="w-4 h-4 flex-shrink-0" style={{ color: "#25D366" }} />
+              <span className="text-sm font-mono flex-1" style={{ color: "#25D366" }}>+{phoneNumber}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+          {isStopped ? (
+            <button onClick={handleConnect} disabled={connecting}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 disabled:opacity-50"
+              style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
+              {connecting
+                ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Connexion…</>
+                : <><MessageCircle className="w-3.5 h-3.5" /> Connecter WhatsApp</>}
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              {!isWorking && (
+                <span className="text-xs animate-pulse" style={{ color: "var(--text-disabled)" }}>
+                  {isStarting ? "Initialisation de la session…" : "En attente du scan…"}
+                </span>
+              )}
             </div>
-          ))}
+          )}
+          {!isStopped && (
+            <button onClick={handleDisconnect}
+              className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150"
+              style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              Déconnecter
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="rounded-2xl p-6 space-y-4" style={{ background: "var(--surface-glass)", border: "1px solid var(--border-subtle)" }}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--surface-gold)", border: "1px solid var(--border-gold)" }}>
-            <Code2 className="w-5 h-5 text-[var(--color-gold)]" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>API & Intégrations</h3>
-            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>Utilisez cet ID dans vos workflows</p>
-          </div>
+      {/* Agent ID */}
+      <div className="rounded-2xl p-4 flex items-center gap-4"
+        style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
+        <div className="flex-1 min-w-0">
+          <p className="text-2xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-disabled)" }}>Agent ID</p>
+          <p className="text-xs font-mono truncate" style={{ color: "var(--text-tertiary)" }}>{agent.id}</p>
         </div>
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-          <span className="text-2xs font-semibold uppercase tracking-wider flex-shrink-0" style={{ color: "var(--text-disabled)" }}>Agent ID</span>
-          <code className="flex-1 text-xs font-mono truncate" style={{ color: "var(--text-tertiary)" }}>{agent.id}</code>
-          <button onClick={copyId} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-medium flex-shrink-0 transition-all duration-200" style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}>
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copied ? "Copié" : "Copier"}
-          </button>
-        </div>
-        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
-          <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
-            <span className="text-2xs font-mono" style={{ color: "var(--text-disabled)" }}>Endpoint n8n — récupérer le system prompt</span>
-          </div>
-          <pre className="px-4 py-4 text-2xs font-mono overflow-x-auto" style={{ background: "var(--bg-elevated)", color: "var(--text-tertiary)", lineHeight: 1.7 }}>
-{`GET /api/agents/by-session?session=NOM_SESSION_WAHA
-
-// Réponse :
-{
-  "agent": {
-    "id": "${agent.id}",
-    "compiled_prompt": "...",
-    "target_model": "${agent.target_model}",
-    "primary_language": "${agent.identity.primary_language}",
-    "status": "${agent.status}"
-  }
-}`}
-          </pre>
-        </div>
+        <button onClick={copyId} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-medium flex-shrink-0 transition-all duration-200"
+          style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}>
+          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          {copied ? "Copié" : "Copier"}
+        </button>
       </div>
     </div>
   );
