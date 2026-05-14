@@ -1,12 +1,8 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// hooks/useAgent.ts — Camille by Buyticle
-// Data-fetching hook for a single agent with optimistic updates.
-// ─────────────────────────────────────────────────────────────────────────────
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { authHeaders } from "@/lib/auth-client";
 import type { Agent, UpdateAgentPayload } from "@/types/agent";
 
 interface UseAgentReturn {
@@ -19,9 +15,9 @@ interface UseAgentReturn {
 }
 
 export function useAgent(agentId: string): UseAgentReturn {
-  const [agent, setAgent]   = useState<Agent | null>(null);
+  const [agent, setAgent]     = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
   const [version, setVersion] = useState(0);
 
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
@@ -31,7 +27,7 @@ export function useAgent(agentId: string): UseAgentReturn {
     setLoading(true);
     setError(null);
 
-    fetch(`/api/agents/${agentId}`)
+    fetch(`/api/agents/${agentId}`, { headers: authHeaders() })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -45,13 +41,12 @@ export function useAgent(agentId: string): UseAgentReturn {
     async (payload: UpdateAgentPayload) => {
       if (!agent) return;
 
-      // Optimistic update
       setAgent((prev) => prev ? { ...prev, ...payload } : prev);
 
       try {
         const res = await fetch(`/api/agents/${agentId}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
 
@@ -60,7 +55,6 @@ export function useAgent(agentId: string): UseAgentReturn {
         setAgent(updated);
         toast.success("Agent mis à jour");
       } catch (e) {
-        // Revert on failure
         setAgent(agent);
         toast.error("Erreur lors de la mise à jour");
         console.error("[useAgent.update]", e);

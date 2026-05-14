@@ -9,6 +9,15 @@
    Version : 2026 — proportions compactes, vibe SaaS premium.
 ───────────────────────────────────────────────────────────────────────────── */
 
+/* ── Blackout — icône logo "C" ───────────────────────────────────────────── */
+@font-face {
+  font-family: "Blackout";
+  src: url("/fonts/blackout/Blackout.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
 /* ── Cube — mots courts ≤6 lettres (sections marketing uniquement) ───────── */
 @font-face {
   font-family: "Cube";

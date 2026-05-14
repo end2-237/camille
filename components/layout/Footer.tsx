@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { CamilleIcon } from "@/components/ui/CamilleIcon";
 import { COMPANY, copyright } from "@/lib/company";
 
 const LINKS = {
@@ -52,12 +52,7 @@ export function Footer() {
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1 space-y-4">
             <Link href="/" className="inline-flex items-center gap-2.5 group">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.22)" }}
-              >
-                <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} />
-              </div>
+              <CamilleIcon size="sm" />
               <span className="font-good-timing text-base font-bold" style={{ color: "var(--text-primary)" }}>
                 Camille
               </span>

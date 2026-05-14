@@ -1,164 +1,145 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// app/api/agents/route.ts — Camille by Buyticle
-// GET  /api/agents  → liste les agents de l'utilisateur connecté
-// POST /api/agents  → crée un nouvel agent depuis le formulaire + prompt généré
-//
-// Mode DEV sans Supabase : retourne des données mock si les variables d'env
-// ne sont pas configurées (évite le crash sur ENOTFOUND).
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import type { AgentFormData, SystemPromptConfig } from "@/types/agent";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const isSupabaseConfigured =
-  !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder") &&
-  !!process.env.SUPABASE_SERVICE_ROLE_KEY &&
-  !process.env.SUPABASE_SERVICE_ROLE_KEY.includes("placeholder");
+import { query } from "@/lib/db";
+import { getUserFromRequest } from "@/lib/auth-server";
+import type {
+  Agent, AgentFormData, SystemPromptConfig,
+  AgentIdentity, BusinessContext, KnowledgeBase, AgentCapabilities,
+  AgentStatus, AgentModel, BrandTone, SupportedLanguage, BusinessSector,
+} from "@/types/agent";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createServerClient(): ReturnType<typeof createClient<any>> {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
+function parseJ(val: any) {
+  if (!val) return null;
+  if (typeof val === "object") return val;
+  try { return JSON.parse(val); } catch { return null; }
 }
 
-// Agent fictif pour le mode démo (Supabase non configuré)
-function mockAgent(formData: AgentFormData, systemPrompt: SystemPromptConfig) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToAgent(row: Record<string, any>): Agent {
   return {
-    id: `demo-${Date.now()}`,
-    user_id: "demo-user",
+    id: row.id,
+    user_id: row.user_id,
     identity: {
-      name: formData.agent_name,
-      tagline: formData.agent_tagline,
-      brand_voice: formData.brand_voice,
-      primary_language: formData.primary_language,
-      avatar_emoji: formData.avatar_emoji ?? "✨",
-    },
+      name: row.name,
+      tagline: row.agent_tagline ?? undefined,
+      brand_voice: row.brand_voice as BrandTone,
+      primary_language: row.primary_language as SupportedLanguage,
+      secondary_languages: parseJ(row.secondary_languages) ?? undefined,
+      avatar_emoji: row.avatar_emoji ?? undefined,
+    } satisfies AgentIdentity,
     business_context: {
-      business_name: formData.business_name,
-      sector: formData.sector,
-      description: formData.description,
-      owner_name: formData.owner_name,
-      owner_email: formData.owner_email,
-    },
+      business_name: row.business_name,
+      sector: row.sector as BusinessSector,
+      description: row.description,
+      website_url: row.website_url ?? undefined,
+      location: row.location ?? undefined,
+      target_audience: row.target_audience ?? undefined,
+      owner_name: row.owner_name,
+      owner_email: row.owner_email,
+      whatsapp_number: row.whatsapp_number ?? undefined,
+    } satisfies BusinessContext,
     knowledge_base: {
-      business_description: formData.description,
-      faq: formData.faq ?? [],
+      business_description: row.description ?? "",
+      products_services: row.products_services ?? undefined,
+      pricing_info: row.pricing_info ?? undefined,
+      business_hours: row.business_hours ?? undefined,
+      policies: row.policies ?? undefined,
+      faq: parseJ(row.faq) ?? [],
+      forbidden_topics: parseJ(row.forbidden_topics) ?? [],
+    } satisfies KnowledgeBase,
+    capabilities: (parseJ(row.capabilities) ?? {}) as AgentCapabilities,
+    system_prompt: {
+      compiled_prompt: row.compiled_prompt ?? "",
+      generated_at: row.updated_at,
+      target_model: row.target_model as AgentModel,
+      estimated_tokens: 0,
+      version: 1,
     },
-    capabilities: formData.capabilities,
-    system_prompt: systemPrompt,
-    status: "draft",
-    target_model: formData.target_model,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    status: row.status as AgentStatus,
+    target_model: row.target_model as AgentModel,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
-// ── GET ───────────────────────────────────────────────────────────────────────
-
 export async function GET(req: NextRequest) {
-  // Mode démo : retourne une liste vide proprement
-  if (!isSupabaseConfigured) {
-    return NextResponse.json({
-      agents: [],
-      _demo: true,
-      _message: "Supabase non configuré — connectez votre projet dans .env.local",
-    });
-  }
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   try {
-    const supabase = createServerClient();
-    const userId = req.headers.get("x-user-id") ?? "demo-user";
-
-    const { data: agents, error } = await supabase
-      .from("agents")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-    return NextResponse.json({ agents: agents ?? [] });
+    const result = await query(
+      `SELECT * FROM camille.agents
+       WHERE user_id = $1 AND status != 'archived'
+       ORDER BY created_at DESC`,
+      [user.id]
+    );
+    return NextResponse.json({ agents: result.rows.map(rowToAgent) });
   } catch (err) {
     console.error("[GET /api/agents]", err);
-    return NextResponse.json({ error: "Failed to fetch agents" }, { status: 500 });
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
 
-// ── POST ──────────────────────────────────────────────────────────────────────
-
 export async function POST(req: NextRequest) {
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
   try {
-    const body: { formData: AgentFormData; systemPrompt: SystemPromptConfig } =
-      await req.json();
+    const body: { formData: AgentFormData; systemPrompt: SystemPromptConfig } = await req.json();
     const { formData, systemPrompt } = body;
 
     if (!formData || !systemPrompt) {
-      return NextResponse.json(
-        { error: "Missing formData or systemPrompt" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
     }
 
-    // Mode démo : simule la création sans base de données
-    if (!isSupabaseConfigured) {
-      const agent = mockAgent(formData, systemPrompt);
-      console.info("[POST /api/agents] Mode démo — agent simulé :", agent.identity.name);
-      return NextResponse.json({ agent, _demo: true }, { status: 201 });
-    }
+    const compiledPrompt = typeof systemPrompt === "string"
+      ? systemPrompt
+      : (systemPrompt as SystemPromptConfig).compiled_prompt ?? JSON.stringify(systemPrompt);
 
-    const supabase = createServerClient();
-    const userId = req.headers.get("x-user-id") ?? "demo-user";
+    const result = await query(
+      `INSERT INTO camille.agents (
+        user_id, name, agent_tagline, brand_voice, primary_language,
+        secondary_languages, avatar_emoji, business_name, sector, description,
+        website_url, location, target_audience, owner_name, owner_email,
+        whatsapp_number, products_services, pricing_info, business_hours,
+        policies, faq, forbidden_topics, capabilities, target_model, compiled_prompt, status
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25,'draft'
+      ) RETURNING *`,
+      [
+        user.id,
+        formData.agent_name,
+        formData.agent_tagline ?? null,
+        formData.brand_voice ?? null,
+        formData.primary_language ?? null,
+        formData.secondary_languages ? JSON.stringify(formData.secondary_languages) : null,
+        formData.avatar_emoji ?? null,
+        formData.business_name ?? null,
+        formData.sector ?? null,
+        formData.description ?? null,
+        formData.website_url ?? null,
+        formData.location ?? null,
+        formData.target_audience ?? null,
+        formData.owner_name ?? null,
+        formData.owner_email ?? null,
+        formData.whatsapp_number ?? null,
+        formData.products_services ?? null,
+        formData.pricing_info ?? null,
+        formData.business_hours ?? null,
+        formData.policies ?? null,
+        formData.faq ? JSON.stringify(formData.faq) : null,
+        formData.forbidden_topics ? JSON.stringify(formData.forbidden_topics) : null,
+        formData.capabilities ? JSON.stringify(formData.capabilities) : null,
+        formData.target_model ?? null,
+        compiledPrompt,
+      ]
+    );
 
-    const { data: agent, error } = await supabase
-      .from("agents")
-      .insert({
-        user_id: userId,
-        identity: {
-          name: formData.agent_name,
-          tagline: formData.agent_tagline,
-          brand_voice: formData.brand_voice,
-          primary_language: formData.primary_language,
-          secondary_languages: formData.secondary_languages,
-          avatar_emoji: formData.avatar_emoji,
-        },
-        business_context: {
-          business_name: formData.business_name,
-          sector: formData.sector,
-          description: formData.description,
-          website_url: formData.website_url,
-          location: formData.location,
-          target_audience: formData.target_audience,
-          owner_name: formData.owner_name,
-          owner_email: formData.owner_email,
-          whatsapp_number: formData.whatsapp_number,
-        },
-        knowledge_base: {
-          business_description: formData.description,
-          products_services: formData.products_services,
-          pricing_info: formData.pricing_info,
-          business_hours: formData.business_hours,
-          policies: formData.policies,
-          faq: formData.faq ?? [],
-          forbidden_topics: formData.forbidden_topics ?? [],
-        },
-        capabilities: formData.capabilities,
-        system_prompt: systemPrompt,
-        status: "draft",
-        target_model: formData.target_model,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return NextResponse.json({ agent }, { status: 201 });
+    return NextResponse.json({ agent: rowToAgent(result.rows[0]) }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/agents]", err);
-    return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }

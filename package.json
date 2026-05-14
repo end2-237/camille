@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-progress": "^1.1.0",
     "@radix-ui/react-select": "^2.1.1",
@@ -31,6 +34,9 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/pg": "^8.11.10",
     "@playwright/test": "^1.47.2",
     "@types/node": "^20",
     "@types/react": "^19",

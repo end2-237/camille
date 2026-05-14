@@ -10,12 +10,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Sparkles, Menu, X,
+  Menu, X,
   LayoutGrid, Route, CreditCard, LayoutDashboard,
   LogIn, Bot, Building2, Shield, MessageSquare,
 } from "lucide-react";
-import { GoldButton } from "@/components/ui/GoldButton";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { GoldButton }    from "@/components/ui/GoldButton";
+import { ThemeToggle }   from "@/components/ui/ThemeToggle";
+import { CamilleIcon }   from "@/components/ui/CamilleIcon";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
@@ -67,9 +68,7 @@ export function Navbar() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group flex-shrink-0" aria-label="Camille — Accueil">
-            <div className="w-8 h-8 rounded-xl glass-gold flex items-center justify-center transition-shadow duration-200 group-hover:shadow-[var(--shadow-gold)]">
-              <Sparkles className="w-4 h-4 text-[var(--color-gold)]" />
-            </div>
+            <CamilleIcon size="md" className="transition-shadow duration-200 group-hover:shadow-[var(--shadow-gold)]" />
             <span className="text-sm font-bold tracking-tight">
               <span className="font-good-timing text-gold-gradient">Camille</span>
               <span className="text-[var(--text-tertiary)] ml-1 font-sans font-normal text-xs">by Buyticle</span>
