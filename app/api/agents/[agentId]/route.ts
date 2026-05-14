@@ -88,7 +88,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ agent: rowToAgent(result.rows[0]) });
   } catch (err) {
     console.error("[GET /api/agents/:id]", err);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
@@ -183,7 +184,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ agent: rowToAgent(result.rows[0]) });
   } catch (err) {
     console.error("[PATCH /api/agents/:id]", err);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
