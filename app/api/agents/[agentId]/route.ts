@@ -94,12 +94,11 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 }
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const user = await getUserFromRequest(req);
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-
-  const { agentId } = await params;
-
   try {
+    const user = await getUserFromRequest(req);
+    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+    const { agentId } = await params;
     const updates = await req.json();
     const flat: Record<string, unknown> = {};
 
@@ -110,12 +109,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     // identity → flat columns
     if (updates.identity) {
       const id = updates.identity;
-      if (id.name !== undefined)               flat.name = id.name;
-      if (id.tagline !== undefined)            flat.agent_tagline = id.tagline;
-      if (id.brand_voice !== undefined)        flat.brand_voice = id.brand_voice;
-      if (id.primary_language !== undefined)   flat.primary_language = id.primary_language;
+      if (id.name !== undefined)                flat.name = id.name;
+      if (id.tagline !== undefined)             flat.agent_tagline = id.tagline;
+      if (id.brand_voice !== undefined)         flat.brand_voice = id.brand_voice;
+      if (id.primary_language !== undefined)    flat.primary_language = id.primary_language;
       if (id.secondary_languages !== undefined) flat.secondary_languages = JSON.stringify(id.secondary_languages);
-      if (id.avatar_emoji !== undefined)       flat.avatar_emoji = id.avatar_emoji;
+      if (id.avatar_emoji !== undefined)        flat.avatar_emoji = id.avatar_emoji;
     }
 
     // business_context → flat columns
@@ -136,26 +135,26 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     if (updates.knowledge_base) {
       const kb = updates.knowledge_base;
       if (kb.business_description !== undefined) flat.description = kb.business_description;
-      if (kb.products_services !== undefined) flat.products_services = kb.products_services;
-      if (kb.pricing_info !== undefined)      flat.pricing_info = kb.pricing_info;
-      if (kb.business_hours !== undefined)    flat.business_hours = kb.business_hours;
-      if (kb.policies !== undefined)          flat.policies = kb.policies;
-      if (kb.faq !== undefined)               flat.faq = JSON.stringify(kb.faq);
-      if (kb.forbidden_topics !== undefined)  flat.forbidden_topics = JSON.stringify(kb.forbidden_topics);
+      if (kb.products_services !== undefined)    flat.products_services = kb.products_services;
+      if (kb.pricing_info !== undefined)         flat.pricing_info = kb.pricing_info;
+      if (kb.business_hours !== undefined)       flat.business_hours = kb.business_hours;
+      if (kb.policies !== undefined)             flat.policies = kb.policies;
+      if (kb.faq !== undefined)                  flat.faq = JSON.stringify(kb.faq);
+      if (kb.forbidden_topics !== undefined)     flat.forbidden_topics = JSON.stringify(kb.forbidden_topics);
     }
 
-    // capabilities → json column
+    // capabilities → text column (JSON stringified)
     if (updates.capabilities !== undefined) {
       flat.capabilities = JSON.stringify(updates.capabilities);
     }
 
     // system_prompt → compiled_prompt column
     if (updates.system_prompt !== undefined) {
-      flat.compiled_prompt = updates.system_prompt.compiled_prompt;
+      flat.compiled_prompt = updates.system_prompt.compiled_prompt ?? "";
       if (updates.system_prompt.target_model) flat.target_model = updates.system_prompt.target_model;
     }
 
-    // Raw flat fields (fallback)
+    // Raw flat fields (fallback for direct top-level fields)
     for (const [k, v] of Object.entries(updates)) {
       if (ALLOWED_PATCH_FIELDS.has(k) && flat[k] === undefined) flat[k] = v;
     }
@@ -170,6 +169,9 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       typeof val === "object" && val !== null ? JSON.stringify(val) : val
     );
 
+    console.log("[PATCH /api/agents/:id] SQL:", `UPDATE camille.agents SET ${setClauses}, updated_at = NOW() WHERE id = $1 AND user_id = $2`);
+    console.log("[PATCH /api/agents/:id] params:", [agentId, user.id, ...values]);
+
     const result = await query(
       `UPDATE camille.agents
        SET ${setClauses}, updated_at = NOW()
@@ -179,12 +181,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     );
 
     if (result.rows.length === 0) {
-      return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
+      return NextResponse.json({ error: "Agent introuvable ou accès refusé" }, { status: 404 });
     }
     return NextResponse.json({ agent: rowToAgent(result.rows[0]) });
   } catch (err) {
-    console.error("[PATCH /api/agents/:id]", err);
-    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[PATCH /api/agents/:id] FULL ERROR:", err);
+    // Expose le message réel pour debug (à retirer en prod)
+    const msg = err instanceof Error
+      ? `${err.message}${(err as NodeJS.ErrnoException).code ? ` [${(err as NodeJS.ErrnoException).code}]` : ""}`
+      : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
