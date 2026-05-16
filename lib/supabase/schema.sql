@@ -223,3 +223,30 @@ CREATE TABLE IF NOT EXISTS camille.agent_conversations (
 
 CREATE INDEX IF NOT EXISTS idx_conv_session_phone
   ON camille.agent_conversations (session_name, contact_phone, created_at DESC);
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Colonne plan sur agents (free | starter | pro | enterprise)
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE camille.agents
+  ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Table: token_usage
+-- Usage mensuel de tokens par agent — une ligne par (agent, mois YYYY-MM).
+-- Upsertée par n8n après chaque réponse via POST /api/usage/record.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS camille.token_usage (
+  id                BIGSERIAL   PRIMARY KEY,
+  agent_id          UUID        NOT NULL,
+  period            TEXT        NOT NULL,   -- 'YYYY-MM'
+  prompt_tokens     BIGINT      NOT NULL DEFAULT 0,
+  completion_tokens BIGINT      NOT NULL DEFAULT 0,
+  total_tokens      BIGINT      NOT NULL DEFAULT 0,
+  last_updated      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (agent_id, period)
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_usage_agent_period
+  ON camille.token_usage (agent_id, period DESC);

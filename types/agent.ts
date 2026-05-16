@@ -285,6 +285,7 @@ export interface Agent {
 
   status: AgentStatus;
   target_model: AgentModel;
+  plan: "free" | "starter" | "pro" | "enterprise";
 
   created_at: ISODateString;
   updated_at: ISODateString;

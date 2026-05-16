@@ -57,6 +57,7 @@ function rowToAgent(row: Record<string, any>): Agent {
     },
     status: row.status as AgentStatus,
     target_model: row.target_model as AgentModel,
+    plan: (row.plan ?? "free") as Agent["plan"],
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

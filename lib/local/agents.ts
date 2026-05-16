@@ -89,6 +89,7 @@ export function createAgent(
     system_prompt:  systemPrompt,
     status:         "active",
     target_model:   formData.target_model,
+    plan:           "free",
     created_at:     now,
     updated_at:     now,
   };

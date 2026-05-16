@@ -14,7 +14,7 @@ import {
   Zap, Code2, Plug2, RefreshCw, Copy, Check,
   Save, Pencil, Plus, Trash2, Play, Pause,
   MessageCircle, Globe, Phone, Clock,
-  Users, ChevronDown, LayoutDashboard,
+  Users, ChevronDown, LayoutDashboard, TrendingUp,
 } from "lucide-react";
 import { toast }                from "sonner";
 import { useAuth }             from "@/hooks/useAuth";
@@ -176,7 +176,112 @@ function SectionCard({ title, children }: { title: string; children: React.React
 
 // ── Tab: Overview ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ agent, onToggleStatus }: { agent: Agent; onToggleStatus: () => void }) {
+// ── Usage data types ──────────────────────────────────────────────────────────
+interface UsageData {
+  plan:    { id: string; label: string; limit: number; unlimited: boolean };
+  current: { period: string; total_tokens: number; remaining: number; percent: number; prompt_tokens: number; completion_tokens: number };
+  plans:   { id: string; label: string; monthly_tokens: number; price_eur: number; current: boolean }[];
+}
+
+const PLAN_COLORS: Record<string, string> = {
+  free:       "var(--text-disabled)",
+  starter:    "#60a5fa",
+  pro:        "var(--color-gold)",
+  enterprise: "#a78bfa",
+};
+
+function UsageSection({ agentId, token }: { agentId: string; token: string | null }) {
+  const [usage, setUsage] = useState<UsageData | null>(null);
+
+  useEffect(() => {
+    if (!agentId) return;
+    fetch(`/api/usage?agentId=${agentId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => d && setUsage(d))
+      .catch(() => {});
+  }, [agentId, token]);
+
+  if (!usage) return null;
+
+  const { plan, current } = usage;
+  const pct = Math.min(100, current.percent);
+  const barColor = pct >= 90 ? "#f87171" : pct >= 70 ? "#fbbf24" : "var(--color-gold)";
+
+  return (
+    <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-3.5 h-3.5" style={{ color: "var(--text-disabled)" }} />
+          <span className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>Utilisation · {current.period}</span>
+        </div>
+        <span className="text-2xs font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(212,175,55,0.1)", color: PLAN_COLORS[plan.id] ?? "var(--color-gold)", border: `1px solid ${PLAN_COLORS[plan.id] ?? "var(--color-gold)"}30` }}>
+          {plan.label}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div>
+        <div className="flex justify-between items-end mb-1.5">
+          <span className="text-xs font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+            {current.total_tokens.toLocaleString("fr-FR")}
+            <span className="text-2xs font-normal ml-1" style={{ color: "var(--text-disabled)" }}>tokens</span>
+          </span>
+          {plan.unlimited ? (
+            <span className="text-2xs" style={{ color: "var(--text-disabled)" }}>Illimité</span>
+          ) : (
+            <span className="text-2xs tabular-nums" style={{ color: "var(--text-disabled)" }}>
+              / {plan.limit.toLocaleString("fr-FR")} · {pct}%
+            </span>
+          )}
+        </div>
+        {!plan.unlimited && (
+          <div className="w-full rounded-full overflow-hidden" style={{ height: "5px", background: "var(--border-subtle)" }}>
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              style={{ height: "100%", borderRadius: "99px", background: barColor }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Détail prompt / completion */}
+      <div className="flex gap-4">
+        <div>
+          <p className="text-2xs" style={{ color: "var(--text-disabled)" }}>Prompt</p>
+          <p className="text-xs font-semibold tabular-nums" style={{ color: "var(--text-tertiary)" }}>{current.prompt_tokens.toLocaleString("fr-FR")}</p>
+        </div>
+        <div>
+          <p className="text-2xs" style={{ color: "var(--text-disabled)" }}>Réponse</p>
+          <p className="text-xs font-semibold tabular-nums" style={{ color: "var(--text-tertiary)" }}>{current.completion_tokens.toLocaleString("fr-FR")}</p>
+        </div>
+        {!plan.unlimited && (
+          <div className="ml-auto text-right">
+            <p className="text-2xs" style={{ color: "var(--text-disabled)" }}>Restant</p>
+            <p className="text-xs font-semibold tabular-nums" style={{ color: pct >= 90 ? "#f87171" : "var(--text-tertiary)" }}>
+              {current.remaining.toLocaleString("fr-FR")}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Alerte limite proche */}
+      {!plan.unlimited && pct >= 80 && (
+        <div className="rounded-lg px-3 py-2 text-2xs" style={{ background: pct >= 90 ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.08)", color: pct >= 90 ? "#f87171" : "#fbbf24", border: `1px solid ${pct >= 90 ? "rgba(248,113,113,0.2)" : "rgba(251,191,36,0.2)"}` }}>
+          {pct >= 90
+            ? "⚠️ Limite presque atteinte — le bot cessera de répondre à 100%."
+            : "Vous approchez de votre limite mensuelle."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OverviewTab({ agent, onToggleStatus, token }: { agent: Agent; onToggleStatus: () => void; token: string | null }) {
   const [copied, setCopied] = useState(false);
   const copyId = async () => {
     await navigator.clipboard.writeText(agent.id);
@@ -251,6 +356,9 @@ function OverviewTab({ agent, onToggleStatus }: { agent: Agent; onToggleStatus: 
           })}
         </div>
       </SectionCard>
+
+      {/* Usage tokens */}
+      <UsageSection agentId={agent.id} token={token} />
 
       {/* ID */}
       <div className="rounded-xl p-4 flex items-center gap-4" style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
@@ -947,6 +1055,7 @@ export default function AgentConfigPage() {
   const { isLoggedIn }             = useAuth();
   const { agent, loading, update } = useAgent(agentId);
   const [tab, setTab]              = useState<TabId>("overview");
+  const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
 
   useEffect(() => { if (!isLoggedIn) router.replace("/login"); }, [isLoggedIn, router]);
   useEffect(() => { if (!loading && !agent) router.replace("/dashboard"); }, [agent, loading, router]);
@@ -1033,7 +1142,7 @@ export default function AgentConfigPage() {
           <div className="max-w-2xl mx-auto px-4 sm:px-7 py-5 sm:py-6">
             <AnimatePresence mode="wait">
               <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
-                {tab === "overview"     && <OverviewTab     agent={agent} onToggleStatus={handleToggleStatus} />}
+                {tab === "overview"     && <OverviewTab     agent={agent} onToggleStatus={handleToggleStatus} token={token} />}
                 {tab === "identity"     && <IdentityTab     agent={agent} onSave={handleSave} />}
                 {tab === "business"     && <BusinessTab     agent={agent} onSave={handleSave} />}
                 {tab === "knowledge"    && <KnowledgeTab    agent={agent} onSave={handleSave} />}
