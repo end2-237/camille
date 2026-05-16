@@ -1,8 +1,8 @@
-// POST /api/waha/disconnect — arrête et supprime la session Waha d'un agent
+// POST /api/waha/disconnect — arrête la session Waha (sans la supprimer)
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
-import { wahaStopSession, wahaDeleteSession } from "@/lib/waha";
+import { wahaStopSession } from "@/lib/waha";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,15 +23,13 @@ export async function POST(req: NextRequest) {
 
     const { session_name } = sessionRes.rows[0];
 
-    try {
-      await wahaStopSession(session_name);
-      await wahaDeleteSession(session_name);
-    } catch {
-      // Continue même si Waha échoue (session peut déjà être supprimée)
-    }
+    // Stop uniquement — on ne supprime PAS la session Waha
+    // pour éviter de devoir la recréer manuellement dans le dashboard
+    try { await wahaStopSession(session_name); } catch { /* ignore */ }
 
+    // Mettre à jour le statut en DB (ne pas supprimer l'enregistrement)
     await query(
-      "DELETE FROM camille.whatsapp_sessions WHERE session_name = $1",
+      "UPDATE camille.whatsapp_sessions SET status = 'STOPPED', updated_at = NOW() WHERE session_name = $1",
       [session_name]
     );
 

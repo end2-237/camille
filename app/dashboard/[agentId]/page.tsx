@@ -626,19 +626,22 @@ function PromptTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>
 type WahaStatus = "STOPPED" | "STARTING" | "SCAN_QR_CODE" | "WORKING" | "FAILED" | "ERROR" | null;
 
 function IntegrationTab({ agent }: { agent: Agent }) {
-  const [wahaStatus, setWahaStatus] = useState<WahaStatus>(null);
-  const [sessionName, setSessionName] = useState<string | null>(null);
-  const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
-  const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [wahaStatus, setWahaStatus]     = useState<WahaStatus>(null);
+  const [sessionName, setSessionName]   = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber]   = useState<string | null>(null);
+  const [connecting, setConnecting]     = useState(false);
+  const [qrBlobUrl, setQrBlobUrl]       = useState<string | null>(null);
+  const [copied, setCopied]             = useState(false);
+  const [connectMode, setConnectMode]   = useState<"qr" | "phone">("qr");
+  const [phoneInput, setPhoneInput]     = useState("");
+  const [pairingCode, setPairingCode]   = useState<string | null>(null);
+  const [phoneLoading, setPhoneLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const blobUrlRef = useRef<string | null>(null);
+  const blobUrlRef  = useRef<string | null>(null);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
   const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
-  // Fetch QR avec auth header → blob URL (les <img src> ne peuvent pas envoyer Authorization)
   const fetchQr = useCallback(async (sName: string) => {
     try {
       const res = await fetch(`/api/waha/qr?session=${sName}`, { headers: authH });
@@ -651,7 +654,6 @@ function IntegrationTab({ agent }: { agent: Agent }) {
     } catch { /* QR pas encore prêt */ }
   }, []);
 
-  // Libère le blob URL à la destruction du composant
   useEffect(() => () => { if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current); }, []);
 
   const fetchStatus = useCallback(async () => {
@@ -661,65 +663,75 @@ function IntegrationTab({ agent }: { agent: Agent }) {
     setWahaStatus(data.status);
     setSessionName(data.session_name ?? null);
     setPhoneNumber(data.phone_number ?? null);
-    if (data.status === "WORKING") {
-      setQrBlobUrl(null);
-      stopPolling();
-    } else if (data.session_name && data.status === "SCAN_QR_CODE") {
+    if (data.status === "WORKING") { setQrBlobUrl(null); setPairingCode(null); stopPolling(); }
+    else if (data.session_name && data.status === "SCAN_QR_CODE" && connectMode === "qr") {
       fetchQr(data.session_name);
     }
-  }, [agent.id, fetchQr]);
+  }, [agent.id, fetchQr, connectMode]);
 
   function stopPolling() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
   }
-
   function startPolling() {
     stopPolling();
     intervalRef.current = setInterval(() => fetchStatus(), 3000);
   }
 
-  useEffect(() => {
-    fetchStatus();
-    return () => stopPolling();
-  }, [fetchStatus]);
+  useEffect(() => { fetchStatus(); return () => stopPolling(); }, [fetchStatus]);
 
   const handleConnect = async () => {
     setConnecting(true);
+    setPairingCode(null);
     try {
       const res = await fetch("/api/waha/connect", {
         method: "POST",
         headers: { ...authH, "Content-Type": "application/json" },
         body: JSON.stringify({ agentId: agent.id }),
       });
-      // Parser le JSON sans planter si le corps est vide ou non-JSON
       let data: { error?: string; session_name?: string } = {};
-      try { data = await res.json(); } catch { /* corps vide ou HTML */ }
-      if (!res.ok) {
-        toast.error(data.error ?? `Erreur serveur (${res.status})`);
-        return;
-      }
+      try { data = await res.json(); } catch { /* corps vide */ }
+      if (!res.ok) { toast.error(data.error ?? `Erreur serveur (${res.status})`); return; }
       setSessionName(data.session_name ?? null);
       setWahaStatus("STARTING");
       startPolling();
       setTimeout(() => fetchStatus(), 2000);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur réseau");
-    } finally {
-      setConnecting(false);
-    }
+    } finally { setConnecting(false); }
+  };
+
+  const handlePhoneCode = async () => {
+    if (!phoneInput.trim()) { toast.error("Entrez un numéro de téléphone"); return; }
+    setPhoneLoading(true);
+    try {
+      const res = await fetch("/api/waha/phone", {
+        method: "POST",
+        headers: { ...authH, "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: agent.id, phoneNumber: phoneInput }),
+      });
+      let data: { error?: string; code?: string } = {};
+      try { data = await res.json(); } catch { /* corps vide */ }
+      if (!res.ok) { toast.error(data.error ?? `Erreur (${res.status})`); return; }
+      setPairingCode(data.code ?? null);
+      startPolling();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur réseau");
+    } finally { setPhoneLoading(false); }
   };
 
   const handleDisconnect = async () => {
     stopPolling();
-    await fetch("/api/waha/disconnect", {
-      method: "POST",
-      headers: { ...authH, "Content-Type": "application/json" },
-      body: JSON.stringify({ agentId: agent.id }),
-    });
+    try {
+      await fetch("/api/waha/disconnect", {
+        method: "POST",
+        headers: { ...authH, "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: agent.id }),
+      });
+    } catch { /* ignore */ }
     setWahaStatus("STOPPED");
-    setSessionName(null);
     setPhoneNumber(null);
     setQrBlobUrl(null);
+    setPairingCode(null);
     toast.success("Session WhatsApp déconnectée");
   };
 
@@ -728,58 +740,106 @@ function IntegrationTab({ agent }: { agent: Agent }) {
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
 
-  const isWorking = wahaStatus === "WORKING";
+  const isWorking  = wahaStatus === "WORKING";
   const isScanning = wahaStatus === "SCAN_QR_CODE";
   const isStarting = wahaStatus === "STARTING";
-  const isStopped = !wahaStatus || wahaStatus === "STOPPED" || wahaStatus === "FAILED" || wahaStatus === "ERROR";
+  const isStopped  = !wahaStatus || wahaStatus === "STOPPED" || wahaStatus === "FAILED" || wahaStatus === "ERROR";
 
   return (
     <div className="space-y-5">
-      {/* WhatsApp connection card */}
       <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
+
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4" style={{ background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.25)" }}>
-            <MessageCircle className="w-4.5 h-4.5" style={{ color: "#25D366" }} />
+            <MessageCircle className="w-4 h-4" style={{ color: "#25D366" }} />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>WhatsApp</p>
-            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+            <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
               {isWorking ? `Connecté · ${phoneNumber ?? ""}` : isScanning ? "Scannez le QR code" : isStarting ? "Démarrage…" : "Non connecté"}
             </p>
           </div>
-          <span className="flex items-center gap-1.5 text-xs font-medium"
+          <span className="flex items-center gap-1.5 text-xs font-medium flex-shrink-0"
             style={{ color: isWorking ? "#34D399" : isScanning || isStarting ? "#FBBF24" : "var(--text-disabled)" }}>
-            <span className={cn("w-1.5 h-1.5 rounded-full", isWorking ? "bg-emerald-400 animate-pulse" : isScanning || isStarting ? "bg-amber-400 animate-pulse" : "bg-white/20")} />
-            {isWorking ? "Actif" : isScanning ? "En attente" : isStarting ? "Démarrage" : "Inactif"}
+            <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
+              isWorking ? "bg-emerald-400 animate-pulse" : isScanning || isStarting ? "bg-amber-400 animate-pulse" : "bg-white/20")} />
+            <span className="hidden sm:inline">{isWorking ? "Actif" : isScanning ? "En attente" : isStarting ? "Démarrage" : "Inactif"}</span>
           </span>
         </div>
 
-        {/* QR code */}
+        {/* Mode toggle (QR / Phone) — visible quand en attente de scan */}
         <AnimatePresence>
           {isScanning && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-              className="flex flex-col items-center gap-4 py-8 px-6">
-              <p className="text-xs text-center" style={{ color: "var(--text-tertiary)" }}>
-                Ouvrez WhatsApp → Paramètres → Appareils liés → Lier un appareil
-              </p>
-              {qrBlobUrl ? (
-                <div className="rounded-2xl overflow-hidden p-3" style={{ background: "#fff" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={qrBlobUrl} alt="QR WhatsApp" width={200} height={200} />
-                </div>
-              ) : (
-                <div className="w-[200px] h-[200px] rounded-2xl flex items-center justify-center"
-                  style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-                  <div className="w-6 h-6 rounded-full border-2 border-t-[var(--color-gold)] border-white/10 animate-spin" />
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+              {/* Toggle */}
+              <div className="flex px-5 pt-5 gap-2">
+                {(["qr", "phone"] as const).map((m) => (
+                  <button key={m} onClick={() => setConnectMode(m)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    style={connectMode === m
+                      ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
+                      : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
+                    {m === "qr" ? <><Globe className="w-3 h-3" /> QR Code</> : <><Phone className="w-3 h-3" /> Numéro</>}
+                  </button>
+                ))}
+              </div>
+
+              {/* QR mode */}
+              {connectMode === "qr" && (
+                <div className="flex flex-col items-center gap-4 py-6 px-6">
+                  <p className="text-xs text-center" style={{ color: "var(--text-tertiary)" }}>
+                    WhatsApp → Paramètres → Appareils liés → Lier un appareil
+                  </p>
+                  {qrBlobUrl ? (
+                    <div className="rounded-2xl overflow-hidden p-3" style={{ background: "#fff" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={qrBlobUrl} alt="QR WhatsApp" width={200} height={200} />
+                    </div>
+                  ) : (
+                    <div className="w-[200px] h-[200px] rounded-2xl flex items-center justify-center"
+                      style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
+                      <div className="w-6 h-6 rounded-full border-2 border-t-[var(--color-gold)] border-white/10 animate-spin" />
+                    </div>
+                  )}
+                  <button onClick={() => sessionName && fetchQr(sessionName)}
+                    className="text-xs flex items-center gap-1.5 transition-opacity hover:opacity-70"
+                    style={{ color: "var(--text-disabled)" }}>
+                    <RefreshCw className="w-3 h-3" /> Actualiser le QR
+                  </button>
                 </div>
               )}
-              <button onClick={() => sessionName && fetchQr(sessionName)}
-                className="text-xs flex items-center gap-1.5 transition-opacity hover:opacity-70"
-                style={{ color: "var(--text-disabled)" }}>
-                <RefreshCw className="w-3 h-3" /> Actualiser le QR
-              </button>
+
+              {/* Phone mode */}
+              {connectMode === "phone" && (
+                <div className="flex flex-col gap-4 py-6 px-6">
+                  <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                    WhatsApp → Paramètres → Appareils liés → Lier avec numéro de téléphone
+                  </p>
+                  <div className="flex gap-2">
+                    <FInput
+                      placeholder="+33 6 12 34 56 78"
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                      className="flex-1"
+                    />
+                    <button onClick={handlePhoneCode} disabled={phoneLoading}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-all duration-200 disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
+                      {phoneLoading ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : "Obtenir le code"}
+                    </button>
+                  </div>
+                  {pairingCode && (
+                    <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                      className="rounded-xl p-4 text-center"
+                      style={{ background: "rgba(37,211,102,0.08)", border: "1px solid rgba(37,211,102,0.2)" }}>
+                      <p className="text-xs mb-2" style={{ color: "var(--text-tertiary)" }}>Entrez ce code dans WhatsApp</p>
+                      <p className="text-2xl font-mono font-bold tracking-widest" style={{ color: "#25D366" }}>{pairingCode}</p>
+                    </motion.div>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -796,27 +856,27 @@ function IntegrationTab({ agent }: { agent: Agent }) {
         </AnimatePresence>
 
         {/* Actions */}
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+        <div className="flex items-center justify-between px-5 py-4 gap-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
           {isStopped ? (
             <button onClick={handleConnect} disabled={connecting}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 disabled:opacity-50"
               style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
               {connecting
-                ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Connexion…</>
-                : <><MessageCircle className="w-3.5 h-3.5" /> Connecter WhatsApp</>}
+                ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Connexion…</>
+                : <><MessageCircle className="w-3.5 h-3.5" />Connecter WhatsApp</>}
             </button>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 min-w-0">
               {!isWorking && (
-                <span className="text-xs animate-pulse" style={{ color: "var(--text-disabled)" }}>
-                  {isStarting ? "Initialisation de la session…" : "En attente du scan…"}
+                <span className="text-xs animate-pulse truncate" style={{ color: "var(--text-disabled)" }}>
+                  {isStarting ? "Initialisation…" : "En attente du scan…"}
                 </span>
               )}
             </div>
           )}
           {!isStopped && (
             <button onClick={handleDisconnect}
-              className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150"
+              className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150 flex-shrink-0"
               style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
@@ -827,13 +887,13 @@ function IntegrationTab({ agent }: { agent: Agent }) {
       </div>
 
       {/* Agent ID */}
-      <div className="rounded-2xl p-4 flex items-center gap-4"
+      <div className="rounded-2xl p-4 flex items-center gap-3"
         style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
         <div className="flex-1 min-w-0">
-          <p className="text-2xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-disabled)" }}>Agent ID</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-disabled)" }}>Agent ID</p>
           <p className="text-xs font-mono truncate" style={{ color: "var(--text-tertiary)" }}>{agent.id}</p>
         </div>
-        <button onClick={copyId} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-medium flex-shrink-0 transition-all duration-200"
+        <button onClick={copyId} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0 transition-all duration-200"
           style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}>
           {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           {copied ? "Copié" : "Copier"}
@@ -912,11 +972,27 @@ export default function AgentConfigPage() {
         </span>
       </div>
 
+      {/* ── Mobile tab bar ──────────────────────────────────────────────── */}
+      <div className="md:hidden flex-shrink-0 overflow-x-auto flex gap-1 px-3 py-2"
+        style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap flex-shrink-0 transition-colors duration-100",
+              tab === id
+                ? "text-[var(--text-primary)] bg-[var(--surface-glass)]"
+                : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]")}
+            style={tab === id ? { border: "1px solid var(--border-subtle)" } : { border: "1px solid transparent" }}>
+            <Icon className="w-3 h-3 opacity-60" />
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
 
-        {/* Left tab nav */}
-        <div className="w-[168px] flex-shrink-0 flex flex-col py-3 px-2.5 space-y-px overflow-y-auto"
+        {/* Left tab nav — desktop only */}
+        <div className="hidden md:flex w-[168px] flex-shrink-0 flex-col py-3 px-2.5 space-y-px overflow-y-auto"
           style={{ borderRight: "1px solid var(--border-subtle)" }}>
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTab(id)}
@@ -933,7 +1009,7 @@ export default function AgentConfigPage() {
 
         {/* Content */}
         <div className="flex-1 min-w-0 overflow-y-auto">
-          <div className="max-w-2xl mx-auto px-7 py-6">
+          <div className="max-w-2xl mx-auto px-4 sm:px-7 py-5 sm:py-6">
             <AnimatePresence mode="wait">
               <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
                 {tab === "overview"     && <OverviewTab     agent={agent} onToggleStatus={handleToggleStatus} />}
