@@ -10,7 +10,7 @@ import {
   Zap, Check, X, CreditCard, TrendingUp, AlertTriangle,
   RefreshCw, ChevronRight, Sparkles, Shield, Phone,
   MessageCircle, Clock, History, UserPlus, FileText,
-  Target, Send, Users, Image, Info,
+  Target, Send, Users, Image, Info, Calendar,
 } from "lucide-react";
 import { toast }       from "sonner";
 import { useAuth }     from "@/hooks/useAuth";
@@ -41,7 +41,7 @@ interface Payment {
 
 const CAP_ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   MessageCircle, Clock, History, UserPlus, FileText,
-  Target, Send, Users, Image, Zap,
+  Target, Send, Users, Image, Zap, Calendar,
 };
 function CapIcon({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
   const Icon = CAP_ICON_MAP[name] ?? Zap;

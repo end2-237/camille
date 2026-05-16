@@ -78,6 +78,7 @@ export const step4Schema = z.object({
     strategy_advisor:     z.boolean(),
     lead_capture:         z.boolean(),
     proactive_messaging:  z.boolean(),
+    calendar_booking:     z.boolean(),
   }),
 });
 

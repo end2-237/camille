@@ -15,7 +15,7 @@ import {
   Save, Pencil, Plus, Trash2, Play, Pause,
   MessageCircle, Globe, Phone, Clock,
   Users, ChevronDown, LayoutDashboard, TrendingUp,
-  History, FileText, Target, UserPlus, Send, Image,
+  History, FileText, Target, UserPlus, Send, Image, Calendar,
 } from "lucide-react";
 import { toast }                from "sonner";
 import { useAuth }             from "@/hooks/useAuth";
@@ -80,7 +80,7 @@ const EMOJI_PRESETS = ["✨","🤖","💼","🛍️","🏥","📚","🏠","⚖�
 
 const CAP_ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   MessageCircle, Clock, History, UserPlus, FileText,
-  Target, Send, Users, Image, Zap, Sparkles, LayoutDashboard,
+  Target, Send, Users, Image, Zap, Sparkles, LayoutDashboard, Calendar,
 };
 function CapIconDash({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
   const Icon = CAP_ICON_MAP[name] ?? Zap;

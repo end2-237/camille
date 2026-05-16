@@ -223,6 +223,7 @@ export default function ConfigurePage() {
           strategy_advisor:     false,
           lead_capture:         false,
           proactive_messaging:  false,
+          calendar_booking:     false,
         },
         target_model:     "claude-3-5-sonnet-20241022",
         faq:              [],

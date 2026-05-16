@@ -10,7 +10,7 @@ import { useFormContext, Controller } from "react-hook-form";
 import { motion } from "framer-motion";
 import {
   MessageCircle, FileText, Image, Users, Target, UserPlus, Send,
-  History, Zap, RefreshCw,
+  History, Zap, RefreshCw, Calendar,
 } from "lucide-react";
 import type { AgentFormData, AgentCapabilities } from "@/types/agent";
 import type { DbCapability } from "@/lib/plans-db";
@@ -22,7 +22,7 @@ type CapKey = keyof AgentCapabilities;
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   MessageCircle, FileText, Image, Users, Target, UserPlus, Send,
-  History, Zap,
+  History, Zap, Calendar,
 };
 function CapIcon({ name, className }: { name: string; className?: string }) {
   const Icon = ICON_MAP[name] ?? Zap;

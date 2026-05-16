@@ -183,6 +183,9 @@ export interface AgentCapabilities {
 
   /** Send proactive follow-up or broadcast messages */
   proactive_messaging: boolean;
+
+  /** Book appointments and sync with Google Calendar */
+  calendar_booking: boolean;
 }
 
 // ── WhatsApp Integration ──────────────────────────────────────────────────────

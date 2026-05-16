@@ -61,6 +61,7 @@ const DEFAULT_VALUES: Partial<AgentFormData> = {
     strategy_advisor:    false,
     lead_capture:        false,
     proactive_messaging: false,
+    calendar_booking:    false,
   },
   faq: [],
   forbidden_topics: [],
