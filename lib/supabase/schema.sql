@@ -205,3 +205,21 @@ CREATE POLICY "analytics_owner" ON agent_analytics
         AND agents.user_id = auth.uid()
     )
   );
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Table: agent_conversations
+-- Historique des conversations WhatsApp par session et par contact.
+-- Utilisée par n8n pour injecter le contexte dans les appels LLM.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS camille.agent_conversations (
+  id             BIGSERIAL PRIMARY KEY,
+  session_name   TEXT        NOT NULL,            -- ex: "default" ou "cam..."
+  contact_phone  TEXT        NOT NULL,            -- ex: "33612345678@c.us"
+  role           TEXT        NOT NULL CHECK (role IN ('user', 'assistant')),
+  content        TEXT        NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_session_phone
+  ON camille.agent_conversations (session_name, contact_phone, created_at DESC);
