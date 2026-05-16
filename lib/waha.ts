@@ -27,7 +27,8 @@ export async function wahaCreateSession(sessionName: string) {
     const text = await res.text();
     throw new Error(`Waha createSession: ${res.status} ${text}`);
   }
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
 export async function wahaStartSession(sessionName: string) {
@@ -51,7 +52,9 @@ export async function wahaGetSession(sessionName: string) {
   // 404 = session inconnue, 422 = nom invalide → les deux = pas de session active
   if (res.status === 404 || res.status === 422) return null;
   if (!res.ok) throw new Error(`Waha getSession: ${res.status}`);
-  return res.json() as Promise<{ name: string; status: string; me?: { id: string; pushName: string } }>;
+  const text = await res.text();
+  if (!text) return null;
+  return JSON.parse(text) as { name: string; status: string; me?: { id: string; pushName: string } };
 }
 
 export async function wahaGetQR(sessionName: string): Promise<Buffer | null> {
