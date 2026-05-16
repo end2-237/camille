@@ -9,6 +9,8 @@ import { motion, AnimatePresence }           from "framer-motion";
 import {
   Zap, Check, X, CreditCard, TrendingUp, AlertTriangle,
   RefreshCw, ChevronRight, Sparkles, Shield, Phone,
+  MessageCircle, Clock, History, UserPlus, FileText,
+  Target, Send, Users, Image, Info,
 } from "lucide-react";
 import { toast }       from "sonner";
 import { useAuth }     from "@/hooks/useAuth";
@@ -73,6 +75,260 @@ const PLAN_FEATURES: Record<string, string[]> = {
 
 const PLAN_ORDER: (keyof typeof PLANS)[] = ["free", "starter", "pro", "enterprise"];
 const PLAN_HIGHLIGHT: Record<string, boolean> = { pro: true };
+
+// ── Capability cost catalogue ─────────────────────────────────────────────────
+
+const CAPABILITY_COSTS = [
+  {
+    id:          "support_whatsapp",
+    icon:        MessageCircle,
+    label:       "Support WhatsApp",
+    description: "Réponses automatiques aux messages entrants",
+    tokensPerMsg: 800,
+    color:       "#34D399",
+    plans:       ["free","starter","pro","enterprise"],
+    alwaysOn:    true,          // always counted — it's the base capability
+  },
+  {
+    id:          "typing_indicator",
+    icon:        Clock,
+    label:       "Indicateur de frappe",
+    description: "Simulation startTyping / stopTyping avant chaque réponse",
+    tokensPerMsg: 0,
+    color:       "#60A5FA",
+    plans:       ["starter","pro","enterprise"],
+    alwaysOn:    false,
+  },
+  {
+    id:          "conversation_history",
+    icon:        History,
+    label:       "Historique de conversation",
+    description: "Injection des 10 à 200 derniers échanges dans le contexte",
+    tokensPerMsg: 400,
+    color:       "#A78BFA",
+    plans:       ["starter","pro","enterprise"],
+    alwaysOn:    false,
+  },
+  {
+    id:          "lead_capture",
+    icon:        UserPlus,
+    label:       "Capture de leads",
+    description: "Collecte d'email / téléphone + enregistrement CRM",
+    tokensPerMsg: 200,
+    color:       "#FB923C",
+    plans:       ["starter","pro","enterprise"],
+    alwaysOn:    false,
+  },
+  {
+    id:          "content_generation",
+    icon:        FileText,
+    label:       "Génération de contenu",
+    description: "Rédaction de posts, e-mails, descriptions produits",
+    tokensPerMsg: 1_200,
+    color:       "#F472B6",
+    plans:       ["pro","enterprise"],
+    alwaysOn:    false,
+  },
+  {
+    id:          "strategy_advisor",
+    icon:        Target,
+    label:       "Conseiller stratégique",
+    description: "Analyse de marché, recommandations, plan d'action",
+    tokensPerMsg: 500,
+    color:       "#FBBF24",
+    plans:       ["pro","enterprise"],
+    alwaysOn:    false,
+  },
+  {
+    id:          "proactive_messaging",
+    icon:        Send,
+    label:       "Messages proactifs",
+    description: "Envoi de campagnes et relances sortantes planifiées",
+    tokensPerMsg: 600,
+    color:       "#34D399",
+    plans:       ["pro","enterprise"],
+    alwaysOn:    false,
+  },
+  {
+    id:          "community_management",
+    icon:        Users,
+    label:       "Gestion communauté",
+    description: "Animation de groupes WhatsApp et forums",
+    tokensPerMsg: 900,
+    color:       "#60A5FA",
+    plans:       ["pro","enterprise"],
+    alwaysOn:    false,
+  },
+  {
+    id:          "image_creation",
+    icon:        Image,
+    label:       "Création d'images",
+    description: "Génération via DALL-E / Stable Diffusion à la demande",
+    tokensPerMsg: 2_500,
+    color:       "#A78BFA",
+    plans:       ["enterprise"],
+    alwaysOn:    false,
+  },
+] as const;
+
+// ── Capability cost breakdown component ───────────────────────────────────────
+
+function CapabilityCostBreakdown({ agent }: { agent: Agent }) {
+  const caps      = (agent.capabilities ?? {}) as unknown as Record<string, boolean>;
+  const plan      = agent.plan ?? "free";
+  const planLimit = PLANS[plan as keyof typeof PLANS]?.monthly_tokens ?? 50_000;
+  const unlimited = isUnlimited(plan);
+
+  // Map capability id → active (true if either alwaysOn or turned on in config)
+  const activeCaps = CAPABILITY_COSTS.filter(
+    (c) => c.alwaysOn || caps[c.id] === true
+  );
+
+  const totalPerMsg = activeCaps.reduce((s, c) => s + c.tokensPerMsg, 0);
+
+  // Estimated conversations per month given the plan limit
+  const estimatedConvos = unlimited || totalPerMsg === 0
+    ? null
+    : Math.floor(planLimit / (totalPerMsg * 8)); // assume ~8 msgs/conversation
+
+  return (
+    <div
+      className="rounded-xl p-5 space-y-4"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4" style={{ color: "var(--color-gold)" }} />
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            Capacités actives & coût par message
+          </p>
+        </div>
+        {totalPerMsg > 0 && (
+          <span
+            className="text-2xs font-bold px-2.5 py-1 rounded-full tabular-nums"
+            style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}
+          >
+            ~{totalPerMsg.toLocaleString("fr-FR")} tokens / msg
+          </span>
+        )}
+      </div>
+
+      {/* Capability rows */}
+      <div className="space-y-2">
+        {CAPABILITY_COSTS.map((cap) => {
+          const isActive  = cap.alwaysOn || caps[cap.id] === true;
+          const inPlan    = cap.plans.includes(plan as any);
+          const Icon      = cap.icon;
+
+          return (
+            <div
+              key={cap.id}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-opacity"
+              style={{
+                background:  isActive ? `${cap.color}08` : "var(--bg-muted)",
+                border:      `1px solid ${isActive ? `${cap.color}20` : "var(--border-subtle)"}`,
+                opacity:     isActive ? 1 : 0.5,
+              }}
+            >
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: isActive ? `${cap.color}18` : "var(--bg-card)" }}
+              >
+                <Icon className="w-3.5 h-3.5" style={{ color: isActive ? cap.color : "var(--text-disabled)" }} />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-semibold truncate" style={{ color: isActive ? "var(--text-primary)" : "var(--text-disabled)" }}>
+                    {cap.label}
+                  </p>
+                  {!inPlan && isActive && (
+                    <span
+                      className="text-2xs px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                      style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                    >
+                      Hors plan
+                    </span>
+                  )}
+                  {!inPlan && !isActive && (
+                    <span
+                      className="text-2xs px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                      style={{ background: "var(--bg-card)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}
+                    >
+                      Plan supérieur
+                    </span>
+                  )}
+                </div>
+                <p className="text-2xs mt-0.5 truncate" style={{ color: "var(--text-disabled)" }}>
+                  {cap.description}
+                </p>
+              </div>
+
+              <div className="text-right flex-shrink-0">
+                {cap.tokensPerMsg === 0 ? (
+                  <span className="text-2xs" style={{ color: "var(--text-disabled)" }}>0 token</span>
+                ) : (
+                  <span
+                    className="text-xs font-bold tabular-nums"
+                    style={{ color: isActive ? cap.color : "var(--text-disabled)" }}
+                  >
+                    +{cap.tokensPerMsg >= 1_000
+                      ? `${(cap.tokensPerMsg / 1_000).toFixed(1)}k`
+                      : cap.tokensPerMsg
+                    }
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Summary row */}
+      <div
+        className="flex items-center justify-between rounded-lg px-3 py-3"
+        style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)" }}
+      >
+        <div>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+            Coût total estimé par message
+          </p>
+          <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>
+            {activeCaps.length} capacité{activeCaps.length > 1 ? "s" : ""} active{activeCaps.length > 1 ? "s" : ""}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-base font-bold tabular-nums" style={{ color: "var(--color-gold)" }}>
+            ~{totalPerMsg.toLocaleString("fr-FR")}
+            <span className="text-xs font-normal ml-1" style={{ color: "var(--text-disabled)" }}>tokens</span>
+          </p>
+          {estimatedConvos !== null && (
+            <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>
+              ≈ {estimatedConvos.toLocaleString("fr-FR")} conversations / mois
+            </p>
+          )}
+          {unlimited && (
+            <p className="text-2xs mt-0.5" style={{ color: "var(--color-gold)" }}>
+              <Sparkles className="w-2.5 h-2.5 inline mr-0.5" />
+              Illimité
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Info note */}
+      <div className="flex items-start gap-2" style={{ color: "var(--text-disabled)" }}>
+        <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+        <p className="text-2xs leading-relaxed">
+          Les tokens consommés incluent le prompt système, le contexte de conversation et la réponse générée.
+          L'estimatif suppose ~8 messages échangés par conversation.
+          Activez ou désactivez des capacités depuis la <a href={`/dashboard/${agent.id}`} className="underline" style={{ color: "var(--text-tertiary)" }}>page de configuration</a> de votre agent.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -604,6 +860,11 @@ function BillingContent() {
 
             <UsageBar percent={usage.current.percent} unlimited={usage.plan.unlimited} />
           </div>
+        )}
+
+        {/* Capability cost breakdown */}
+        {activeAgent && (
+          <CapabilityCostBreakdown agent={activeAgent} />
         )}
 
         {/* Plan cards */}

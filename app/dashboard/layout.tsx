@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard,
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2,
 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -105,6 +105,9 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           icon={<Bot className="w-3.5 h-3.5" />}
           active={false} collapsed={collapsed}
           badge={mounted ? agents.length : undefined} />
+        <NavItem href="/dashboard/stats" label="Statistiques"
+          icon={<BarChart2 className="w-3.5 h-3.5" />}
+          active={pathname === "/dashboard/stats"} collapsed={collapsed} />
         <NavItem href="/dashboard/billing" label="Plans & Facturation"
           icon={<CreditCard className="w-3.5 h-3.5" />}
           active={pathname === "/dashboard/billing"} collapsed={collapsed} />
@@ -279,7 +282,9 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
   }, []);
 
   const pageLabel = (() => {
-    if (pathname === "/dashboard") return "Tableau de bord";
+    if (pathname === "/dashboard")         return "Tableau de bord";
+    if (pathname === "/dashboard/stats")   return "Statistiques";
+    if (pathname === "/dashboard/billing") return "Plans & Facturation";
     const match = agents.find((a) => pathname.includes(a.id));
     if (match) return match.identity.name;
     return "Dashboard";
