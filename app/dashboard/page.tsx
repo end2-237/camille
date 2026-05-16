@@ -31,6 +31,11 @@ const SECTOR_LABELS: Record<string, string> = {
 };
 
 const MODEL_SHORT: Record<string, string> = {
+  // Groq — disponibles
+  "llama-3.1-8b-instant":       "Llama 3.1 8B",
+  "llama-3.3-70b-versatile":    "Llama 3.3 70B",
+  "mixtral-8x7b-32768":         "Mixtral 8x7B",
+  // OpenAI / Anthropic — bientôt
   "gpt-4o":                     "GPT-4o",
   "gpt-4o-mini":                "GPT-4o mini",
   "claude-3-5-sonnet-20241022": "Claude 3.5 Sonnet",

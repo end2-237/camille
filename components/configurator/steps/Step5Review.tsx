@@ -17,34 +17,47 @@ const MODELS: {
   provider: string;
   description: string;
   speed: "fast" | "medium" | "powerful";
+  available: boolean;
 }[] = [
   {
-    value: "claude-3-5-sonnet-20241022",
-    label: "Claude 3.5 Sonnet",
-    provider: "Anthropic",
-    description: "Nuancé, créatif, idéal pour le support client haut de gamme",
+    value: "llama-3.1-8b-instant",
+    label: "Llama 3.1 8B",
+    provider: "Groq",
+    description: "Ultra-rapide, idéal pour les réponses WhatsApp en temps réel",
+    speed: "fast",
+    available: true,
+  },
+  {
+    value: "llama-3.3-70b-versatile",
+    label: "Llama 3.3 70B",
+    provider: "Groq",
+    description: "Puissant et nuancé, parfait pour le support client haut de gamme",
     speed: "powerful",
+    available: true,
+  },
+  {
+    value: "mixtral-8x7b-32768",
+    label: "Mixtral 8x7B",
+    provider: "Groq",
+    description: "Contexte long, excellent pour les conversations complexes",
+    speed: "medium",
+    available: true,
   },
   {
     value: "gpt-4o",
     label: "GPT-4o",
     provider: "OpenAI",
-    description: "Polyvalent et robuste pour des cas d'usage complexes",
+    description: "Intégration OpenAI — bientôt disponible",
     speed: "powerful",
+    available: false,
   },
   {
-    value: "gpt-4o-mini",
-    label: "GPT-4o Mini",
-    provider: "OpenAI",
-    description: "Rapide et économique pour un trafic élevé",
-    speed: "fast",
-  },
-  {
-    value: "claude-3-haiku-20240307",
-    label: "Claude 3 Haiku",
+    value: "claude-3-5-sonnet-20241022",
+    label: "Claude 3.5 Sonnet",
     provider: "Anthropic",
-    description: "Ultra-rapide, parfait pour les réponses WhatsApp en temps réel",
-    speed: "fast",
+    description: "Intégration Anthropic — bientôt disponible",
+    speed: "powerful",
+    available: false,
   },
 ];
 
@@ -86,12 +99,14 @@ export function Step5Review({ generatedPrompt, onPreview }: Step5ReviewProps) {
                   <motion.button
                     key={model.value}
                     type="button"
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => field.onChange(model.value)}
+                    whileHover={model.available ? { y: -2 } : {}}
+                    whileTap={model.available ? { scale: 0.98 } : {}}
+                    onClick={() => model.available && field.onChange(model.value)}
+                    disabled={!model.available}
                     className={cn(
                       "flex flex-col items-start gap-2 p-4 rounded-xl text-left",
                       "border transition-all duration-250 ease-premium",
+                      !model.available && "opacity-45 cursor-not-allowed",
                       isSelected
                         ? "glass-gold border-gold/35 shadow-gold"
                         : "glass border-white/[0.07] hover:border-white/15"
@@ -106,10 +121,16 @@ export function Step5Review({ generatedPrompt, onPreview }: Step5ReviewProps) {
                       >
                         {model.label}
                       </span>
-                      <span className={cn("text-2xs font-medium", speed.color)}>
-                        <Zap className="w-2.5 h-2.5 inline mr-0.5" />
-                        {speed.label}
-                      </span>
+                      {model.available ? (
+                        <span className={cn("text-2xs font-medium", speed.color)}>
+                          <Zap className="w-2.5 h-2.5 inline mr-0.5" />
+                          {speed.label}
+                        </span>
+                      ) : (
+                        <span className="text-2xs font-medium text-white/30 bg-white/5 px-1.5 py-0.5 rounded">
+                          Bientôt
+                        </span>
+                      )}
                     </div>
                     <span className="text-2xs text-white/40">
                       {model.provider}

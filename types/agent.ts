@@ -46,8 +46,14 @@ export type BusinessSector =
   | "other";
 
 export type AgentModel =
+  // Groq — disponibles
+  | "llama-3.1-8b-instant"
+  | "llama-3.3-70b-versatile"
+  | "mixtral-8x7b-32768"
+  // OpenAI — bientôt
   | "gpt-4o"
   | "gpt-4o-mini"
+  // Anthropic — bientôt
   | "claude-3-5-sonnet-20241022"
   | "claude-3-haiku-20240307";
 

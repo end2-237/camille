@@ -52,7 +52,7 @@ const DEFAULT_VALUES: Partial<AgentFormData> = {
   primary_language: "fr",
   brand_voice: "professional",
   sector: "ecommerce",
-  target_model: "claude-3-5-sonnet-20241022",
+  target_model: "llama-3.1-8b-instant",
   capabilities: {
     support_whatsapp:    true,
     content_generation:  false,

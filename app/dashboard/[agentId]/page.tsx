@@ -62,11 +62,14 @@ const LANG_OPTIONS = [
   { value: "nl", label: "Nederlands 🇳🇱" },
 ];
 
-const MODEL_OPTIONS = [
-  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet", sub: "Recommandé · Meilleur équilibre" },
-  { value: "claude-3-haiku-20240307",    label: "Claude 3 Haiku",    sub: "Ultra-rapide · Économique" },
-  { value: "gpt-4o",                     label: "GPT-4o",             sub: "OpenAI · Très capable" },
-  { value: "gpt-4o-mini",               label: "GPT-4o mini",        sub: "OpenAI · Rapide & léger" },
+const MODEL_OPTIONS: { value: string; label: string; sub: string; available: boolean }[] = [
+  // Groq — disponibles
+  { value: "llama-3.1-8b-instant",    label: "Llama 3.1 8B",     sub: "Groq · Ultra-rapide · Recommandé",         available: true  },
+  { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B",    sub: "Groq · Puissant · Réponses nuancées",      available: true  },
+  { value: "mixtral-8x7b-32768",      label: "Mixtral 8x7B",     sub: "Groq · Contexte long · Très polyvalent",   available: true  },
+  // Bientôt
+  { value: "gpt-4o",                  label: "GPT-4o",            sub: "OpenAI · Bientôt disponible",              available: false },
+  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet", sub: "Anthropic · Bientôt disponible",        available: false },
 ];
 
 const EMOJI_PRESETS = ["✨","🤖","💼","🛍️","🏥","📚","🏠","⚖️","💄","🍽️","💻","🤝","💡","🎯","🦁","🦊","🦋","🌟","🔮","🎨"];
@@ -506,8 +509,16 @@ function ModelTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>)
         <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>Le modèle utilisé pour générer les réponses de votre agent.</p>
         <div className="space-y-3">
           {MODEL_OPTIONS.map((opt) => (
-            <div key={opt.value} onClick={() => setModel(opt.value as AgentModel)} className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-200"
-              style={{ background: model === opt.value ? "rgba(212,175,55,0.08)" : "var(--bg-elevated)", border: `1px solid ${model === opt.value ? "var(--border-gold)" : "var(--border-subtle)"}` }}>
+            <div
+              key={opt.value}
+              onClick={() => opt.available && setModel(opt.value as AgentModel)}
+              className="flex items-center gap-4 p-4 rounded-xl transition-all duration-200"
+              style={{
+                background: model === opt.value ? "rgba(212,175,55,0.08)" : "var(--bg-elevated)",
+                border: `1px solid ${model === opt.value ? "var(--border-gold)" : "var(--border-subtle)"}`,
+                cursor: opt.available ? "pointer" : "not-allowed",
+                opacity: opt.available ? 1 : 0.45,
+              }}>
               <div className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ border: `2px solid ${model === opt.value ? "var(--color-gold)" : "var(--border-default)"}` }}>
                 {model === opt.value && <div className="w-2 h-2 rounded-full" style={{ background: "var(--color-gold)" }} />}
               </div>
@@ -515,7 +526,10 @@ function ModelTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>)
                 <p className="text-sm font-semibold" style={{ color: model === opt.value ? "var(--color-gold)" : "var(--text-primary)" }}>{opt.label}</p>
                 <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>{opt.sub}</p>
               </div>
-              <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: model === opt.value ? "var(--color-gold)" : "var(--text-disabled)", opacity: model === opt.value ? 1 : 0.3 }} />
+              {opt.available
+                ? <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: model === opt.value ? "var(--color-gold)" : "var(--text-disabled)", opacity: model === opt.value ? 1 : 0.3 }} />
+                : <span className="text-2xs px-2 py-0.5 rounded-full" style={{ background: "var(--bg-card)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>Bientôt</span>
+              }
             </div>
           ))}
         </div>
