@@ -41,15 +41,22 @@ export async function POST(req: NextRequest) {
     const sessionName = existing.rows[0]?.session_name ?? makeSessionName(agentId);
 
     // Waha Core : "default" est pré-existante, on essaie START en premier.
-    // Si 404 (session vraiment absente), on crée puis on relance START.
+    // Si 404, on tente CREATE + START. Si ça échoue encore, message clair.
     try {
       await wahaStartSession(sessionName);
     } catch (startErr) {
       const msg = startErr instanceof Error ? startErr.message : String(startErr);
       if (msg.includes("404")) {
-        // Session absente → créer puis redémarrer
-        await wahaCreateSession(sessionName);
-        await wahaStartSession(sessionName);
+        try {
+          await wahaCreateSession(sessionName);
+          await wahaStartSession(sessionName);
+        } catch {
+          throw new Error(
+            `Session Waha "${sessionName}" introuvable. ` +
+            `Créez-la manuellement dans le dashboard Waha (${process.env.WAHA_URL ?? "https://waha.vps.buyticle.com"}) ` +
+            `puis réessayez.`
+          );
+        }
       } else {
         throw startErr;
       }
