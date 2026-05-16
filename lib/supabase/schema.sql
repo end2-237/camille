@@ -250,3 +250,25 @@ CREATE TABLE IF NOT EXISTS camille.token_usage (
 
 CREATE INDEX IF NOT EXISTS idx_token_usage_agent_period
   ON camille.token_usage (agent_id, period DESC);
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Table: payments
+-- Paiements Monetbil — une ligne par tentative de paiement.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS camille.payments (
+  id             TEXT        PRIMARY KEY,   -- CAM-timestamp-hex
+  user_id        UUID        NOT NULL,
+  agent_id       UUID        NOT NULL,
+  plan_id        TEXT        NOT NULL,      -- starter | pro | enterprise
+  amount         INTEGER     NOT NULL,      -- XAF
+  currency       TEXT        NOT NULL DEFAULT 'XAF',
+  status         TEXT        NOT NULL DEFAULT 'pending',  -- pending|success|failed|cancelled
+  transaction_id TEXT,
+  phone          TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_user_id ON camille.payments (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payments_status  ON camille.payments (status);

@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink,
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard,
 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -105,6 +105,9 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           icon={<Bot className="w-3.5 h-3.5" />}
           active={false} collapsed={collapsed}
           badge={mounted ? agents.length : undefined} />
+        <NavItem href="/dashboard/billing" label="Plans & Facturation"
+          icon={<CreditCard className="w-3.5 h-3.5" />}
+          active={pathname === "/dashboard/billing"} collapsed={collapsed} />
 
         {mounted && agents.length > 0 && (
           <div className="pt-3">
