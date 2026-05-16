@@ -33,7 +33,7 @@ const MODELS: {
     provider: "Groq",
     description: "Puissant et nuancé, parfait pour le support client haut de gamme",
     speed: "powerful",
-    available: true,
+    available: false,
   },
   {
     value: "mixtral-8x7b-32768",
@@ -41,7 +41,7 @@ const MODELS: {
     provider: "Groq",
     description: "Contexte long, excellent pour les conversations complexes",
     speed: "medium",
-    available: true,
+    available: false,
   },
   {
     value: "gpt-4o",

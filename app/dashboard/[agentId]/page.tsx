@@ -65,8 +65,8 @@ const LANG_OPTIONS = [
 const MODEL_OPTIONS: { value: string; label: string; sub: string; available: boolean }[] = [
   // Groq — disponibles
   { value: "llama-3.1-8b-instant",    label: "Llama 3.1 8B",     sub: "Groq · Ultra-rapide · Recommandé",         available: true  },
-  { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B",    sub: "Groq · Puissant · Réponses nuancées",      available: true  },
-  { value: "mixtral-8x7b-32768",      label: "Mixtral 8x7B",     sub: "Groq · Contexte long · Très polyvalent",   available: true  },
+  { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B",    sub: "Groq · Bientôt disponible",                available: false },
+  { value: "mixtral-8x7b-32768",      label: "Mixtral 8x7B",     sub: "Groq · Bientôt disponible",                available: false },
   // Bientôt
   { value: "gpt-4o",                  label: "GPT-4o",            sub: "OpenAI · Bientôt disponible",              available: false },
   { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet", sub: "Anthropic · Bientôt disponible",        available: false },
