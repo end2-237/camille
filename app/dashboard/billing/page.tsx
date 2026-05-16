@@ -3,8 +3,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter, useSearchParams }        from "next/navigation";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams }                  from "next/navigation";
 import { motion, AnimatePresence }           from "framer-motion";
 import {
   Zap, Check, X, CreditCard, TrendingUp, AlertTriangle,
@@ -354,7 +354,7 @@ function PlanCard({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export default function BillingPage() {
+function BillingContent() {
   const router                  = useRouter();
   const searchParams            = useSearchParams();
   const { isLoggedIn }          = useAuth();
@@ -688,5 +688,18 @@ export default function BillingPage() {
 
       </div>
     </>
+  );
+}
+
+// useSearchParams() doit être dans un Suspense boundary (Next.js 15 requirement)
+export default function BillingPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: "var(--border-subtle)", borderTopColor: "var(--color-gold)" }} />
+      </div>
+    }>
+      <BillingContent />
+    </Suspense>
   );
 }
