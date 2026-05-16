@@ -1,9 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
-import { query } from "@/lib/db";
-import { getUserFromRequest } from "@/lib/auth-server";
-import { UPGRADEABLE_PLANS, getPlanPriceXAF } from "@/lib/plans";
-import type { PlanId } from "@/lib/plans";
+import { NextRequest, NextResponse }   from "next/server";
+import crypto                          from "crypto";
+import { query }                       from "@/lib/db";
+import { getUserFromRequest }          from "@/lib/auth-server";
+import { isPurchasableDB, getPlanPriceXafDB } from "@/lib/plans-db";
 
 const MONETBIL_SERVICE_KEY = process.env.MONETBIL_SERVICE_KEY!;
 const APP_URL =
@@ -32,13 +31,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!UPGRADEABLE_PLANS.includes(planId as PlanId)) {
+    // Vérifie que le plan est achetable (is_purchasable = true en DB)
+    const purchasable = await isPurchasableDB(planId);
+    if (!purchasable) {
       return NextResponse.json(
         {
           error:
             planId === "enterprise"
-              ? "Contactez-nous pour le plan Enterprise"
-              : "Plan invalide. Choisissez starter ou pro.",
+              ? "Contactez-nous pour le plan Enterprise : hello@buyticle.com"
+              : "Plan invalide ou non disponible à l'achat.",
         },
         { status: 400 }
       );
@@ -59,7 +60,8 @@ export async function POST(req: NextRequest) {
     }
 
     const agent = agentResult.rows[0] as { id: string; owner_email: string };
-    const amount = getPlanPriceXAF(planId);
+    // Prix depuis la DB (jamais depuis le client)
+    const amount = await getPlanPriceXafDB(planId);
 
     // ── Generate payment reference ────────────────────────────────────────────
     const paymentRef = `CAM-${Date.now()}-${crypto

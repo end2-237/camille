@@ -1,10 +1,11 @@
 // GET /api/usage?agentId=UUID  — usage du mois courant pour le dashboard
 // Route authentifiée — appelée par le dashboard Camille.
 
-import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/auth-server";
-import { query } from "@/lib/db";
-import { getPlanLimit, getPlanLabel, isUnlimited, currentPeriod, PLANS } from "@/lib/plans";
+import { NextRequest, NextResponse }         from "next/server";
+import { getUserFromRequest }                 from "@/lib/auth-server";
+import { query }                             from "@/lib/db";
+import { currentPeriod }                     from "@/lib/plans";
+import { getPlanLimitDB, getPlanLabelDB, isUnlimitedTokens, getPlansFromDB } from "@/lib/plans-db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,10 +24,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
     }
 
-    const plan   = agentRes.rows[0].plan ?? "free";
-    const period = currentPeriod();
-    const limit  = getPlanLimit(plan);
-    const unlimited = isUnlimited(plan);
+    const planId    = agentRes.rows[0].plan ?? "free";
+    const period    = currentPeriod();
+
+    // Données du plan depuis la DB
+    const limit     = await getPlanLimitDB(planId);
+    const label     = await getPlanLabelDB(planId);
+    const unlimited = isUnlimitedTokens(limit);
 
     // Usage mois courant
     const usageRes = await query(
@@ -58,13 +62,11 @@ export async function GET(req: NextRequest) {
       [agentId]
     );
 
+    // Tous les plans actifs depuis la DB (pour afficher le tableau de comparaison)
+    const { plans: allPlans } = await getPlansFromDB();
+
     return NextResponse.json({
-      plan: {
-        id:     plan,
-        label:  getPlanLabel(plan),
-        limit,
-        unlimited,
-      },
+      plan: { id: planId, label, limit, unlimited },
       current: {
         period,
         prompt_tokens:     Number(row.prompt_tokens),
@@ -78,12 +80,13 @@ export async function GET(req: NextRequest) {
         period:       r.period,
         total_tokens: Number(r.total_tokens),
       })),
-      plans: Object.entries(PLANS).map(([id, p]) => ({
-        id,
+      plans: allPlans.map((p) => ({
+        id:             p.id,
         label:          p.label,
         monthly_tokens: p.monthly_tokens,
+        price_xaf:      p.price_xaf,
         price_eur:      p.price_eur,
-        current:        id === plan,
+        current:        p.id === planId,
       })),
     });
   } catch (err) {

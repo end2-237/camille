@@ -6,9 +6,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest }        from "@/lib/auth-server";
-import { query }                     from "@/lib/db";
-import { getPlanLimit, isUnlimited, currentPeriod } from "@/lib/plans";
+import { getUserFromRequest }                         from "@/lib/auth-server";
+import { query }                                      from "@/lib/db";
+import { currentPeriod }                              from "@/lib/plans";
+import { getPlanLimitDB, isUnlimitedTokens }          from "@/lib/plans-db";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -280,37 +281,39 @@ export async function GET(req: NextRequest) {
     const peakHour = hourlyDistribution.reduce((best, h) => h.count > best.count ? h : best, hourlyDistribution[0]);
 
     // ── 12. Per-agent enriched list ───────────────────────────────────────────
-    const agentDetails = (agentIdParam ? allAgents.filter((a) => a.id === agentIdParam) : allAgents).map((a) => {
-      const agg     = perAgentMap[a.id];
-      const planId  = a.plan ?? "free";
-      const limit   = getPlanLimit(planId);
-      const unlimited = isUnlimited(planId);
-      const used    = tokenByAgent[a.id] ?? 0;
-      const percent = unlimited ? 0 : Math.min(100, Math.round((used / limit) * 100));
-      const caps    = (a.capabilities ?? {}) as Record<string, boolean>;
-      const activeCapsCount = Object.values(caps).filter(Boolean).length;
+    const agentDetails = await Promise.all(
+      (agentIdParam ? allAgents.filter((a) => a.id === agentIdParam) : allAgents).map(async (a) => {
+        const agg       = perAgentMap[a.id];
+        const planId    = a.plan ?? "free";
+        const limit     = await getPlanLimitDB(planId);
+        const unlimited = isUnlimitedTokens(limit);
+        const used      = tokenByAgent[a.id] ?? 0;
+        const percent   = unlimited ? 0 : Math.min(100, Math.round((used / limit) * 100));
+        const caps      = (a.capabilities ?? {}) as Record<string, boolean>;
+        const activeCapsCount = Object.values(caps).filter(Boolean).length;
 
-      return {
-        id:               a.id,
-        name:             (a.identity as Record<string, string>)?.name ?? "Agent",
-        emoji:            (a.identity as Record<string, string>)?.avatar_emoji ?? "🤖",
-        status:           a.status,
-        plan:             planId,
-        sector:           (a.business_context as Record<string, string>)?.sector ?? "",
-        activeCaps:       activeCapsCount,
-        created_at:       a.created_at,
-        period_messages:  agg ? Number(agg.total_messages)    : 0,
-        period_leads:     agg ? Number(agg.total_leads)       : 0,
-        period_escalations: agg ? Number(agg.total_escalations) : 0,
-        period_tokens:    agg ? Number(agg.total_tokens)      : 0,
-        avg_response_ms:  agg ? Number(agg.avg_response_ms)   : null,
-        active_days:      agg ? Number(agg.active_days)       : 0,
-        token_used_month: used,
-        token_limit:      limit,
-        token_unlimited:  unlimited,
-        token_percent:    percent,
-      };
-    });
+        return {
+          id:               a.id,
+          name:             (a.identity as Record<string, string>)?.name ?? "Agent",
+          emoji:            (a.identity as Record<string, string>)?.avatar_emoji ?? "🤖",
+          status:           a.status,
+          plan:             planId,
+          sector:           (a.business_context as Record<string, string>)?.sector ?? "",
+          activeCaps:       activeCapsCount,
+          created_at:       a.created_at,
+          period_messages:  agg ? Number(agg.total_messages)      : 0,
+          period_leads:     agg ? Number(agg.total_leads)         : 0,
+          period_escalations: agg ? Number(agg.total_escalations) : 0,
+          period_tokens:    agg ? Number(agg.total_tokens)        : 0,
+          avg_response_ms:  agg ? Number(agg.avg_response_ms)     : null,
+          active_days:      agg ? Number(agg.active_days)         : 0,
+          token_used_month: used,
+          token_limit:      limit,
+          token_unlimited:  unlimited,
+          token_percent:    percent,
+        };
+      })
+    );
 
     // ── Response ──────────────────────────────────────────────────────────────
     return NextResponse.json({

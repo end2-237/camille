@@ -3,8 +3,9 @@
 // Route publique — pas d'auth requise (n8n appelle depuis le serveur).
 
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
-import { getPlanLimit, isUnlimited, currentPeriod } from "@/lib/plans";
+import { query }           from "@/lib/db";
+import { currentPeriod }   from "@/lib/plans";
+import { getPlanLimitDB, isUnlimitedTokens } from "@/lib/plans-db";
 
 export async function GET(req: NextRequest) {
   const sessionName = req.nextUrl.searchParams.get("session");
@@ -24,15 +25,17 @@ export async function GET(req: NextRequest) {
     );
 
     if (agentRes.rows.length === 0) {
-      // Session inconnue → on laisse passer (pas de blocage si pas d'agent trouvé)
       return NextResponse.json({ allowed: true, reason: "no_agent" });
     }
 
     const { id: agentId, plan } = agentRes.rows[0];
     const period = currentPeriod();
 
+    // Récupère la limite depuis la DB (avec cache 5 min)
+    const limit = await getPlanLimitDB(plan);
+
     // Plan illimité → toujours autorisé
-    if (isUnlimited(plan)) {
+    if (isUnlimitedTokens(limit)) {
       return NextResponse.json({
         allowed: true,
         plan,
@@ -42,8 +45,6 @@ export async function GET(req: NextRequest) {
         percent: 0,
       });
     }
-
-    const limit = getPlanLimit(plan);
 
     // Usage du mois courant
     const usageRes = await query(

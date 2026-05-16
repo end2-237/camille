@@ -16,8 +16,8 @@ import { toast }       from "sonner";
 import { useAuth }     from "@/hooks/useAuth";
 import { useAgents }   from "@/hooks/useAgents";
 import { cn }          from "@/lib/utils";
-import { PLANS, UPGRADEABLE_PLANS, getPlanPriceXAF, getPlanLabel, isUnlimited } from "@/lib/plans";
 import type { Agent }  from "@/types/agent";
+import type { DbPlan, DbCapability } from "@/lib/plans-db";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,166 +37,35 @@ interface Payment {
   created_at:     string;
 }
 
-// ── Plan feature lists ────────────────────────────────────────────────────────
+// ── Icon map capacités (icon name en DB → composant lucide) ──────────────────
 
-const PLAN_FEATURES: Record<string, string[]> = {
-  free: [
-    "1 agent WhatsApp",
-    "50 000 tokens / mois",
-    "Historique 10 messages",
-    "Support communautaire",
-  ],
-  starter: [
-    "1 agent WhatsApp",
-    "500 000 tokens / mois",
-    "Historique 50 messages",
-    "Indicateur de frappe",
-    "Historique de conversation",
-    "Support email prioritaire",
-  ],
-  pro: [
-    "Agents illimités",
-    "2 000 000 tokens / mois",
-    "Historique 200 messages",
-    "Indicateur de frappe",
-    "Toutes les capacités",
-    "Support dédié",
-    "Analytics avancés",
-  ],
-  enterprise: [
-    "Tokens illimités",
-    "Déploiement personnalisé",
-    "SLA garanti",
-    "Intégrations sur mesure",
-    "Account manager dédié",
-    "Facturation sur devis",
-  ],
+const CAP_ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+  MessageCircle, Clock, History, UserPlus, FileText,
+  Target, Send, Users, Image, Zap,
 };
+function CapIcon({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
+  const Icon = CAP_ICON_MAP[name] ?? Zap;
+  return <Icon className={className} style={style} />;
+}
 
-const PLAN_ORDER: (keyof typeof PLANS)[] = ["free", "starter", "pro", "enterprise"];
-const PLAN_HIGHLIGHT: Record<string, boolean> = { pro: true };
+// ── Capability cost breakdown (DB-driven) ────────────────────────────────────
 
-// ── Capability cost catalogue ─────────────────────────────────────────────────
-
-const CAPABILITY_COSTS = [
-  {
-    id:          "support_whatsapp",
-    icon:        MessageCircle,
-    label:       "Support WhatsApp",
-    description: "Réponses automatiques aux messages entrants",
-    tokensPerMsg: 800,
-    color:       "#34D399",
-    plans:       ["free","starter","pro","enterprise"],
-    alwaysOn:    true,          // always counted — it's the base capability
-  },
-  {
-    id:          "typing_indicator",
-    icon:        Clock,
-    label:       "Indicateur de frappe",
-    description: "Simulation startTyping / stopTyping avant chaque réponse",
-    tokensPerMsg: 0,
-    color:       "#60A5FA",
-    plans:       ["starter","pro","enterprise"],
-    alwaysOn:    false,
-  },
-  {
-    id:          "conversation_history",
-    icon:        History,
-    label:       "Historique de conversation",
-    description: "Injection des 10 à 200 derniers échanges dans le contexte",
-    tokensPerMsg: 400,
-    color:       "#A78BFA",
-    plans:       ["starter","pro","enterprise"],
-    alwaysOn:    false,
-  },
-  {
-    id:          "lead_capture",
-    icon:        UserPlus,
-    label:       "Capture de leads",
-    description: "Collecte d'email / téléphone + enregistrement CRM",
-    tokensPerMsg: 200,
-    color:       "#FB923C",
-    plans:       ["starter","pro","enterprise"],
-    alwaysOn:    false,
-  },
-  {
-    id:          "content_generation",
-    icon:        FileText,
-    label:       "Génération de contenu",
-    description: "Rédaction de posts, e-mails, descriptions produits",
-    tokensPerMsg: 1_200,
-    color:       "#F472B6",
-    plans:       ["pro","enterprise"],
-    alwaysOn:    false,
-  },
-  {
-    id:          "strategy_advisor",
-    icon:        Target,
-    label:       "Conseiller stratégique",
-    description: "Analyse de marché, recommandations, plan d'action",
-    tokensPerMsg: 500,
-    color:       "#FBBF24",
-    plans:       ["pro","enterprise"],
-    alwaysOn:    false,
-  },
-  {
-    id:          "proactive_messaging",
-    icon:        Send,
-    label:       "Messages proactifs",
-    description: "Envoi de campagnes et relances sortantes planifiées",
-    tokensPerMsg: 600,
-    color:       "#34D399",
-    plans:       ["pro","enterprise"],
-    alwaysOn:    false,
-  },
-  {
-    id:          "community_management",
-    icon:        Users,
-    label:       "Gestion communauté",
-    description: "Animation de groupes WhatsApp et forums",
-    tokensPerMsg: 900,
-    color:       "#60A5FA",
-    plans:       ["pro","enterprise"],
-    alwaysOn:    false,
-  },
-  {
-    id:          "image_creation",
-    icon:        Image,
-    label:       "Création d'images",
-    description: "Génération via DALL-E / Stable Diffusion à la demande",
-    tokensPerMsg: 2_500,
-    color:       "#A78BFA",
-    plans:       ["enterprise"],
-    alwaysOn:    false,
-  },
-] as const;
-
-// ── Capability cost breakdown component ───────────────────────────────────────
-
-function CapabilityCostBreakdown({ agent }: { agent: Agent }) {
+function CapabilityCostBreakdown({ agent, capabilities }: { agent: Agent; capabilities: DbCapability[] }) {
   const caps      = (agent.capabilities ?? {}) as unknown as Record<string, boolean>;
-  const plan      = agent.plan ?? "free";
-  const planLimit = PLANS[plan as keyof typeof PLANS]?.monthly_tokens ?? 50_000;
-  const unlimited = isUnlimited(plan);
+  const planId    = agent.plan ?? "free";
 
-  // Map capability id → active (true if either alwaysOn or turned on in config)
-  const activeCaps = CAPABILITY_COSTS.filter(
-    (c) => c.alwaysOn || caps[c.id] === true
+  // support_whatsapp toujours actif (capacité de base)
+  const activeCaps = capabilities.filter(
+    (c) => c.id === "support_whatsapp" || caps[c.id] === true
   );
+  const totalPerMsg = activeCaps.reduce((s, c) => s + c.tokens_per_msg, 0);
 
-  const totalPerMsg = activeCaps.reduce((s, c) => s + c.tokensPerMsg, 0);
-
-  // Estimated conversations per month given the plan limit
-  const estimatedConvos = unlimited || totalPerMsg === 0
-    ? null
-    : Math.floor(planLimit / (totalPerMsg * 8)); // assume ~8 msgs/conversation
+  // Si capabilities pas encore chargées
+  if (capabilities.length === 0) return null;
 
   return (
-    <div
-      className="rounded-xl p-5 space-y-4"
-      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
-    >
-      {/* Header */}
+    <div className="rounded-xl p-5 space-y-4"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap className="w-4 h-4" style={{ color: "var(--color-gold)" }} />
@@ -205,57 +74,45 @@ function CapabilityCostBreakdown({ agent }: { agent: Agent }) {
           </p>
         </div>
         {totalPerMsg > 0 && (
-          <span
-            className="text-2xs font-bold px-2.5 py-1 rounded-full tabular-nums"
-            style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}
-          >
+          <span className="text-2xs font-bold px-2.5 py-1 rounded-full tabular-nums"
+            style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
             ~{totalPerMsg.toLocaleString("fr-FR")} tokens / msg
           </span>
         )}
       </div>
 
-      {/* Capability rows */}
       <div className="space-y-2">
-        {CAPABILITY_COSTS.map((cap) => {
-          const isActive  = cap.alwaysOn || caps[cap.id] === true;
-          const inPlan    = cap.plans.includes(plan as any);
-          const Icon      = cap.icon;
-
+        {capabilities.map((cap) => {
+          const isActive = cap.id === "support_whatsapp" || caps[cap.id] === true;
+          const inPlan   = cap.plans.includes(planId);
           return (
-            <div
-              key={cap.id}
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-opacity"
+            <div key={cap.id}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5"
               style={{
-                background:  isActive ? `${cap.color}08` : "var(--bg-muted)",
-                border:      `1px solid ${isActive ? `${cap.color}20` : "var(--border-subtle)"}`,
-                opacity:     isActive ? 1 : 0.5,
-              }}
-            >
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: isActive ? `${cap.color}18` : "var(--bg-card)" }}
-              >
-                <Icon className="w-3.5 h-3.5" style={{ color: isActive ? cap.color : "var(--text-disabled)" }} />
+                background: isActive ? `${cap.color}08` : "var(--bg-muted)",
+                border:     `1px solid ${isActive ? `${cap.color}20` : "var(--border-subtle)"}`,
+                opacity:    isActive ? 1 : 0.5,
+              }}>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: isActive ? `${cap.color}18` : "var(--bg-card)" }}>
+                <CapIcon name={cap.icon} className="w-3.5 h-3.5"
+                  style={{ color: isActive ? cap.color : "var(--text-disabled)" }} />
               </div>
-
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-semibold truncate" style={{ color: isActive ? "var(--text-primary)" : "var(--text-disabled)" }}>
+                  <p className="text-xs font-semibold truncate"
+                    style={{ color: isActive ? "var(--text-primary)" : "var(--text-disabled)" }}>
                     {cap.label}
                   </p>
                   {!inPlan && isActive && (
-                    <span
-                      className="text-2xs px-1.5 py-0.5 rounded font-medium flex-shrink-0"
-                      style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                    >
+                    <span className="text-2xs px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                      style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}>
                       Hors plan
                     </span>
                   )}
                   {!inPlan && !isActive && (
-                    <span
-                      className="text-2xs px-1.5 py-0.5 rounded font-medium flex-shrink-0"
-                      style={{ background: "var(--bg-card)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}
-                    >
+                    <span className="text-2xs px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                      style={{ background: "var(--bg-card)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
                       Plan supérieur
                     </span>
                   )}
@@ -264,19 +121,15 @@ function CapabilityCostBreakdown({ agent }: { agent: Agent }) {
                   {cap.description}
                 </p>
               </div>
-
               <div className="text-right flex-shrink-0">
-                {cap.tokensPerMsg === 0 ? (
+                {cap.tokens_per_msg === 0 ? (
                   <span className="text-2xs" style={{ color: "var(--text-disabled)" }}>0 token</span>
                 ) : (
-                  <span
-                    className="text-xs font-bold tabular-nums"
-                    style={{ color: isActive ? cap.color : "var(--text-disabled)" }}
-                  >
-                    +{cap.tokensPerMsg >= 1_000
-                      ? `${(cap.tokensPerMsg / 1_000).toFixed(1)}k`
-                      : cap.tokensPerMsg
-                    }
+                  <span className="text-xs font-bold tabular-nums"
+                    style={{ color: isActive ? cap.color : "var(--text-disabled)" }}>
+                    +{cap.tokens_per_msg >= 1_000
+                      ? `${(cap.tokens_per_msg / 1_000).toFixed(1)}k`
+                      : cap.tokens_per_msg}
                   </span>
                 )}
               </div>
@@ -285,15 +138,10 @@ function CapabilityCostBreakdown({ agent }: { agent: Agent }) {
         })}
       </div>
 
-      {/* Summary row */}
-      <div
-        className="flex items-center justify-between rounded-lg px-3 py-3"
-        style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)" }}
-      >
+      <div className="flex items-center justify-between rounded-lg px-3 py-3"
+        style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)" }}>
         <div>
-          <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
-            Coût total estimé par message
-          </p>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>Coût total estimé par message</p>
           <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>
             {activeCaps.length} capacité{activeCaps.length > 1 ? "s" : ""} active{activeCaps.length > 1 ? "s" : ""}
           </p>
@@ -303,27 +151,17 @@ function CapabilityCostBreakdown({ agent }: { agent: Agent }) {
             ~{totalPerMsg.toLocaleString("fr-FR")}
             <span className="text-xs font-normal ml-1" style={{ color: "var(--text-disabled)" }}>tokens</span>
           </p>
-          {estimatedConvos !== null && (
-            <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>
-              ≈ {estimatedConvos.toLocaleString("fr-FR")} conversations / mois
-            </p>
-          )}
-          {unlimited && (
-            <p className="text-2xs mt-0.5" style={{ color: "var(--color-gold)" }}>
-              <Sparkles className="w-2.5 h-2.5 inline mr-0.5" />
-              Illimité
-            </p>
-          )}
         </div>
       </div>
 
-      {/* Info note */}
       <div className="flex items-start gap-2" style={{ color: "var(--text-disabled)" }}>
         <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
         <p className="text-2xs leading-relaxed">
-          Les tokens consommés incluent le prompt système, le contexte de conversation et la réponse générée.
           L'estimatif suppose ~8 messages échangés par conversation.
-          Activez ou désactivez des capacités depuis la <a href={`/dashboard/${agent.id}`} className="underline" style={{ color: "var(--text-tertiary)" }}>page de configuration</a> de votre agent.
+          Activez ou désactivez des capacités depuis la{" "}
+          <a href={`/dashboard/${agent.id}`} className="underline" style={{ color: "var(--text-tertiary)" }}>
+            page de configuration
+          </a>{" "}de votre agent.
         </p>
       </div>
     </div>
@@ -379,16 +217,16 @@ function UsageBar({ percent, unlimited }: { percent: number; unlimited: boolean 
 // ── Upgrade modal ─────────────────────────────────────────────────────────────
 
 function UpgradeModal({
-  agent, planId, onClose, token,
+  agent, planRow, onClose, token,
 }: {
-  agent: Agent; planId: string; onClose: () => void; token: string | null;
+  agent: Agent; planRow: DbPlan; onClose: () => void; token: string | null;
 }) {
   const [phone, setPhone]     = useState("");
   const [country, setCountry] = useState("CM");
   const [loading, setLoading] = useState(false);
 
-  const price    = getPlanPriceXAF(planId);
-  const planInfo = PLANS[planId as keyof typeof PLANS];
+  const price   = planRow.price_xaf;
+  const planId  = planRow.id;
 
   const handlePay = async () => {
     setLoading(true);
@@ -427,7 +265,7 @@ function UpgradeModal({
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-              Passer au plan {planInfo?.label}
+              Passer au plan {planRow.label}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-disabled)" }}>
               Agent : {agent.identity.avatar_emoji} {agent.identity.name}
@@ -514,33 +352,30 @@ function UpgradeModal({
   );
 }
 
-// ── Plan card ──────────────────────────────────────────────────────────────────
+// ── Plan card (DB-driven) ─────────────────────────────────────────────────────
 
 function PlanCard({
-  planId, agent, currentPlan, onUpgrade,
+  plan, agent, currentPlan, onUpgrade,
 }: {
-  planId: string; agent: Agent | null; currentPlan: string; onUpgrade: (planId: string) => void;
+  plan: DbPlan; agent: Agent | null; currentPlan: string; onUpgrade: (plan: DbPlan) => void;
 }) {
-  const plan      = PLANS[planId as keyof typeof PLANS];
-  const isCurrent = currentPlan === planId;
-  const isHighlight = PLAN_HIGHLIGHT[planId];
-  const features  = PLAN_FEATURES[planId] ?? [];
-  const price     = plan.price_xaf;
-  const isContact = planId === "enterprise";
-  const canUpgrade = UPGRADEABLE_PLANS.includes(planId as any) && !isCurrent && currentPlan !== "enterprise";
+  const isCurrent    = currentPlan === plan.id;
+  const isContact    = plan.price_xaf === -1;
+  const unlimited    = plan.monthly_tokens === -1;
+  const canUpgrade   = plan.is_purchasable && !isCurrent;
 
   return (
     <div
       className="rounded-xl p-5 space-y-4 flex flex-col relative"
       style={{
-        background: isHighlight ? "rgba(212,175,55,0.05)" : "var(--bg-elevated)",
-        border: `1px solid ${isCurrent ? "var(--color-gold)" : isHighlight ? "rgba(212,175,55,0.2)" : "var(--border-subtle)"}`,
+        background: plan.highlight ? "rgba(212,175,55,0.05)" : "var(--bg-elevated)",
+        border: `1px solid ${isCurrent ? "var(--color-gold)" : plan.highlight ? "rgba(212,175,55,0.2)" : "var(--border-subtle)"}`,
       }}
     >
-      {isHighlight && (
+      {plan.badge && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-2xs font-bold"
           style={{ background: "var(--color-gold)", color: "#0a0a0a" }}>
-          Populaire
+          {plan.badge}
         </div>
       )}
       {isCurrent && (
@@ -554,32 +389,37 @@ function PlanCard({
         <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{plan.label}</p>
         {isContact ? (
           <p className="text-lg font-bold mt-1" style={{ color: "var(--color-gold)" }}>Sur devis</p>
-        ) : price === 0 ? (
+        ) : plan.price_xaf === 0 ? (
           <p className="text-lg font-bold mt-1" style={{ color: "var(--text-secondary)" }}>Gratuit</p>
         ) : (
           <p className="text-lg font-bold mt-1" style={{ color: "var(--color-gold)" }}>
-            {formatXAF(price)}<span className="text-xs font-normal ml-1" style={{ color: "var(--text-disabled)" }}>/mois</span>
+            {formatXAF(plan.price_xaf)}
+            <span className="text-xs font-normal ml-1" style={{ color: "var(--text-disabled)" }}>/mois</span>
           </p>
         )}
         <p className="text-2xs mt-1" style={{ color: "var(--text-disabled)" }}>
-          {isUnlimited(planId) ? "Tokens illimités" : `${plan.monthly_tokens.toLocaleString("fr-FR")} tokens / mois`}
+          {unlimited ? "Tokens illimités" : `${plan.monthly_tokens.toLocaleString("fr-FR")} tokens / mois`}
         </p>
       </div>
 
       <ul className="space-y-2 flex-1">
-        {features.map((f) => (
-          <li key={f} className="flex items-center gap-2">
-            <Check className="w-3 h-3 flex-shrink-0" style={{ color: "#34D399" }} />
-            <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>{f}</span>
+        {plan.features.map((f, i) => (
+          <li key={i} className="flex items-center gap-2">
+            {f.included
+              ? <Check className="w-3 h-3 flex-shrink-0" style={{ color: "#34D399" }} />
+              : <X className="w-3 h-3 flex-shrink-0 opacity-20" style={{ color: "var(--text-disabled)" }} />}
+            <span className="text-xs" style={{ color: f.included ? "var(--text-tertiary)" : "var(--text-disabled)", opacity: f.included ? 1 : 0.5 }}>
+              {f.label}
+            </span>
           </li>
         ))}
       </ul>
 
       {isContact ? (
-        <a href="mailto:hello@buyticle.com?subject=Camille Enterprise"
+        <a href={plan.cta_href}
           className="block text-center py-2.5 rounded-lg text-xs font-semibold transition-all duration-200"
           style={{ background: "var(--bg-muted)", color: "var(--text-secondary)", border: "1px solid var(--border-subtle)" }}>
-          Nous contacter
+          {plan.cta_label}
         </a>
       ) : isCurrent ? (
         <div className="py-2.5 rounded-lg text-xs font-semibold text-center"
@@ -588,20 +428,20 @@ function PlanCard({
           Actif
         </div>
       ) : canUpgrade && agent ? (
-        <button onClick={() => onUpgrade(planId)}
+        <button onClick={() => onUpgrade(plan)}
           className="w-full py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:brightness-110"
           style={{
-            background: isHighlight ? "rgba(212,175,55,0.15)" : "var(--bg-muted)",
-            color:      isHighlight ? "var(--color-gold)" : "var(--text-secondary)",
-            border: `1px solid ${isHighlight ? "rgba(212,175,55,0.3)" : "var(--border-subtle)"}`,
+            background: plan.highlight ? "rgba(212,175,55,0.15)" : "var(--bg-muted)",
+            color:      plan.highlight ? "var(--color-gold)" : "var(--text-secondary)",
+            border: `1px solid ${plan.highlight ? "rgba(212,175,55,0.3)" : "var(--border-subtle)"}`,
           }}>
-          Passer à {plan.label}
+          {plan.cta_label}
           <ChevronRight className="w-3 h-3 inline ml-1" />
         </button>
       ) : (
         <div className="py-2.5 rounded-lg text-xs text-center"
           style={{ color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
-          {planId === "free" ? "Plan de base" : "Non disponible"}
+          {plan.id === "free" ? "Plan de base" : "Non disponible"}
         </div>
       )}
     </div>
@@ -617,16 +457,33 @@ function BillingContent() {
   const { agents, loading: agentsLoading } = useAgents();
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
 
-  const [usageMap,  setUsageMap]  = useState<Record<string, AgentUsage>>({});
-  const [payments,  setPayments]  = useState<Payment[]>([]);
-  const [modal,     setModal]     = useState<{ agent: Agent; planId: string } | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [payResult, setPayResult] = useState<"success" | "cancel" | null>(null);
+  const [usageMap,   setUsageMap]   = useState<Record<string, AgentUsage>>({});
+  const [payments,   setPayments]   = useState<Payment[]>([]);
+  const [modal,      setModal]      = useState<{ agent: Agent; planRow: DbPlan } | null>(null);
+  const [verifying,  setVerifying]  = useState(false);
+  const [payResult,  setPayResult]  = useState<"success" | "cancel" | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+
+  // ── Plans & capabilities depuis la DB ──────────────────────────────────────
+  const [plansData, setPlansData] = useState<{ plans: DbPlan[]; capabilities: DbCapability[] }>({
+    plans: [], capabilities: [],
+  });
+  const [plansLoading, setPlansLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/plans")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setPlansData({ plans: d.plans ?? [], capabilities: d.capabilities ?? [] }); })
+      .finally(() => setPlansLoading(false));
+  }, []);
+
+  // Helper : label d'un plan depuis la liste DB
+  const getPlanLabel = (planId: string) =>
+    plansData.plans.find((p) => p.id === planId)?.label ?? planId;
 
   useEffect(() => { if (!isLoggedIn) router.replace("/login"); }, [isLoggedIn, router]);
 
-  // Récupère l'usage pour chaque agent
+  // ── Usage par agent ────────────────────────────────────────────────────────
   const fetchUsage = useCallback(async () => {
     if (!agents.length || !token) return;
     const results = await Promise.allSettled(
@@ -646,7 +503,7 @@ function BillingContent() {
     setUsageMap(map);
   }, [agents, token]);
 
-  // Historique paiements
+  // ── Historique paiements ───────────────────────────────────────────────────
   const fetchHistory = useCallback(async () => {
     if (!token) return;
     const res = await fetch("/api/payments/history?limit=20", {
@@ -661,7 +518,7 @@ function BillingContent() {
   useEffect(() => { fetchUsage(); }, [fetchUsage]);
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  // Gestion retour Monetbil
+  // ── Gestion retour Monetbil ────────────────────────────────────────────────
   useEffect(() => {
     const paymentStatus = searchParams.get("payment");
     const ref           = searchParams.get("ref");
@@ -678,7 +535,9 @@ function BillingContent() {
 
           if (data.status === "success") {
             setPayResult("success");
-            toast.success(`🎉 Plan ${getPlanLabel(data.plan_id)} activé !`);
+            // plan label depuis plansData si déjà chargé, sinon fallback sur plan_id
+            const label = plansData.plans.find((p) => p.id === data.plan_id)?.label ?? data.plan_id;
+            toast.success(`🎉 Plan ${label} activé !`);
             fetchUsage();
             fetchHistory();
             setVerifying(false);
@@ -687,7 +546,6 @@ function BillingContent() {
             toast.error("Paiement échoué. Veuillez réessayer.");
             setVerifying(false);
           } else if (attempts < 8) {
-            // Encore pending → réessayer dans 3s (le webhook IPN peut arriver en retard)
             setTimeout(() => poll(attempts + 1), 3000);
           } else {
             toast("Paiement en cours de vérification. Actualisez dans quelques instants.");
@@ -700,12 +558,11 @@ function BillingContent() {
       setPayResult("cancel");
       toast("Paiement annulé.");
     }
-    // Nettoyer l'URL
     router.replace("/dashboard/billing", { scroll: false });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Agent sélectionné pour les plans (le premier actif par défaut)
+  // ── Agent actif ────────────────────────────────────────────────────────────
   const activeAgent = selectedAgent
     ? agents.find((a) => a.id === selectedAgent) ?? agents[0]
     : agents[0] ?? null;
@@ -719,7 +576,10 @@ function BillingContent() {
     return u && !u.plan.unlimited && u.current.percent >= 80;
   });
 
-  if (agentsLoading) {
+  // Plan "pro" pour le bouton "Upgrader" rapide
+  const proPlan = plansData.plans.find((p) => p.id === "pro") ?? plansData.plans[plansData.plans.length - 2] ?? null;
+
+  if (agentsLoading || plansLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <RefreshCw className="w-5 h-5 animate-spin" style={{ color: "var(--text-disabled)" }} />
@@ -733,7 +593,9 @@ function BillingContent() {
       <AnimatePresence>
         {modal && (
           <UpgradeModal
-            agent={modal.agent} planId={modal.planId} token={token}
+            agent={modal.agent}
+            planRow={modal.planRow}
+            token={token}
             onClose={() => setModal(null)}
           />
         )}
@@ -789,13 +651,15 @@ function BillingContent() {
                   <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
                     {a.identity.avatar_emoji} {a.identity.name} — {u.current.percent}% utilisé
                   </span>
-                  <button
-                    onClick={() => { setSelectedAgent(a.id); setModal({ agent: a, planId: "pro" }); }}
-                    className="text-2xs font-semibold px-2.5 py-1 rounded-lg"
-                    style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}
-                  >
-                    Upgrader
-                  </button>
+                  {proPlan && (
+                    <button
+                      onClick={() => { setSelectedAgent(a.id); setModal({ agent: a, planRow: proPlan }); }}
+                      className="text-2xs font-semibold px-2.5 py-1 rounded-lg"
+                      style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}
+                    >
+                      Upgrader
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -821,7 +685,7 @@ function BillingContent() {
                   <span>{a.identity.avatar_emoji}</span>
                   <span className="font-medium">{a.identity.name}</span>
                   <span className="px-1.5 py-0.5 rounded text-2xs" style={{ background: "var(--bg-card)", color: "var(--text-disabled)" }}>
-                    {getPlanLabel(a.plan)}
+                    {getPlanLabel(a.plan ?? "free")}
                   </span>
                 </button>
               ))}
@@ -863,27 +727,29 @@ function BillingContent() {
         )}
 
         {/* Capability cost breakdown */}
-        {activeAgent && (
-          <CapabilityCostBreakdown agent={activeAgent} />
+        {activeAgent && plansData.capabilities.length > 0 && (
+          <CapabilityCostBreakdown agent={activeAgent} capabilities={plansData.capabilities} />
         )}
 
         {/* Plan cards */}
-        <div className="space-y-3">
-          <p className="text-xs font-medium" style={{ color: "var(--text-disabled)" }}>
-            Choisissez le plan adapté à votre usage
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-3">
-            {PLAN_ORDER.map((planId) => (
-              <PlanCard
-                key={planId}
-                planId={planId}
-                agent={activeAgent}
-                currentPlan={currentPlan}
-                onUpgrade={(pid) => activeAgent && setModal({ agent: activeAgent, planId: pid })}
-              />
-            ))}
+        {plansData.plans.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-medium" style={{ color: "var(--text-disabled)" }}>
+              Choisissez le plan adapté à votre usage
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-3">
+              {plansData.plans.map((plan) => (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  agent={activeAgent}
+                  currentPlan={currentPlan}
+                  onUpgrade={(p) => activeAgent && setModal({ agent: activeAgent, planRow: p })}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Historique paiements */}
         <div className="space-y-3">
@@ -896,14 +762,14 @@ function BillingContent() {
           ) : (
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
               {payments.map((p, i) => {
-                const s   = STATUS_STYLE[p.status] ?? STATUS_STYLE.pending;
+                const s     = STATUS_STYLE[p.status] ?? STATUS_STYLE.pending;
                 const agent = agents.find((a) => a.id === p.agent_id);
                 return (
                   <div
                     key={p.id}
                     className="flex items-center gap-4 px-4 py-3"
                     style={{
-                      background: i % 2 === 0 ? "var(--bg-elevated)" : "var(--bg-muted)",
+                      background:   i % 2 === 0 ? "var(--bg-elevated)" : "var(--bg-muted)",
                       borderBottom: i < payments.length - 1 ? "1px solid var(--border-subtle)" : undefined,
                     }}
                   >
