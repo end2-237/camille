@@ -75,6 +75,10 @@ export async function wahaDeleteSession(sessionName: string) {
 }
 
 export function makeSessionName(agentId: string) {
-  // Waha n'accepte que des caractères alphanumériques (pas de tirets)
+  // Waha Core (gratuit) = 1 seule session nommée "default"
+  // Waha NEXT/PLUS (payant) = sessions multiples avec noms custom
+  // Mettre WAHA_MULTI_SESSION=true dans .env pour activer le mode multi
+  const multi = process.env.WAHA_MULTI_SESSION === "true";
+  if (!multi) return "default";
   return `cam${agentId.replace(/-/g, "").slice(0, 12)}`;
 }
