@@ -40,12 +40,20 @@ export async function POST(req: NextRequest) {
     );
     const sessionName = existing.rows[0]?.session_name ?? makeSessionName(agentId);
 
-    const wahaSession = await wahaGetSession(sessionName);
-    if (!wahaSession) {
-      await wahaCreateSession(sessionName);
+    // Waha Core : "default" est pré-existante, on essaie START en premier.
+    // Si 404 (session vraiment absente), on crée puis on relance START.
+    try {
+      await wahaStartSession(sessionName);
+    } catch (startErr) {
+      const msg = startErr instanceof Error ? startErr.message : String(startErr);
+      if (msg.includes("404")) {
+        // Session absente → créer puis redémarrer
+        await wahaCreateSession(sessionName);
+        await wahaStartSession(sessionName);
+      } else {
+        throw startErr;
+      }
     }
-
-    await wahaStartSession(sessionName);
 
     await query(
       `INSERT INTO camille.whatsapp_sessions (session_name, agent_id, user_id, status)
