@@ -15,6 +15,7 @@ import {
   Save, Pencil, Plus, Trash2, Play, Pause,
   MessageCircle, Globe, Phone, Clock,
   Users, ChevronDown, LayoutDashboard, TrendingUp,
+  History, FileText, Target, UserPlus, Send, Image,
 } from "lucide-react";
 import { toast }                from "sonner";
 import { useAuth }             from "@/hooks/useAuth";
@@ -22,6 +23,7 @@ import { useAgent }            from "@/hooks/useAgent";
 import { generateSystemPrompt } from "@/lib/generateSystemPrompt";
 import { cn }                      from "@/lib/utils";
 import type { Agent, AgentModel, FAQEntry } from "@/types/agent";
+import type { DbCapability } from "@/lib/plans-db";
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -73,6 +75,17 @@ const MODEL_OPTIONS: { value: string; label: string; sub: string; available: boo
 ];
 
 const EMOJI_PRESETS = ["✨","🤖","💼","🛍️","🏥","📚","🏠","⚖️","💄","🍽️","💻","🤝","💡","🎯","🦁","🦊","🦋","🌟","🔮","🎨"];
+
+// ── Capability icon map (nom DB → composant lucide) ───────────────────────────
+
+const CAP_ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+  MessageCircle, Clock, History, UserPlus, FileText,
+  Target, Send, Users, Image, Zap, Sparkles, LayoutDashboard,
+};
+function CapIconDash({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
+  const Icon = CAP_ICON_MAP[name] ?? Zap;
+  return <Icon className={className} style={style} />;
+}
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
@@ -281,7 +294,7 @@ function UsageSection({ agentId, token }: { agentId: string; token: string | nul
   );
 }
 
-function OverviewTab({ agent, onToggleStatus, token }: { agent: Agent; onToggleStatus: () => void; token: string | null }) {
+function OverviewTab({ agent, onToggleStatus, token, capabilities }: { agent: Agent; onToggleStatus: () => void; token: string | null; capabilities: DbCapability[] }) {
   const [copied, setCopied] = useState(false);
   const copyId = async () => {
     await navigator.clipboard.writeText(agent.id);
@@ -290,15 +303,8 @@ function OverviewTab({ agent, onToggleStatus, token }: { agent: Agent; onToggleS
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const CAPS_META = [
-    { key: "support_whatsapp",     label: "WhatsApp",  icon: MessageCircle },
-    { key: "content_generation",   label: "Contenu",   icon: Sparkles },
-    { key: "community_management", label: "Community", icon: Users },
-    { key: "strategy_advisor",     label: "Stratégie", icon: LayoutDashboard },
-    { key: "lead_capture",         label: "Leads",     icon: Zap },
-    { key: "proactive_messaging",  label: "Proactif",  icon: MessageCircle },
-    { key: "image_creation",       label: "Images",    icon: Sparkles },
-  ] as const;
+  // Cap meta driven from DB (fall back to empty until loaded)
+  const capsForOverview = capabilities.filter((c) => c.status !== "disabled");
 
   return (
     <div className="space-y-5">
@@ -345,12 +351,24 @@ function OverviewTab({ agent, onToggleStatus, token }: { agent: Agent; onToggleS
       {/* Capabilities */}
       <SectionCard title="Capacités activées">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {CAPS_META.map(({ key, label, icon: Icon }) => {
-            const active = agent.capabilities[key];
+          {capsForOverview.map((cap) => {
+            const agentCaps = agent.capabilities as unknown as Record<string, boolean>;
+            // capacités non-toggleables (Core/Auto) sont toujours considérées actives
+            const active = !cap.is_user_configurable || agentCaps[cap.id] === true;
             return (
-              <div key={key} className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: active ? "rgba(212,175,55,0.08)" : "var(--bg-muted)", border: `1px solid ${active ? "rgba(212,175,55,0.2)" : "var(--border-subtle)"}`, opacity: active ? 1 : 0.4 }}>
-                <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
-                <span className="text-2xs font-medium" style={{ color: active ? "var(--color-gold)" : "var(--text-tertiary)" }}>{label}</span>
+              <div key={cap.id}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                style={{
+                  background: active ? "rgba(212,175,55,0.08)" : "var(--bg-muted)",
+                  border: `1px solid ${active ? "rgba(212,175,55,0.2)" : "var(--border-subtle)"}`,
+                  opacity: active ? 1 : 0.4,
+                }}>
+                <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
+                  style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
+                <span className="text-2xs font-medium truncate"
+                  style={{ color: active ? "var(--color-gold)" : "var(--text-tertiary)" }}>
+                  {cap.label}
+                </span>
               </div>
             );
           })}
@@ -554,47 +572,90 @@ function KnowledgeTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Age
 
 // ── Tab: Capabilities ─────────────────────────────────────────────────────────
 
-function CapabilitiesTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>) => void }) {
-  const [caps, setCaps] = useState({ ...agent.capabilities });
+function CapabilitiesTab({ agent, onSave, capabilities }: {
+  agent: Agent; onSave: (p: Partial<Agent>) => void; capabilities: DbCapability[];
+}) {
+  const [caps, setCaps] = useState({ ...(agent.capabilities as unknown as Record<string, boolean>) });
   const dirty = JSON.stringify(caps) !== JSON.stringify(agent.capabilities);
-  const save = () => { onSave({ capabilities: { ...caps } }); toast.success("Capacités mises à jour !"); };
+  const save  = () => { onSave({ capabilities: { ...caps } as any }); toast.success("Capacités mises à jour !"); };
 
-  const CAPS_META = [
-    { key: "support_whatsapp" as const,     icon: MessageCircle, label: "Support WhatsApp",         desc: "Répond automatiquement aux messages WhatsApp entrants.", tag: "Core" },
-    { key: "content_generation" as const,   icon: Sparkles,      label: "Génération de contenu",    desc: "Crée posts, captions, newsletters sur demande.", tag: null },
-    { key: "community_management" as const, icon: Users,         label: "Community Management",     desc: "Planifie et publie du contenu sur les réseaux.", tag: null },
-    { key: "strategy_advisor" as const,     icon: LayoutDashboard, label: "Conseiller Stratégique", desc: "Recommandations stratégiques et résumés analytiques.", tag: null },
-    { key: "lead_capture" as const,         icon: Zap,           label: "Capture de Leads",         desc: "Qualifie et pousse les prospects vers votre CRM.", tag: null },
-    { key: "proactive_messaging" as const,  icon: MessageCircle, label: "Messagerie Proactive",     desc: "Messages de suivi et broadcasts ciblés.", tag: null },
-    { key: "image_creation" as const,       icon: Sparkles,      label: "Création d'images",        desc: "Génère des visuels IA pour vos campagnes.", tag: "Bêta" },
-  ] as const;
+  // Toutes les caps visibles (pas disabled)
+  const visibleCaps = capabilities.filter((c) => c.status !== "disabled");
 
   return (
     <div className="space-y-4">
       <SaveBar dirty={dirty} onSave={save} />
-      {CAPS_META.map(({ key, icon: Icon, label, desc, tag }) => {
-        const active = caps[key];
-        const isLive = key === "support_whatsapp";
+      {visibleCaps.map((cap, i) => {
+        const isToggleable = cap.is_user_configurable && cap.status === "active";
+        const isComingSoon = cap.status === "coming_soon";
+        const isAuto       = !cap.is_user_configurable;
+        // actif si toggleable+activé OU auto (toujours on)
+        const active       = isAuto ? true : caps[cap.id] === true;
+
         return (
-          <div key={key}
-            onClick={isLive ? () => setCaps((c) => ({ ...c, [key]: !c[key] })) : undefined}
-            className={cn("flex items-center gap-4 py-3 transition-colors duration-100", isLive ? "cursor-pointer" : "cursor-not-allowed opacity-50")}
-            style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-            {/* Toggle */}
+          <div key={cap.id}
+            onClick={isToggleable ? () => setCaps((c) => ({ ...c, [cap.id]: !c[cap.id] })) : undefined}
+            className={cn(
+              "flex items-center gap-4 py-3 transition-colors duration-100",
+              isToggleable ? "cursor-pointer" : isComingSoon ? "cursor-not-allowed opacity-50" : "cursor-default opacity-70"
+            )}
+            style={{ borderBottom: i < visibleCaps.length - 1 ? "1px solid var(--border-subtle)" : undefined }}
+          >
+            {/* Toggle dot */}
             <div className="relative w-8 h-4 rounded-full flex-shrink-0"
-              style={{ background: isLive && active ? "var(--color-gold)" : "var(--bg-muted)", border: `1px solid ${isLive && active ? "var(--color-gold)" : "var(--border-default)"}` }}>
-              <motion.div animate={{ x: isLive && active ? 16 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              style={{
+                background: active ? "var(--color-gold)" : "var(--bg-muted)",
+                border: `1px solid ${active ? "var(--color-gold)" : "var(--border-default)"}`,
+              }}>
+              <motion.div
+                animate={{ x: active ? 16 : 2 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 className="absolute top-0.5 w-3 h-3 rounded-full"
-                style={{ background: isLive && active ? "#000" : "var(--text-disabled)" }} />
+                style={{ background: active ? "#000" : "var(--text-disabled)" }}
+              />
             </div>
-            <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: isLive && active ? "var(--color-gold)" : "var(--text-disabled)" }} />
+
+            <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
+              style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
+
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium" style={{ color: isLive && active ? "var(--text-primary)" : "var(--text-secondary)" }}>{label}</p>
-                {isLive && tag && <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)" }}>{tag}</span>}
-                {!isLive && <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-disabled)" }}>Bientôt</span>}
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-xs font-medium"
+                  style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                  {cap.label}
+                </p>
+                {cap.badge && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                    style={{
+                      background: cap.badge === "Core"  ? "rgba(52,211,153,0.1)"  :
+                                  cap.badge === "Bientôt" ? "rgba(255,255,255,0.05)" :
+                                  cap.badge === "Nouveau" ? "rgba(56,189,248,0.1)"  :
+                                  "rgba(212,175,55,0.12)",
+                      color:      cap.badge === "Core"  ? "#34D399"               :
+                                  cap.badge === "Bientôt" ? "var(--text-disabled)" :
+                                  cap.badge === "Nouveau" ? "#38bdf8"              :
+                                  "var(--color-gold)",
+                    }}>
+                    {cap.badge}
+                  </span>
+                )}
+                {isAuto && !cap.badge && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                    style={{ background: "rgba(52,211,153,0.08)", color: "#34D399" }}>
+                    Auto
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>{desc}</p>
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                {cap.description}
+                {cap.tokens_per_msg > 0 && (
+                  <span className="ml-1 tabular-nums">
+                    · ~{cap.tokens_per_msg >= 1000
+                        ? `${(cap.tokens_per_msg / 1000).toFixed(1)}k`
+                        : cap.tokens_per_msg} tokens/msg
+                  </span>
+                )}
+              </p>
             </div>
           </div>
         );
@@ -1057,6 +1118,15 @@ export default function AgentConfigPage() {
   const [tab, setTab]              = useState<TabId>("overview");
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
 
+  // Capacités depuis la DB (/api/plans est public)
+  const [capabilities, setCapabilities] = useState<DbCapability[]>([]);
+  useEffect(() => {
+    fetch("/api/plans")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.capabilities) setCapabilities(d.capabilities as DbCapability[]); })
+      .catch(() => {/* silencieux, fallback = liste vide */});
+  }, []);
+
   useEffect(() => { if (!isLoggedIn) router.replace("/login"); }, [isLoggedIn, router]);
   useEffect(() => { if (!loading && !agent) router.replace("/dashboard"); }, [agent, loading, router]);
 
@@ -1142,11 +1212,11 @@ export default function AgentConfigPage() {
           <div className="max-w-2xl mx-auto px-4 sm:px-7 py-5 sm:py-6">
             <AnimatePresence mode="wait">
               <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
-                {tab === "overview"     && <OverviewTab     agent={agent} onToggleStatus={handleToggleStatus} token={token} />}
+                {tab === "overview"     && <OverviewTab     agent={agent} onToggleStatus={handleToggleStatus} token={token} capabilities={capabilities} />}
                 {tab === "identity"     && <IdentityTab     agent={agent} onSave={handleSave} />}
                 {tab === "business"     && <BusinessTab     agent={agent} onSave={handleSave} />}
                 {tab === "knowledge"    && <KnowledgeTab    agent={agent} onSave={handleSave} />}
-                {tab === "capabilities" && <CapabilitiesTab agent={agent} onSave={handleSave} />}
+                {tab === "capabilities" && <CapabilitiesTab agent={agent} onSave={handleSave} capabilities={capabilities} />}
                 {tab === "model"        && <ModelTab        agent={agent} onSave={handleSave} />}
                 {tab === "prompt"       && <PromptTab       agent={agent} onSave={handleSave} />}
                 {tab === "integration"  && <IntegrationTab  agent={agent} />}

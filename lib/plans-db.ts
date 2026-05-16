@@ -28,16 +28,19 @@ export interface DbPlan {
 }
 
 export interface DbCapability {
-  id:             string;
-  label:          string;
-  description:    string;
-  tokens_per_msg: number;
-  detail:         string;
-  color:          string;
-  icon:           string;
-  note:           string | null;
-  sort_order:     number;
-  plans:          string[];  // plan IDs qui incluent cette capacité
+  id:                   string;
+  label:                string;
+  description:          string;
+  tokens_per_msg:       number;
+  detail:               string;
+  color:                string;
+  icon:                 string;   // nom du composant lucide-react
+  note:                 string | null;
+  sort_order:           number;
+  status:               string;   // 'active' | 'coming_soon' | 'disabled'
+  badge:                string | null;  // 'Core' | 'Bientôt' | 'Nouveau' | null
+  is_user_configurable: boolean;  // false = toujours actif, non-toggleable
+  plans:                string[];  // plan IDs qui incluent cette capacité
 }
 
 // ── Valeurs de secours si DB indisponible ─────────────────────────────────────
@@ -119,8 +122,11 @@ export async function getPlansFromDB(): Promise<{ plans: DbPlan[]; capabilities:
 
   const capabilities: DbCapability[] = capsRes.rows.map((r) => ({
     ...r,
-    tokens_per_msg: Number(r.tokens_per_msg),
-    plans:          capPlanMap[r.id] ?? [],
+    tokens_per_msg:       Number(r.tokens_per_msg),
+    status:               r.status               ?? "active",
+    badge:                r.badge                ?? null,
+    is_user_configurable: r.is_user_configurable ?? true,
+    plans:                capPlanMap[r.id]        ?? [],
   }));
 
   _cache = { plans, capabilities, ts: Date.now() };
