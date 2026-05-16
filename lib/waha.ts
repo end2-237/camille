@@ -39,7 +39,9 @@ export async function wahaStartSession(sessionName: string) {
     const text = await res.text();
     throw new Error(`Waha startSession: ${res.status} ${text}`);
   }
-  return res.json();
+  // Waha peut renvoyer un corps vide sur 200 → on ignore
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
 export async function wahaGetSession(sessionName: string) {

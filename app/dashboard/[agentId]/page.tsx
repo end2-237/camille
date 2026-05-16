@@ -691,14 +691,22 @@ function IntegrationTab({ agent }: { agent: Agent }) {
         headers: { ...authH, "Content-Type": "application/json" },
         body: JSON.stringify({ agentId: agent.id }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error ?? "Erreur connexion"); return; }
-      setSessionName(data.session_name);
+      // Parser le JSON sans planter si le corps est vide ou non-JSON
+      let data: { error?: string; session_name?: string } = {};
+      try { data = await res.json(); } catch { /* corps vide ou HTML */ }
+      if (!res.ok) {
+        toast.error(data.error ?? `Erreur serveur (${res.status})`);
+        return;
+      }
+      setSessionName(data.session_name ?? null);
       setWahaStatus("STARTING");
       startPolling();
       setTimeout(() => fetchStatus(), 2000);
-    } catch { toast.error("Erreur réseau"); }
-    finally { setConnecting(false); }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur réseau");
+    } finally {
+      setConnecting(false);
+    }
   };
 
   const handleDisconnect = async () => {
