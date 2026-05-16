@@ -46,7 +46,8 @@ export async function wahaGetSession(sessionName: string) {
   const res = await fetch(`${WAHA_URL}/api/sessions/${sessionName}`, {
     headers: wahaHeaders(),
   });
-  if (res.status === 404) return null;
+  // 404 = session inconnue, 422 = nom invalide → les deux = pas de session active
+  if (res.status === 404 || res.status === 422) return null;
   if (!res.ok) throw new Error(`Waha getSession: ${res.status}`);
   return res.json() as Promise<{ name: string; status: string; me?: { id: string; pushName: string } }>;
 }
@@ -74,5 +75,6 @@ export async function wahaDeleteSession(sessionName: string) {
 }
 
 export function makeSessionName(agentId: string) {
-  return `cam-${agentId.replace(/-/g, "").slice(0, 10)}`;
+  // Waha n'accepte que des caractères alphanumériques (pas de tirets)
+  return `cam${agentId.replace(/-/g, "").slice(0, 12)}`;
 }
