@@ -630,12 +630,29 @@ function IntegrationTab({ agent }: { agent: Agent }) {
   const [sessionName, setSessionName] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
   const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+  // Fetch QR avec auth header → blob URL (les <img src> ne peuvent pas envoyer Authorization)
+  const fetchQr = useCallback(async (sName: string) => {
+    try {
+      const res = await fetch(`/api/waha/qr?session=${sName}`, { headers: authH });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+      const url = URL.createObjectURL(blob);
+      blobUrlRef.current = url;
+      setQrBlobUrl(url);
+    } catch { /* QR pas encore prêt */ }
+  }, []);
+
+  // Libère le blob URL à la destruction du composant
+  useEffect(() => () => { if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current); }, []);
 
   const fetchStatus = useCallback(async () => {
     const res = await fetch(`/api/waha/status?agentId=${agent.id}`, { headers: authH });
@@ -645,12 +662,12 @@ function IntegrationTab({ agent }: { agent: Agent }) {
     setSessionName(data.session_name ?? null);
     setPhoneNumber(data.phone_number ?? null);
     if (data.status === "WORKING") {
-      setQrUrl(null);
+      setQrBlobUrl(null);
       stopPolling();
     } else if (data.session_name && data.status === "SCAN_QR_CODE") {
-      setQrUrl(`/api/waha/qr?session=${data.session_name}&t=${Date.now()}`);
+      fetchQr(data.session_name);
     }
-  }, [agent.id]);
+  }, [agent.id, fetchQr]);
 
   function stopPolling() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -694,7 +711,7 @@ function IntegrationTab({ agent }: { agent: Agent }) {
     setWahaStatus("STOPPED");
     setSessionName(null);
     setPhoneNumber(null);
-    setQrUrl(null);
+    setQrBlobUrl(null);
     toast.success("Session WhatsApp déconnectée");
   };
 
@@ -739,11 +756,10 @@ function IntegrationTab({ agent }: { agent: Agent }) {
               <p className="text-xs text-center" style={{ color: "var(--text-tertiary)" }}>
                 Ouvrez WhatsApp → Paramètres → Appareils liés → Lier un appareil
               </p>
-              {qrUrl ? (
+              {qrBlobUrl ? (
                 <div className="rounded-2xl overflow-hidden p-3" style={{ background: "#fff" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={qrUrl} alt="QR WhatsApp" width={200} height={200}
-                    onError={() => setTimeout(() => setQrUrl(`/api/waha/qr?session=${sessionName}&t=${Date.now()}`), 2000)} />
+                  <img src={qrBlobUrl} alt="QR WhatsApp" width={200} height={200} />
                 </div>
               ) : (
                 <div className="w-[200px] h-[200px] rounded-2xl flex items-center justify-center"
@@ -751,7 +767,7 @@ function IntegrationTab({ agent }: { agent: Agent }) {
                   <div className="w-6 h-6 rounded-full border-2 border-t-[var(--color-gold)] border-white/10 animate-spin" />
                 </div>
               )}
-              <button onClick={() => setQrUrl(`/api/waha/qr?session=${sessionName}&t=${Date.now()}`)}
+              <button onClick={() => sessionName && fetchQr(sessionName)}
                 className="text-xs flex items-center gap-1.5 transition-opacity hover:opacity-70"
                 style={{ color: "var(--text-disabled)" }}>
                 <RefreshCw className="w-3 h-3" /> Actualiser le QR
