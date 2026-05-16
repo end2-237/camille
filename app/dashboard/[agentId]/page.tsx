@@ -775,15 +775,22 @@ function IntegrationTab({ agent }: { agent: Agent }) {
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
               {/* Toggle */}
               <div className="flex px-5 pt-5 gap-2">
-                {(["qr", "phone"] as const).map((m) => (
-                  <button key={m} onClick={() => setConnectMode(m)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                    style={connectMode === m
-                      ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
-                      : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
-                    {m === "qr" ? <><Globe className="w-3 h-3" /> QR Code</> : <><Phone className="w-3 h-3" /> Numéro</>}
-                  </button>
-                ))}
+                <button onClick={() => setConnectMode("qr")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                  style={connectMode === "qr"
+                    ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
+                    : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
+                  <Globe className="w-3 h-3" /> QR Code
+                </button>
+                <button onClick={() => setConnectMode("phone")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                  style={connectMode === "phone"
+                    ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
+                    : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
+                  <Phone className="w-3 h-3" /> Numéro
+                  <span className="text-[9px] px-1 py-0.5 rounded font-bold ml-0.5"
+                    style={{ background: "rgba(251,191,36,0.15)", color: "#FBBF24" }}>NEXT</span>
+                </button>
               </div>
 
               {/* QR mode */}

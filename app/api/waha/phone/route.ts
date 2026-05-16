@@ -40,6 +40,15 @@ export async function POST(req: NextRequest) {
     );
 
     const text = await res.text();
+
+    // 404 = endpoint inexistant → fonctionnalité Waha NEXT/PLUS uniquement
+    if (res.status === 404) {
+      return NextResponse.json(
+        { error: "La connexion par numéro de téléphone nécessite Waha NEXT ou PLUS. Utilisez le QR code avec Waha Core (gratuit)." },
+        { status: 501 }
+      );
+    }
+
     if (!res.ok) {
       throw new Error(`Waha requestCode: ${res.status} ${text}`);
     }
