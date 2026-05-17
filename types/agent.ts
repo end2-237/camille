@@ -290,6 +290,9 @@ export interface Agent {
   target_model: AgentModel;
   plan: "free" | "starter" | "pro" | "enterprise";
 
+  /** Google Calendar OAuth — email shown in dashboard when connected */
+  google_calendar_email?: string | null;
+
   created_at: ISODateString;
   updated_at: ISODateString;
 }

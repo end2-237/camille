@@ -57,6 +57,7 @@ function rowToAgent(row: Record<string, any>): Agent {
     status: row.status as AgentStatus,
     target_model: row.target_model as AgentModel,
     plan: (row.plan ?? "free") as Agent["plan"],
+    google_calendar_email: row.google_calendar_email ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -68,6 +69,7 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "location", "target_audience", "owner_name", "owner_email", "whatsapp_number",
   "products_services", "pricing_info", "business_hours", "policies",
   "faq", "forbidden_topics", "capabilities", "target_model", "compiled_prompt", "status",
+  "google_calendar_email",
 ]);
 
 type RouteContext = { params: Promise<{ agentId: string }> };

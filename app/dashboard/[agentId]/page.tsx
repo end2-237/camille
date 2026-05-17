@@ -7,7 +7,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useRouter }             from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence }          from "framer-motion";
 import {
   ArrowLeft, Sparkles, Bot, BookOpen,
@@ -572,12 +572,70 @@ function KnowledgeTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Age
 
 // ── Tab: Capabilities ─────────────────────────────────────────────────────────
 
-function CapabilitiesTab({ agent, onSave, capabilities }: {
-  agent: Agent; onSave: (p: Partial<Agent>) => void; capabilities: DbCapability[];
+function CapabilitiesTab({ agent, onSave, capabilities, refetch }: {
+  agent: Agent;
+  onSave: (p: Partial<Agent>) => void;
+  capabilities: DbCapability[];
+  refetch: () => void;
 }) {
-  const [caps, setCaps] = useState({ ...(agent.capabilities as unknown as Record<string, boolean>) });
+  const [caps, setCaps]               = useState({ ...(agent.capabilities as unknown as Record<string, boolean>) });
+  const [gcalLoading, setGcalLoading] = useState(false);
   const dirty = JSON.stringify(caps) !== JSON.stringify(agent.capabilities);
   const save  = () => { onSave({ capabilities: { ...caps } as any }); toast.success("Capacités mises à jour !"); };
+
+  const calendarConnected = !!agent.google_calendar_email;
+
+  const handleGCalConnect = async () => {
+    setGcalLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
+      const res = await fetch("/api/integrations/google-calendar/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ agentId: agent.id }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        toast.error(d.error ?? "Erreur lors de la connexion");
+        return;
+      }
+      const { url } = await res.json() as { url: string };
+      window.location.href = url;
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setGcalLoading(false);
+    }
+  };
+
+  const handleGCalDisconnect = async () => {
+    setGcalLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
+      const res = await fetch("/api/integrations/google-calendar/disconnect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ agentId: agent.id }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        toast.error(d.error ?? "Erreur lors de la déconnexion");
+        return;
+      }
+      toast.success("Google Agenda déconnecté");
+      refetch();
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setGcalLoading(false);
+    }
+  };
 
   // Toutes les caps visibles (pas disabled)
   const visibleCaps = capabilities.filter((c) => c.status !== "disabled");
@@ -589,74 +647,150 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
         const isToggleable = cap.is_user_configurable && cap.status === "active";
         const isComingSoon = cap.status === "coming_soon";
         const isAuto       = !cap.is_user_configurable;
-        // actif si toggleable+activé OU auto (toujours on)
         const active       = isAuto ? true : caps[cap.id] === true;
+        const isCalendar   = cap.id === "calendar_booking";
 
         return (
-          <div key={cap.id}
-            onClick={isToggleable ? () => setCaps((c) => ({ ...c, [cap.id]: !c[cap.id] })) : undefined}
-            className={cn(
-              "flex items-center gap-4 py-3 transition-colors duration-100",
-              isToggleable ? "cursor-pointer" : isComingSoon ? "cursor-not-allowed opacity-50" : "cursor-default opacity-70"
-            )}
-            style={{ borderBottom: i < visibleCaps.length - 1 ? "1px solid var(--border-subtle)" : undefined }}
-          >
-            {/* Toggle dot */}
-            <div className="relative w-8 h-4 rounded-full flex-shrink-0"
-              style={{
-                background: active ? "var(--color-gold)" : "var(--bg-muted)",
-                border: `1px solid ${active ? "var(--color-gold)" : "var(--border-default)"}`,
-              }}>
-              <motion.div
-                animate={{ x: active ? 16 : 2 }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                className="absolute top-0.5 w-3 h-3 rounded-full"
-                style={{ background: active ? "#000" : "var(--text-disabled)" }}
-              />
-            </div>
-
-            <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
-              style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-xs font-medium"
-                  style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                  {cap.label}
-                </p>
-                {cap.badge && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                    style={{
-                      background: cap.badge === "Core"  ? "rgba(52,211,153,0.1)"  :
-                                  cap.badge === "Bientôt" ? "rgba(255,255,255,0.05)" :
-                                  cap.badge === "Nouveau" ? "rgba(56,189,248,0.1)"  :
-                                  "rgba(212,175,55,0.12)",
-                      color:      cap.badge === "Core"  ? "#34D399"               :
-                                  cap.badge === "Bientôt" ? "var(--text-disabled)" :
-                                  cap.badge === "Nouveau" ? "#38bdf8"              :
-                                  "var(--color-gold)",
-                    }}>
-                    {cap.badge}
-                  </span>
-                )}
-                {isAuto && !cap.badge && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                    style={{ background: "rgba(52,211,153,0.08)", color: "#34D399" }}>
-                    Auto
-                  </span>
-                )}
+          <div key={cap.id}>
+            <div
+              onClick={isToggleable ? () => setCaps((c) => ({ ...c, [cap.id]: !c[cap.id] })) : undefined}
+              className={cn(
+                "flex items-center gap-4 py-3 transition-colors duration-100",
+                isToggleable ? "cursor-pointer" : isComingSoon ? "cursor-not-allowed opacity-50" : "cursor-default opacity-70"
+              )}
+              style={{ borderBottom: (i < visibleCaps.length - 1 && !(isCalendar && active)) ? "1px solid var(--border-subtle)" : undefined }}
+            >
+              {/* Toggle dot */}
+              <div className="relative w-8 h-4 rounded-full flex-shrink-0"
+                style={{
+                  background: active ? "var(--color-gold)" : "var(--bg-muted)",
+                  border: `1px solid ${active ? "var(--color-gold)" : "var(--border-default)"}`,
+                }}>
+                <motion.div
+                  animate={{ x: active ? 16 : 2 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className="absolute top-0.5 w-3 h-3 rounded-full"
+                  style={{ background: active ? "#000" : "var(--text-disabled)" }}
+                />
               </div>
-              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                {cap.description}
-                {cap.tokens_per_msg > 0 && (
-                  <span className="ml-1 tabular-nums">
-                    · ~{cap.tokens_per_msg >= 1000
-                        ? `${(cap.tokens_per_msg / 1000).toFixed(1)}k`
-                        : cap.tokens_per_msg} tokens/msg
-                  </span>
-                )}
-              </p>
+
+              <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
+                style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs font-medium"
+                    style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                    {cap.label}
+                  </p>
+                  {cap.badge && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                      style={{
+                        background: cap.badge === "Core"    ? "rgba(52,211,153,0.1)"  :
+                                    cap.badge === "Bientôt" ? "rgba(255,255,255,0.05)" :
+                                    cap.badge === "Nouveau" ? "rgba(56,189,248,0.1)"  :
+                                    "rgba(212,175,55,0.12)",
+                        color:      cap.badge === "Core"    ? "#34D399"               :
+                                    cap.badge === "Bientôt" ? "var(--text-disabled)"  :
+                                    cap.badge === "Nouveau" ? "#38bdf8"               :
+                                    "var(--color-gold)",
+                      }}>
+                      {cap.badge}
+                    </span>
+                  )}
+                  {isAuto && !cap.badge && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                      style={{ background: "rgba(52,211,153,0.08)", color: "#34D399" }}>
+                      Auto
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                  {cap.description}
+                  {cap.tokens_per_msg > 0 && (
+                    <span className="ml-1 tabular-nums">
+                      · ~{cap.tokens_per_msg >= 1000
+                          ? `${(cap.tokens_per_msg / 1000).toFixed(1)}k`
+                          : cap.tokens_per_msg} tokens/msg
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
+
+            {/* ── Google Calendar connection sub-panel (calendar_booking only) ── */}
+            <AnimatePresence>
+              {isCalendar && active && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ borderBottom: i < visibleCaps.length - 1 ? "1px solid var(--border-subtle)" : undefined }}
+                >
+                  <div className="ml-12 mb-3 rounded-xl p-3.5 flex items-center gap-3"
+                    style={{
+                      background: calendarConnected ? "rgba(52,211,153,0.06)" : "var(--bg-muted)",
+                      border: `1px solid ${calendarConnected ? "rgba(52,211,153,0.2)" : "var(--border-subtle)"}`,
+                    }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{
+                        background: calendarConnected ? "rgba(52,211,153,0.1)" : "rgba(212,175,55,0.08)",
+                      }}>
+                      <Calendar className="w-3.5 h-3.5"
+                        style={{ color: calendarConnected ? "#34D399" : "var(--color-gold)" }} />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      {calendarConnected ? (
+                        <>
+                          <p className="text-[11px] font-semibold" style={{ color: "#34D399" }}>
+                            Google Agenda connecté
+                          </p>
+                          <p className="text-[10px] truncate mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                            {agent.google_calendar_email}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[11px] font-medium" style={{ color: "var(--text-primary)" }}>
+                            Connectez votre Google Agenda
+                          </p>
+                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                            Nécessaire pour vérifier les disponibilités et créer des événements.
+                          </p>
+                        </>
+                      )}
+                    </div>
+
+                    {calendarConnected ? (
+                      <button
+                        onClick={handleGCalDisconnect}
+                        disabled={gcalLoading}
+                        className="text-[10px] px-2.5 py-1 rounded-lg flex-shrink-0 font-medium transition-all duration-150 disabled:opacity-50"
+                        style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        {gcalLoading ? "…" : "Déconnecter"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleGCalConnect}
+                        disabled={gcalLoading}
+                        className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-lg flex-shrink-0 font-semibold transition-all duration-150 disabled:opacity-50 hover:brightness-110"
+                        style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}
+                      >
+                        {gcalLoading
+                          ? <><div className="w-2.5 h-2.5 rounded-full border border-t-[var(--color-gold)] border-white/20 animate-spin" />Connexion…</>
+                          : <><Calendar className="w-2.5 h-2.5" />Connecter</>
+                        }
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         );
       })}
@@ -1111,12 +1245,38 @@ type TabId = (typeof TABS)[number]["id"];
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AgentConfigPage() {
-  const { agentId }                = useParams<{ agentId: string }>();
-  const router                     = useRouter();
-  const { isLoggedIn }             = useAuth();
-  const { agent, loading, update } = useAgent(agentId);
-  const [tab, setTab]              = useState<TabId>("overview");
+  const { agentId }                    = useParams<{ agentId: string }>();
+  const router                         = useRouter();
+  const searchParams                   = useSearchParams();
+  const { isLoggedIn }                 = useAuth();
+  const { agent, loading, update, refetch } = useAgent(agentId);
+  const [tab, setTab]                  = useState<TabId>("overview");
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
+
+  // Handle redirect back from Google OAuth
+  useEffect(() => {
+    const gcal      = searchParams.get("gcal");
+    const gcalError = searchParams.get("gcal_error");
+    const tabParam  = searchParams.get("tab");
+
+    if (gcal === "connected") {
+      toast.success("Google Agenda connecté avec succès !");
+      refetch();
+    } else if (gcalError) {
+      toast.error(`Erreur Google Agenda : ${gcalError}`);
+    }
+    if (tabParam === "capabilities") setTab("capabilities");
+
+    // Clean up URL params without full reload
+    if (gcal || gcalError || tabParam) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("gcal");
+      url.searchParams.delete("gcal_error");
+      url.searchParams.delete("tab");
+      router.replace(url.pathname, { scroll: false });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Capacités depuis la DB (/api/plans est public)
   const [capabilities, setCapabilities] = useState<DbCapability[]>([]);
@@ -1216,7 +1376,7 @@ export default function AgentConfigPage() {
                 {tab === "identity"     && <IdentityTab     agent={agent} onSave={handleSave} />}
                 {tab === "business"     && <BusinessTab     agent={agent} onSave={handleSave} />}
                 {tab === "knowledge"    && <KnowledgeTab    agent={agent} onSave={handleSave} />}
-                {tab === "capabilities" && <CapabilitiesTab agent={agent} onSave={handleSave} capabilities={capabilities} />}
+                {tab === "capabilities" && <CapabilitiesTab agent={agent} onSave={handleSave} capabilities={capabilities} refetch={refetch} />}
                 {tab === "model"        && <ModelTab        agent={agent} onSave={handleSave} />}
                 {tab === "prompt"       && <PromptTab       agent={agent} onSave={handleSave} />}
                 {tab === "integration"  && <IntegrationTab  agent={agent} />}
