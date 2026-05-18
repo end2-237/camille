@@ -7,7 +7,7 @@ import { query } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth-server";
 
 const SCOPES = [
-  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.events", // Créer/lire événements seulement (pas la config du calendrier)
   "https://www.googleapis.com/auth/userinfo.email",
   "openid",
 ].join(" ");
