@@ -572,72 +572,15 @@ function KnowledgeTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Age
 
 // ── Tab: Capabilities ─────────────────────────────────────────────────────────
 
-function CapabilitiesTab({ agent, onSave, capabilities, refetch }: {
+function CapabilitiesTab({ agent, onSave, capabilities }: {
   agent: Agent;
   onSave: (p: Partial<Agent>) => void;
   capabilities: DbCapability[];
-  refetch: () => void;
 }) {
-  const [caps, setCaps]               = useState({ ...(agent.capabilities as unknown as Record<string, boolean>) });
-  const [gcalLoading, setGcalLoading] = useState(false);
+  const [caps, setCaps] = useState({ ...(agent.capabilities as unknown as Record<string, boolean>) });
   const dirty = JSON.stringify(caps) !== JSON.stringify(agent.capabilities);
   const save  = () => { onSave({ capabilities: { ...caps } as any }); toast.success("Capacités mises à jour !"); };
 
-  const calendarConnected = !!agent.google_calendar_email;
-
-  const handleGCalConnect = async () => {
-    setGcalLoading(true);
-    try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
-      const res = await fetch("/api/integrations/google-calendar/connect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ agentId: agent.id }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
-        toast.error(d.error ?? "Erreur lors de la connexion");
-        return;
-      }
-      const { url } = await res.json() as { url: string };
-      window.location.href = url;
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setGcalLoading(false);
-    }
-  };
-
-  const handleGCalDisconnect = async () => {
-    setGcalLoading(true);
-    try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
-      const res = await fetch("/api/integrations/google-calendar/disconnect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ agentId: agent.id }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
-        toast.error(d.error ?? "Erreur lors de la déconnexion");
-        return;
-      }
-      toast.success("Google Agenda déconnecté");
-      refetch();
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setGcalLoading(false);
-    }
-  };
-
-  // Toutes les caps visibles (pas disabled)
   const visibleCaps = capabilities.filter((c) => c.status !== "disabled");
 
   return (
@@ -648,149 +591,73 @@ function CapabilitiesTab({ agent, onSave, capabilities, refetch }: {
         const isComingSoon = cap.status === "coming_soon";
         const isAuto       = !cap.is_user_configurable;
         const active       = isAuto ? true : caps[cap.id] === true;
-        const isCalendar   = cap.id === "calendar_booking";
 
         return (
-          <div key={cap.id}>
-            <div
-              onClick={isToggleable ? () => setCaps((c) => ({ ...c, [cap.id]: !c[cap.id] })) : undefined}
-              className={cn(
-                "flex items-center gap-4 py-3 transition-colors duration-100",
-                isToggleable ? "cursor-pointer" : isComingSoon ? "cursor-not-allowed opacity-50" : "cursor-default opacity-70"
-              )}
-              style={{ borderBottom: (i < visibleCaps.length - 1 && !(isCalendar && active)) ? "1px solid var(--border-subtle)" : undefined }}
-            >
-              {/* Toggle dot */}
-              <div className="relative w-8 h-4 rounded-full flex-shrink-0"
-                style={{
-                  background: active ? "var(--color-gold)" : "var(--bg-muted)",
-                  border: `1px solid ${active ? "var(--color-gold)" : "var(--border-default)"}`,
-                }}>
-                <motion.div
-                  animate={{ x: active ? 16 : 2 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  className="absolute top-0.5 w-3 h-3 rounded-full"
-                  style={{ background: active ? "#000" : "var(--text-disabled)" }}
-                />
-              </div>
-
-              <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
-                style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-xs font-medium"
-                    style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                    {cap.label}
-                  </p>
-                  {cap.badge && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                      style={{
-                        background: cap.badge === "Core"    ? "rgba(52,211,153,0.1)"  :
-                                    cap.badge === "Bientôt" ? "rgba(255,255,255,0.05)" :
-                                    cap.badge === "Nouveau" ? "rgba(56,189,248,0.1)"  :
-                                    "rgba(212,175,55,0.12)",
-                        color:      cap.badge === "Core"    ? "#34D399"               :
-                                    cap.badge === "Bientôt" ? "var(--text-disabled)"  :
-                                    cap.badge === "Nouveau" ? "#38bdf8"               :
-                                    "var(--color-gold)",
-                      }}>
-                      {cap.badge}
-                    </span>
-                  )}
-                  {isAuto && !cap.badge && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                      style={{ background: "rgba(52,211,153,0.08)", color: "#34D399" }}>
-                      Auto
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                  {cap.description}
-                  {cap.tokens_per_msg > 0 && (
-                    <span className="ml-1 tabular-nums">
-                      · ~{cap.tokens_per_msg >= 1000
-                          ? `${(cap.tokens_per_msg / 1000).toFixed(1)}k`
-                          : cap.tokens_per_msg} tokens/msg
-                    </span>
-                  )}
-                </p>
-              </div>
+          <div
+            key={cap.id}
+            onClick={isToggleable ? () => setCaps((c) => ({ ...c, [cap.id]: !c[cap.id] })) : undefined}
+            className={cn(
+              "flex items-center gap-4 py-3 transition-colors duration-100",
+              isToggleable ? "cursor-pointer" : isComingSoon ? "cursor-not-allowed opacity-50" : "cursor-default opacity-70"
+            )}
+            style={{ borderBottom: i < visibleCaps.length - 1 ? "1px solid var(--border-subtle)" : undefined }}
+          >
+            {/* Toggle dot */}
+            <div className="relative w-8 h-4 rounded-full flex-shrink-0"
+              style={{
+                background: active ? "var(--color-gold)" : "var(--bg-muted)",
+                border: `1px solid ${active ? "var(--color-gold)" : "var(--border-default)"}`,
+              }}>
+              <motion.div
+                animate={{ x: active ? 16 : 2 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                className="absolute top-0.5 w-3 h-3 rounded-full"
+                style={{ background: active ? "#000" : "var(--text-disabled)" }}
+              />
             </div>
 
-            {/* ── Google Calendar connection sub-panel (calendar_booking only) ── */}
-            <AnimatePresence>
-              {isCalendar && active && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  style={{ borderBottom: i < visibleCaps.length - 1 ? "1px solid var(--border-subtle)" : undefined }}
-                >
-                  <div className="ml-12 mb-3 rounded-xl p-3.5 flex items-center gap-3"
+            <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
+              style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-xs font-medium"
+                  style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                  {cap.label}
+                </p>
+                {cap.badge && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
                     style={{
-                      background: calendarConnected ? "rgba(52,211,153,0.06)" : "var(--bg-muted)",
-                      border: `1px solid ${calendarConnected ? "rgba(52,211,153,0.2)" : "var(--border-subtle)"}`,
+                      background: cap.badge === "Core"    ? "rgba(52,211,153,0.1)"   :
+                                  cap.badge === "Bientôt" ? "rgba(255,255,255,0.05)" :
+                                  cap.badge === "Nouveau" ? "rgba(56,189,248,0.1)"   :
+                                  "rgba(212,175,55,0.12)",
+                      color:      cap.badge === "Core"    ? "#34D399"                :
+                                  cap.badge === "Bientôt" ? "var(--text-disabled)"   :
+                                  cap.badge === "Nouveau" ? "#38bdf8"                :
+                                  "var(--color-gold)",
                     }}>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{
-                        background: calendarConnected ? "rgba(52,211,153,0.1)" : "rgba(212,175,55,0.08)",
-                      }}>
-                      <Calendar className="w-3.5 h-3.5"
-                        style={{ color: calendarConnected ? "#34D399" : "var(--color-gold)" }} />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      {calendarConnected ? (
-                        <>
-                          <p className="text-[11px] font-semibold" style={{ color: "#34D399" }}>
-                            Google Agenda connecté
-                          </p>
-                          <p className="text-[10px] truncate mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                            {agent.google_calendar_email}
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-[11px] font-medium" style={{ color: "var(--text-primary)" }}>
-                            Connectez votre Google Agenda
-                          </p>
-                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                            Nécessaire pour vérifier les disponibilités et créer des événements.
-                          </p>
-                        </>
-                      )}
-                    </div>
-
-                    {calendarConnected ? (
-                      <button
-                        onClick={handleGCalDisconnect}
-                        disabled={gcalLoading}
-                        className="text-[10px] px-2.5 py-1 rounded-lg flex-shrink-0 font-medium transition-all duration-150 disabled:opacity-50"
-                        style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                      >
-                        {gcalLoading ? "…" : "Déconnecter"}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleGCalConnect}
-                        disabled={gcalLoading}
-                        className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-lg flex-shrink-0 font-semibold transition-all duration-150 disabled:opacity-50 hover:brightness-110"
-                        style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}
-                      >
-                        {gcalLoading
-                          ? <><div className="w-2.5 h-2.5 rounded-full border border-t-[var(--color-gold)] border-white/20 animate-spin" />Connexion…</>
-                          : <><Calendar className="w-2.5 h-2.5" />Connecter</>
-                        }
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    {cap.badge}
+                  </span>
+                )}
+                {isAuto && !cap.badge && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                    style={{ background: "rgba(52,211,153,0.08)", color: "#34D399" }}>
+                    Auto
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                {cap.description}
+                {cap.tokens_per_msg > 0 && (
+                  <span className="ml-1 tabular-nums">
+                    · ~{cap.tokens_per_msg >= 1000
+                        ? `${(cap.tokens_per_msg / 1000).toFixed(1)}k`
+                        : cap.tokens_per_msg} tokens/msg
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
         );
       })}
@@ -938,11 +805,37 @@ function PromptTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>
   );
 }
 
-// ── Tab: Integration (WhatsApp connection) ────────────────────────────────────
+// ── Tab: Integration ─────────────────────────────────────────────────────────
+
+// Inline SVG brand icons (Lucide doesn't include social networks)
+function IconFacebook({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+    </svg>
+  );
+}
+function IconInstagram({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <circle cx="12" cy="12" r="3.5" />
+      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function IconTikTok({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.74a4.85 4.85 0 0 1-1.01-.05z" />
+    </svg>
+  );
+}
 
 type WahaStatus = "STOPPED" | "STARTING" | "SCAN_QR_CODE" | "WORKING" | "FAILED" | "ERROR" | null;
 
-function IntegrationTab({ agent }: { agent: Agent }) {
+function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void }) {
+  // ── WhatsApp state ──────────────────────────────────────────────────────────
   const [wahaStatus, setWahaStatus]     = useState<WahaStatus>(null);
   const [sessionName, setSessionName]   = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber]   = useState<string | null>(null);
@@ -956,9 +849,19 @@ function IntegrationTab({ agent }: { agent: Agent }) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const blobUrlRef  = useRef<string | null>(null);
 
+  // ── Google Calendar state ───────────────────────────────────────────────────
+  const [gcalLoading, setGcalLoading] = useState(false);
+  const calendarConnected             = !!agent.google_calendar_email;
+
+  // ── Derived capability flags ────────────────────────────────────────────────
+  const caps                  = agent.capabilities as unknown as Record<string, boolean>;
+  const hasCalendar           = caps.calendar_booking   === true;
+  const hasCommunityMgmt      = caps.community_management === true;
+
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
   const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
+  // ── WhatsApp helpers ────────────────────────────────────────────────────────
   const fetchQr = useCallback(async (sName: string) => {
     try {
       const res = await fetch(`/api/waha/qr?session=${sName}`, { headers: authH });
@@ -969,7 +872,7 @@ function IntegrationTab({ agent }: { agent: Agent }) {
       blobUrlRef.current = url;
       setQrBlobUrl(url);
     } catch { /* QR pas encore prêt */ }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => { if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current); }, []);
 
@@ -984,7 +887,7 @@ function IntegrationTab({ agent }: { agent: Agent }) {
     else if (data.session_name && data.status === "SCAN_QR_CODE" && connectMode === "qr") {
       fetchQr(data.session_name);
     }
-  }, [agent.id, fetchQr, connectMode]);
+  }, [agent.id, fetchQr, connectMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function stopPolling() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -996,7 +899,7 @@ function IntegrationTab({ agent }: { agent: Agent }) {
 
   useEffect(() => { fetchStatus(); return () => stopPolling(); }, [fetchStatus]);
 
-  const handleConnect = async () => {
+  const handleWahaConnect = async () => {
     setConnecting(true);
     setPairingCode(null);
     try {
@@ -1036,7 +939,7 @@ function IntegrationTab({ agent }: { agent: Agent }) {
     } finally { setPhoneLoading(false); }
   };
 
-  const handleDisconnect = async () => {
+  const handleWahaDisconnect = async () => {
     stopPolling();
     try {
       await fetch("/api/waha/disconnect", {
@@ -1052,6 +955,51 @@ function IntegrationTab({ agent }: { agent: Agent }) {
     toast.success("Session WhatsApp déconnectée");
   };
 
+  // ── Google Calendar helpers ─────────────────────────────────────────────────
+  const handleGCalConnect = async () => {
+    setGcalLoading(true);
+    try {
+      const res = await fetch("/api/integrations/google-calendar/connect", {
+        method: "POST",
+        headers: { ...authH, "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: agent.id }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        toast.error(d.error ?? "Erreur lors de la connexion");
+        return;
+      }
+      const { url } = await res.json() as { url: string };
+      window.location.href = url;
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setGcalLoading(false);
+    }
+  };
+
+  const handleGCalDisconnect = async () => {
+    setGcalLoading(true);
+    try {
+      const res = await fetch("/api/integrations/google-calendar/disconnect", {
+        method: "POST",
+        headers: { ...authH, "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: agent.id }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        toast.error(d.error ?? "Erreur lors de la déconnexion");
+        return;
+      }
+      toast.success("Google Agenda déconnecté");
+      refetch();
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setGcalLoading(false);
+    }
+  };
+
   const copyId = async () => {
     await navigator.clipboard.writeText(agent.id);
     setCopied(true); setTimeout(() => setCopied(false), 2000);
@@ -1062,155 +1010,326 @@ function IntegrationTab({ agent }: { agent: Agent }) {
   const isStarting = wahaStatus === "STARTING";
   const isStopped  = !wahaStatus || wahaStatus === "STOPPED" || wahaStatus === "FAILED" || wahaStatus === "ERROR";
 
-  return (
-    <div className="space-y-5">
-      <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
+  // ── Shared sub-components ───────────────────────────────────────────────────
 
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4" style={{ background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.25)" }}>
-            <MessageCircle className="w-4 h-4" style={{ color: "#25D366" }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>WhatsApp</p>
-            <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
-              {isWorking ? `Connecté · ${phoneNumber ?? ""}` : isScanning ? "Scannez le QR code" : isStarting ? "Démarrage…" : "Non connecté"}
-            </p>
-          </div>
-          <span className="flex items-center gap-1.5 text-xs font-medium flex-shrink-0"
-            style={{ color: isWorking ? "#34D399" : isScanning || isStarting ? "#FBBF24" : "var(--text-disabled)" }}>
-            <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
-              isWorking ? "bg-emerald-400 animate-pulse" : isScanning || isStarting ? "bg-amber-400 animate-pulse" : "bg-white/20")} />
-            <span className="hidden sm:inline">{isWorking ? "Actif" : isScanning ? "En attente" : isStarting ? "Démarrage" : "Inactif"}</span>
-          </span>
+  function SectionHeader({ label }: { label: string }) {
+    return (
+      <p className="text-[10px] font-semibold uppercase tracking-widest pb-2"
+        style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--border-subtle)" }}>
+        {label}
+      </p>
+    );
+  }
+
+  function ComingSoonCard({
+    icon, label, description, accentColor,
+  }: {
+    icon: React.ReactNode; label: string; description: string; accentColor: string;
+  }) {
+    return (
+      <div className="flex items-center gap-3 p-4 rounded-xl opacity-50"
+        style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: `${accentColor}15`, border: `1px solid ${accentColor}30` }}>
+          <span style={{ color: accentColor }}>{icon}</span>
         </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</p>
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+              style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
+              BIENTÔT
+            </span>
+          </div>
+          <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>{description}</p>
+        </div>
+      </div>
+    );
+  }
 
-        {/* Mode toggle (QR / Phone) — visible quand en attente de scan */}
-        <AnimatePresence>
-          {isScanning && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-              {/* Toggle */}
-              <div className="flex px-5 pt-5 gap-2">
-                <button onClick={() => setConnectMode("qr")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                  style={connectMode === "qr"
-                    ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
-                    : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
-                  <Globe className="w-3 h-3" /> QR Code
-                </button>
-                <button onClick={() => setConnectMode("phone")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                  style={connectMode === "phone"
-                    ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
-                    : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
-                  <Phone className="w-3 h-3" /> Numéro
-                  <span className="text-[9px] px-1 py-0.5 rounded font-bold ml-0.5"
-                    style={{ background: "rgba(251,191,36,0.15)", color: "#FBBF24" }}>NEXT</span>
-                </button>
-              </div>
+  // ── Render ──────────────────────────────────────────────────────────────────
+  return (
+    <div className="space-y-6">
 
-              {/* QR mode */}
-              {connectMode === "qr" && (
-                <div className="flex flex-col items-center gap-4 py-6 px-6">
-                  <p className="text-xs text-center" style={{ color: "var(--text-tertiary)" }}>
-                    WhatsApp → Paramètres → Appareils liés → Lier un appareil
-                  </p>
-                  {qrBlobUrl ? (
-                    <div className="rounded-2xl overflow-hidden p-3" style={{ background: "#fff" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={qrBlobUrl} alt="QR WhatsApp" width={200} height={200} />
-                    </div>
-                  ) : (
-                    <div className="w-[200px] h-[200px] rounded-2xl flex items-center justify-center"
-                      style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-                      <div className="w-6 h-6 rounded-full border-2 border-t-[var(--color-gold)] border-white/10 animate-spin" />
-                    </div>
-                  )}
-                  <button onClick={() => sessionName && fetchQr(sessionName)}
-                    className="text-xs flex items-center gap-1.5 transition-opacity hover:opacity-70"
-                    style={{ color: "var(--text-disabled)" }}>
-                    <RefreshCw className="w-3 h-3" /> Actualiser le QR
+      {/* ── MESSAGERIE ───────────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <SectionHeader label="Messagerie" />
+
+        {/* WhatsApp card */}
+        <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
+          <div className="flex items-center gap-3 px-5 py-4" style={{ background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.25)" }}>
+              <MessageCircle className="w-4 h-4" style={{ color: "#25D366" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>WhatsApp Business</p>
+              <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
+                {isWorking ? `Connecté · ${phoneNumber ?? ""}` : isScanning ? "Scannez le QR code" : isStarting ? "Démarrage…" : "Non connecté"}
+              </p>
+            </div>
+            <span className="flex items-center gap-1.5 text-xs font-medium flex-shrink-0"
+              style={{ color: isWorking ? "#34D399" : isScanning || isStarting ? "#FBBF24" : "var(--text-disabled)" }}>
+              <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
+                isWorking ? "bg-emerald-400 animate-pulse" : isScanning || isStarting ? "bg-amber-400 animate-pulse" : "bg-white/20")} />
+              <span className="hidden sm:inline">{isWorking ? "Actif" : isScanning ? "En attente" : isStarting ? "Démarrage" : "Inactif"}</span>
+            </span>
+          </div>
+
+          {/* Mode toggle QR / Phone — visible uniquement en scan */}
+          <AnimatePresence>
+            {isScanning && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                <div className="flex px-5 pt-5 gap-2">
+                  <button onClick={() => setConnectMode("qr")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    style={connectMode === "qr"
+                      ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
+                      : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
+                    <Globe className="w-3 h-3" /> QR Code
+                  </button>
+                  <button onClick={() => setConnectMode("phone")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    style={connectMode === "phone"
+                      ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
+                      : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
+                    <Phone className="w-3 h-3" /> Numéro
+                    <span className="text-[9px] px-1 py-0.5 rounded font-bold ml-0.5"
+                      style={{ background: "rgba(251,191,36,0.15)", color: "#FBBF24" }}>NEXT</span>
                   </button>
                 </div>
-              )}
 
-              {/* Phone mode */}
-              {connectMode === "phone" && (
-                <div className="flex flex-col gap-4 py-6 px-6">
-                  <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    WhatsApp → Paramètres → Appareils liés → Lier avec numéro de téléphone
-                  </p>
-                  <div className="flex gap-2">
-                    <FInput
-                      placeholder="+33 6 12 34 56 78"
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value)}
-                      className="flex-1"
-                    />
-                    <button onClick={handlePhoneCode} disabled={phoneLoading}
-                      className="px-4 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-all duration-200 disabled:opacity-50"
-                      style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
-                      {phoneLoading ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : "Obtenir le code"}
+                {connectMode === "qr" && (
+                  <div className="flex flex-col items-center gap-4 py-6 px-6">
+                    <p className="text-xs text-center" style={{ color: "var(--text-tertiary)" }}>
+                      WhatsApp → Paramètres → Appareils liés → Lier un appareil
+                    </p>
+                    {qrBlobUrl ? (
+                      <div className="rounded-2xl overflow-hidden p-3" style={{ background: "#fff" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={qrBlobUrl} alt="QR WhatsApp" width={200} height={200} />
+                      </div>
+                    ) : (
+                      <div className="w-[200px] h-[200px] rounded-2xl flex items-center justify-center"
+                        style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
+                        <div className="w-6 h-6 rounded-full border-2 border-t-[var(--color-gold)] border-white/10 animate-spin" />
+                      </div>
+                    )}
+                    <button onClick={() => sessionName && fetchQr(sessionName)}
+                      className="text-xs flex items-center gap-1.5 transition-opacity hover:opacity-70"
+                      style={{ color: "var(--text-disabled)" }}>
+                      <RefreshCw className="w-3 h-3" /> Actualiser le QR
                     </button>
                   </div>
-                  {pairingCode && (
-                    <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                      className="rounded-xl p-4 text-center"
-                      style={{ background: "rgba(37,211,102,0.08)", border: "1px solid rgba(37,211,102,0.2)" }}>
-                      <p className="text-xs mb-2" style={{ color: "var(--text-tertiary)" }}>Entrez ce code dans WhatsApp</p>
-                      <p className="text-2xl font-mono font-bold tracking-widest" style={{ color: "#25D366" }}>{pairingCode}</p>
-                    </motion.div>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                )}
 
-        {/* Connected phone */}
-        <AnimatePresence>
-          {isWorking && phoneNumber && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="flex items-center gap-3 px-5 py-4">
-              <Phone className="w-4 h-4 flex-shrink-0" style={{ color: "#25D366" }} />
-              <span className="text-sm font-mono flex-1" style={{ color: "#25D366" }}>+{phoneNumber}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                {connectMode === "phone" && (
+                  <div className="flex flex-col gap-4 py-6 px-6">
+                    <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      WhatsApp → Paramètres → Appareils liés → Lier avec numéro de téléphone
+                    </p>
+                    <div className="flex gap-2">
+                      <FInput
+                        placeholder="+33 6 12 34 56 78"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        className="flex-1"
+                      />
+                      <button onClick={handlePhoneCode} disabled={phoneLoading}
+                        className="px-4 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-all duration-200 disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
+                        {phoneLoading
+                          ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                          : "Obtenir le code"}
+                      </button>
+                    </div>
+                    {pairingCode && (
+                      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                        className="rounded-xl p-4 text-center"
+                        style={{ background: "rgba(37,211,102,0.08)", border: "1px solid rgba(37,211,102,0.2)" }}>
+                        <p className="text-xs mb-2" style={{ color: "var(--text-tertiary)" }}>Entrez ce code dans WhatsApp</p>
+                        <p className="text-2xl font-mono font-bold tracking-widest" style={{ color: "#25D366" }}>{pairingCode}</p>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* Actions */}
-        <div className="flex items-center justify-between px-5 py-4 gap-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-          {isStopped ? (
-            <button onClick={handleConnect} disabled={connecting}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
-              {connecting
-                ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Connexion…</>
-                : <><MessageCircle className="w-3.5 h-3.5" />Connecter WhatsApp</>}
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 min-w-0">
-              {!isWorking && (
-                <span className="text-xs animate-pulse truncate" style={{ color: "var(--text-disabled)" }}>
-                  {isStarting ? "Initialisation…" : "En attente du scan…"}
-                </span>
-              )}
-            </div>
-          )}
-          {!isStopped && (
-            <button onClick={handleDisconnect}
-              className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150 flex-shrink-0"
-              style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-              Déconnecter
-            </button>
-          )}
+          {/* Numéro connecté */}
+          <AnimatePresence>
+            {isWorking && phoneNumber && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="flex items-center gap-3 px-5 py-4">
+                <Phone className="w-4 h-4 flex-shrink-0" style={{ color: "#25D366" }} />
+                <span className="text-sm font-mono flex-1" style={{ color: "#25D366" }}>+{phoneNumber}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Actions WhatsApp */}
+          <div className="flex items-center justify-between px-5 py-4 gap-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+            {isStopped ? (
+              <button onClick={handleWahaConnect} disabled={connecting}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
+                {connecting
+                  ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Connexion…</>
+                  : <><MessageCircle className="w-3.5 h-3.5" />Connecter WhatsApp</>}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 min-w-0">
+                {!isWorking && (
+                  <span className="text-xs animate-pulse truncate" style={{ color: "var(--text-disabled)" }}>
+                    {isStarting ? "Initialisation…" : "En attente du scan…"}
+                  </span>
+                )}
+              </div>
+            )}
+            {!isStopped && (
+              <button onClick={handleWahaDisconnect}
+                className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150 flex-shrink-0"
+                style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                Déconnecter
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Agent ID */}
+      {/* ── PRODUCTIVITÉ — Google Agenda (si calendar_booking activé) ─────────── */}
+      <AnimatePresence>
+        {hasCalendar && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-3"
+          >
+            <SectionHeader label="Productivité" />
+
+            <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${calendarConnected ? "rgba(52,211,153,0.25)" : "var(--border-subtle)"}` }}>
+              {/* Header Google Agenda */}
+              <div className="flex items-center gap-3 px-5 py-4"
+                style={{ background: calendarConnected ? "rgba(52,211,153,0.05)" : "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: calendarConnected ? "rgba(52,211,153,0.12)" : "rgba(212,175,55,0.08)",
+                    border: `1px solid ${calendarConnected ? "rgba(52,211,153,0.3)" : "rgba(212,175,55,0.2)"}`,
+                  }}>
+                  <Calendar className="w-4 h-4" style={{ color: calendarConnected ? "#34D399" : "var(--color-gold)" }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Google Agenda</p>
+                  <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
+                    {calendarConnected
+                      ? `Connecté · ${agent.google_calendar_email}`
+                      : "Requis pour vérifier les dispos et créer des événements"}
+                  </p>
+                </div>
+                <span className="flex items-center gap-1.5 text-xs font-medium flex-shrink-0"
+                  style={{ color: calendarConnected ? "#34D399" : "var(--text-disabled)" }}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
+                    calendarConnected ? "bg-emerald-400 animate-pulse" : "bg-white/20")} />
+                  <span className="hidden sm:inline">{calendarConnected ? "Connecté" : "Non connecté"}</span>
+                </span>
+              </div>
+
+              {/* Info quand connecté */}
+              <AnimatePresence>
+                {calendarConnected && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                    <div className="px-5 py-4 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                        style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)" }}>
+                        ✅
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                          {agent.google_calendar_email}
+                        </p>
+                        <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                          Les rendez-vous seront créés automatiquement dans ce calendrier.
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Actions Google Agenda */}
+              <div className="flex items-center justify-between px-5 py-4 gap-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                {!calendarConnected ? (
+                  <button
+                    onClick={handleGCalConnect}
+                    disabled={gcalLoading}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #4285F4, #34A853)", color: "#fff" }}>
+                    {gcalLoading
+                      ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Connexion…</>
+                      : <><Calendar className="w-3.5 h-3.5" />Connecter Google Agenda</>}
+                  </button>
+                ) : (
+                  <p className="text-xs" style={{ color: "var(--text-disabled)" }}>
+                    Agenda actif · les créneaux libres sont détectés en temps réel
+                  </p>
+                )}
+                {calendarConnected && (
+                  <button
+                    onClick={handleGCalDisconnect}
+                    disabled={gcalLoading}
+                    className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150 flex-shrink-0 disabled:opacity-50"
+                    style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                    {gcalLoading ? "…" : "Déconnecter"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── RÉSEAUX SOCIAUX — Facebook / Instagram / TikTok (si community_management) ── */}
+      <AnimatePresence>
+        {hasCommunityMgmt && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-3"
+          >
+            <SectionHeader label="Réseaux sociaux" />
+
+            <ComingSoonCard
+              icon={<IconFacebook className="w-4 h-4" />}
+              label="Facebook"
+              description="Publication, gestion des messages et commentaires"
+              accentColor="#1877F2"
+            />
+            <ComingSoonCard
+              icon={<IconInstagram className="w-4 h-4" />}
+              label="Instagram"
+              description="Publication de contenu et réponses automatiques"
+              accentColor="#E1306C"
+            />
+            <ComingSoonCard
+              icon={<IconTikTok className="w-4 h-4" />}
+              label="TikTok"
+              description="Publication de vidéos et gestion des interactions"
+              accentColor="#010101"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Agent ID ──────────────────────────────────────────────────────────── */}
       <div className="rounded-2xl p-4 flex items-center gap-3"
         style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
         <div className="flex-1 min-w-0">
@@ -1376,10 +1495,10 @@ export default function AgentConfigPage() {
                 {tab === "identity"     && <IdentityTab     agent={agent} onSave={handleSave} />}
                 {tab === "business"     && <BusinessTab     agent={agent} onSave={handleSave} />}
                 {tab === "knowledge"    && <KnowledgeTab    agent={agent} onSave={handleSave} />}
-                {tab === "capabilities" && <CapabilitiesTab agent={agent} onSave={handleSave} capabilities={capabilities} refetch={refetch} />}
+                {tab === "capabilities" && <CapabilitiesTab agent={agent} onSave={handleSave} capabilities={capabilities} />}
                 {tab === "model"        && <ModelTab        agent={agent} onSave={handleSave} />}
                 {tab === "prompt"       && <PromptTab       agent={agent} onSave={handleSave} />}
-                {tab === "integration"  && <IntegrationTab  agent={agent} />}
+                {tab === "integration"  && <IntegrationTab  agent={agent} refetch={refetch} />}
               </motion.div>
             </AnimatePresence>
           </div>
