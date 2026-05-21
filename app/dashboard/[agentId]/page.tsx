@@ -592,7 +592,7 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
   const [pwRevealConf,  setPwRevealConf]  = useState(false);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
-  const authH = token ? { Authorization: `Bearer ${token}` } : {};
+  const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
   const handleSavePassword = async () => {
     if (!pwInput.trim()) { toast.error("Entrez un mot de passe"); return; }
