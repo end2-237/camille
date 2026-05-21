@@ -30,17 +30,21 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     const conv = convResult.rows[0] ?? {};
 
     // ── Token usage ce mois ──────────────────────────────────────────────────
-    const tokenResult = await query(
-      `SELECT
-         COALESCE(SUM(tokens_used), 0) AS total_tokens,
-         COUNT(*)                       AS llm_calls
-       FROM camille.token_usage
-       WHERE agent_id = $1
-       AND recorded_at >= DATE_TRUNC('month', NOW())`,
-      [agentId]
-    );
-
-    const tokens = tokenResult.rows[0] ?? {};
+    let tokens: { total_tokens?: string; llm_calls?: string } = {};
+    try {
+      const tokenResult = await query(
+        `SELECT
+           COALESCE(SUM(tokens_used), 0) AS total_tokens,
+           COUNT(*)                       AS llm_calls
+         FROM camille.token_usage
+         WHERE agent_id = $1
+         AND recorded_at >= DATE_TRUNC('month', NOW())`,
+        [agentId]
+      );
+      tokens = tokenResult.rows[0] ?? {};
+    } catch {
+      // Table token_usage peut ne pas exister encore
+    }
 
     // ── Leads ce mois ─────────────────────────────────────────────────────────
     let leadsCount = 0;
