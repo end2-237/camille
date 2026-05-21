@@ -293,6 +293,12 @@ export interface Agent {
   /** Google Calendar OAuth — email shown in dashboard when connected */
   google_calendar_email?: string | null;
 
+  /**
+   * Owner mode — bcrypt hash of the WhatsApp password for /password authentication.
+   * Only the existence (truthy/falsy) is exposed to the frontend — never the hash itself.
+   */
+  owner_password_hash?: string | null;
+
   created_at: ISODateString;
   updated_at: ISODateString;
 }

@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
         a.owner_email,
         a.whatsapp_number,
         a.capabilities,
-        a.status
+        a.status,
+        (a.owner_password_hash IS NOT NULL) AS has_owner_password
        FROM camille.whatsapp_sessions ws
        JOIN camille.agents a ON a.id = ws.agent_id
        WHERE ws.session_name = $1 AND a.status = 'active'`,
@@ -67,8 +68,9 @@ export async function GET(req: NextRequest) {
         owner_name:         row.owner_name,
         owner_email:        row.owner_email,
         whatsapp_number:    row.whatsapp_number,
-        capabilities:       parseJ(row.capabilities) ?? {},
-        status:             row.status,
+        capabilities:        parseJ(row.capabilities) ?? {},
+        status:              row.status,
+        has_owner_password:  row.has_owner_password === true,
       },
     });
   } catch (err) {
