@@ -186,6 +186,18 @@ export interface AgentCapabilities {
 
   /** Book appointments and sync with Google Calendar */
   calendar_booking: boolean;
+
+  /**
+   * URL of the welcome voice note (.ogg / .mp3) sent to new contacts.
+   * If null / empty, no audio is sent in the welcome sequence.
+   */
+  welcome_audio_url?: string | null;
+
+  /**
+   * URL of the welcome video (.mp4) sent to new contacts after the audio.
+   * If null / empty, no video is sent in the welcome sequence.
+   */
+  welcome_video_url?: string | null;
 }
 
 // ── WhatsApp Integration ──────────────────────────────────────────────────────

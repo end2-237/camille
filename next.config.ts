@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Allow large file uploads (audio up to 10 Mo, video up to 50 Mo)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "55mb",
+    },
+  },
 };
 
 export default nextConfig;

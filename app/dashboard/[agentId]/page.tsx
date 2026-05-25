@@ -16,6 +16,7 @@ import {
   MessageCircle, Globe, Phone, Clock,
   Users, ChevronDown, LayoutDashboard, TrendingUp,
   History, FileText, Target, UserPlus, Send, Image, Calendar,
+  Upload, Mic2, Video, X,
 } from "lucide-react";
 import { toast }                from "sonner";
 import { useAuth }             from "@/hooks/useAuth";
@@ -580,14 +581,224 @@ type OwnerSession = {
   expires_at: string;
 };
 
+// ── MediaUploadCard ───────────────────────────────────────────────────────────
+
+function MediaUploadCard({
+  agentId,
+  type,
+  initialUrl,
+  label,
+  formats,
+}: {
+  agentId:    string;
+  type:       "audio" | "video";
+  initialUrl: string | null;
+  label:      string;
+  formats:    string;
+}) {
+  const [url,       setUrl]       = useState<string | null>(initialUrl);
+  const [uploading, setUploading] = useState(false);
+  const [deleting,  setDeleting]  = useState(false);
+  const [err,       setErr]       = useState<string | null>(null);
+  const [dragOver,  setDragOver]  = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const accept = type === "audio"
+    ? "audio/ogg,audio/mpeg,audio/mp4,audio/aac,audio/x-m4a"
+    : "video/mp4,video/quicktime";
+
+  const doUpload = async (file: File) => {
+    setErr(null);
+    setUploading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("type", type);
+      const res  = await fetch(`/api/agents/${agentId}/media`, {
+        method:  "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body:    fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur upload");
+      setUrl(data.url);
+      toast.success(type === "audio" ? "Audio uploadé !" : "Vidéo uploadée !");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErr(msg);
+      toast.error(msg);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const doDelete = async () => {
+    setErr(null);
+    setDeleting(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
+      const res  = await fetch(`/api/agents/${agentId}/media?type=${type}`, {
+        method:  "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur suppression");
+      setUrl(null);
+      toast.success(type === "audio" ? "Audio supprimé." : "Vidéo supprimée.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErr(msg);
+      toast.error(msg);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) doUpload(file);
+    e.target.value = "";
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) doUpload(file);
+  };
+
+  // Friendly filename from URL
+  const fileName = url
+    ? decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? url)
+    : null;
+
+  const MediaIcon = type === "audio" ? Mic2 : Video;
+
+  return (
+    <div className="space-y-2">
+      {/* Label row */}
+      <div className="flex items-center gap-1.5">
+        <MediaIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
+        <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{label}</p>
+      </div>
+
+      {url ? (
+        /* ── File is set ──────────────────────────────────────────────── */
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
+          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
+          {/* Icon bubble */}
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ background: "rgba(212,175,55,0.12)" }}>
+            <MediaIcon className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} />
+          </div>
+
+          {/* Filename */}
+          <p className="text-[11px] flex-1 min-w-0 truncate" style={{ color: "var(--text-secondary)" }}>
+            {fileName}
+          </p>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading || deleting}
+              className="text-[10px] px-2 py-1 rounded-md font-medium transition-all duration-100"
+              style={{
+                background: "var(--surface-glass)",
+                color:      "var(--text-tertiary)",
+                border:     "1px solid var(--border-subtle)",
+              }}>
+              Remplacer
+            </button>
+            <button
+              onClick={doDelete}
+              disabled={uploading || deleting}
+              title="Supprimer"
+              className="w-6 h-6 flex items-center justify-center rounded-md transition-all duration-100"
+              style={{ color: "var(--text-disabled)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-disabled)")}>
+              {deleting
+                ? <RefreshCw className="w-3 h-3 animate-spin" />
+                : <X className="w-3 h-3" />}
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ── Empty drop zone ──────────────────────────────────────────── */
+        <div
+          onClick={() => !uploading && inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          className="flex flex-col items-center justify-center gap-1.5 py-5 px-4 rounded-xl transition-all duration-200"
+          style={{
+            border:     `1.5px dashed ${dragOver ? "var(--color-gold)" : "var(--border-default)"}`,
+            background: dragOver ? "rgba(212,175,55,0.04)" : "var(--bg-elevated)",
+            cursor:     uploading ? "wait" : "pointer",
+          }}>
+          {uploading ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" style={{ color: "var(--color-gold)" }} />
+              <p className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>Upload en cours…</p>
+            </>
+          ) : (
+            <>
+              <Upload
+                className="w-4 h-4"
+                style={{ color: dragOver ? "var(--color-gold)" : "var(--text-disabled)" }}
+              />
+              <p className="text-[11px] text-center" style={{ color: "var(--text-tertiary)" }}>
+                Glissez un fichier ici ou{" "}
+                <span style={{ color: "var(--color-gold)" }}>parcourir</span>
+              </p>
+              <p className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{formats}</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Error message */}
+      {err && (
+        <p className="text-[10px]" style={{ color: "#f87171" }}>{err}</p>
+      )}
+
+      {/* Auto-save confirmation */}
+      {url && !uploading && !deleting && (
+        <p className="text-[10px] flex items-center gap-1" style={{ color: "#34D399" }}>
+          <Check className="w-2.5 h-2.5" /> Sauvegardé automatiquement
+        </p>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={onFileChange}
+      />
+    </div>
+  );
+}
+
+// ── CapabilitiesTab ───────────────────────────────────────────────────────────
+
 function CapabilitiesTab({ agent, onSave, capabilities }: {
   agent: Agent;
   onSave: (p: Partial<Agent>) => void;
   capabilities: DbCapability[];
 }) {
-  const [caps, setCaps] = useState({ ...(agent.capabilities as unknown as Record<string, boolean>) });
-  const dirty = JSON.stringify(caps) !== JSON.stringify(agent.capabilities);
-  const save  = () => { onSave({ capabilities: { ...caps } as any }); toast.success("Capacités mises à jour !"); };
+  const agentCaps = agent.capabilities as unknown as Record<string, unknown>;
+  const [caps, setCaps] = useState({ ...agentCaps });
+
+  const dirty = JSON.stringify(caps) !== JSON.stringify(agentCaps);
+
+  const save = () => {
+    onSave({ capabilities: { ...caps } as any });
+    toast.success("Capacités mises à jour !");
+  };
 
   const visibleCaps = capabilities.filter((c) => c.status !== "disabled");
 
@@ -670,6 +881,39 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
           </div>
         );
       })}
+
+      {/* ── Séquence d'accueil (audio / vidéo) ── */}
+      <div className="space-y-4 pt-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+        <div className="flex items-center gap-2">
+          <MessageCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
+          <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+            Séquence d&apos;accueil
+          </p>
+          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+            style={{ background: "rgba(56,189,248,0.1)", color: "#38bdf8" }}>
+            Nouveau
+          </span>
+        </div>
+        <p className="text-[11px] -mt-2" style={{ color: "var(--text-disabled)" }}>
+          Envoyés automatiquement aux nouveaux contacts WhatsApp. Omettez pour n&apos;envoyer que du texte.
+        </p>
+
+        <MediaUploadCard
+          agentId={agent.id}
+          type="audio"
+          initialUrl={(agentCaps.welcome_audio_url as string) ?? null}
+          label="Message vocal d'accueil"
+          formats=".ogg · .mp3 · .m4a — max 10 Mo"
+        />
+
+        <MediaUploadCard
+          agentId={agent.id}
+          type="video"
+          initialUrl={(agentCaps.welcome_video_url as string) ?? null}
+          label="Vidéo d'accueil"
+          formats=".mp4 — max 50 Mo"
+        />
+      </div>
 
     </div>
   );
