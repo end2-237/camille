@@ -6,33 +6,33 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "[Camille] Missing Supabase environment variables. " +
-      "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local"
-  );
-}
+// Env vars are read lazily (inside functions) so the module can be imported
+// during the Next.js build without throwing when vars are not yet set.
 
 /** Browser/client-side Supabase instance (uses anon key) */
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-});
+export const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  }
+);
 
 /** Server-side Supabase instance with service role key (never expose to client) */
 export function createServerClient() {
+  const url        = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) {
+
+  if (!url || !serviceKey) {
     throw new Error(
-      "[Camille] SUPABASE_SERVICE_ROLE_KEY is required for server operations."
+      "[Camille] NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for server operations."
     );
   }
-  return createClient<Database>(supabaseUrl, serviceKey, {
+
+  return createClient<Database>(url, serviceKey, {
     auth: { persistSession: false },
   });
 }
