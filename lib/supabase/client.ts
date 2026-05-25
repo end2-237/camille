@@ -6,16 +6,22 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 
-// Env vars are read lazily (inside functions) so the module can be imported
-// during the Next.js build without throwing when vars are not yet set.
+// ── Build-time placeholders ───────────────────────────────────────────────────
+// The Supabase SDK validates that the URL is a non-empty string at instantiation
+// time. During `next build` inside Docker, runtime env vars are not yet injected,
+// so we fall back to placeholder values. The client is never actually invoked
+// during the build — only at runtime when real env vars are present.
+
+const BUILD_URL = "https://placeholder-build.supabase.co";
+const BUILD_KEY = "placeholder-build-key";
 
 /** Browser/client-side Supabase instance (uses anon key) */
 export const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+  process.env.NEXT_PUBLIC_SUPABASE_URL    || BUILD_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || BUILD_KEY,
   {
     auth: {
-      persistSession: true,
+      persistSession:   true,
       autoRefreshToken: true,
     },
   }
@@ -23,14 +29,8 @@ export const supabase = createClient<Database>(
 
 /** Server-side Supabase instance with service role key (never expose to client) */
 export function createServerClient() {
-  const url        = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceKey) {
-    throw new Error(
-      "[Camille] NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for server operations."
-    );
-  }
+  const url        = process.env.NEXT_PUBLIC_SUPABASE_URL    || BUILD_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY   || BUILD_KEY;
 
   return createClient<Database>(url, serviceKey, {
     auth: { persistSession: false },

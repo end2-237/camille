@@ -7,6 +7,9 @@
 // Les URLs publiques sont persistées dans camille.agents.capabilities.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Force dynamic — never statically pre-rendered during build.
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { createServerClient } from "@/lib/supabase/client";
