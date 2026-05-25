@@ -591,110 +591,6 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
 
   const visibleCaps = capabilities.filter((c) => c.status !== "disabled");
 
-  // ── Mode Propriétaire — password management ──────────────────────────────
-  const [pwInput,       setPwInput]       = useState("");
-  const [pwConfirm,     setPwConfirm]     = useState("");
-  const [pwSaving,      setPwSaving]      = useState(false);
-  const [pwSet,         setPwSet]         = useState(!!agent.owner_password_hash);
-  const [pwRevealNew,   setPwRevealNew]   = useState(false);
-  const [pwRevealConf,  setPwRevealConf]  = useState(false);
-
-  // ── Mode Propriétaire — sessions actives ────────────────────────────────
-  const [ownerSessions,    setOwnerSessions]    = useState<OwnerSession[]>([]);
-  const [sessionsLoading,  setSessionsLoading]  = useState(false);
-  const [revokingId,       setRevokingId]       = useState<string | null>(null);
-  const [revokingAll,      setRevokingAll]      = useState(false);
-
-  const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
-  const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
-  // ── Charger les sessions propriétaire actives ────────────────────────────
-  const fetchOwnerSessions = useCallback(async () => {
-    setSessionsLoading(true);
-    try {
-      const res = await fetch(`/api/agents/${agent.id}/owner-session`, { headers: authH });
-      if (!res.ok) return;
-      const data = await res.json() as { sessions?: OwnerSession[] };
-      setOwnerSessions(data.sessions ?? []);
-    } catch { /* ignore */ } finally {
-      setSessionsLoading(false);
-    }
-  }, [agent.id]);
-
-  useEffect(() => { fetchOwnerSessions(); }, [fetchOwnerSessions]);
-
-  const handleRevokeSession = async (sessionPhone: string, sessionId: string) => {
-    setRevokingId(sessionId);
-    try {
-      await fetch(`/api/agents/${agent.id}/owner-session?phone=${encodeURIComponent(sessionPhone)}`, {
-        method: "DELETE", headers: authH,
-      });
-      toast.success("Session révoquée");
-      setOwnerSessions((prev) => prev.filter((s) => s.id !== sessionId));
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setRevokingId(null);
-    }
-  };
-
-  const handleRevokeAll = async () => {
-    setRevokingAll(true);
-    try {
-      await fetch(`/api/agents/${agent.id}/owner-session?all=true`, {
-        method: "DELETE", headers: authH,
-      });
-      toast.success("Toutes les sessions révoquées");
-      setOwnerSessions([]);
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setRevokingAll(false);
-    }
-  };
-
-  const handleSavePassword = async () => {
-    if (!pwInput.trim()) { toast.error("Entrez un mot de passe"); return; }
-    if (pwInput !== pwConfirm) { toast.error("Les mots de passe ne correspondent pas"); return; }
-    if (pwInput.length < 4) { toast.error("Minimum 4 caractères"); return; }
-    setPwSaving(true);
-    try {
-      const res = await fetch(`/api/agents/${agent.id}/owner-password`, {
-        method: "POST",
-        headers: { ...authH, "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pwInput }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
-        toast.error(d.error ?? "Erreur lors de la sauvegarde");
-        return;
-      }
-      toast.success("Mot de passe défini ✅");
-      setPwInput(""); setPwConfirm(""); setPwSet(true);
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setPwSaving(false);
-    }
-  };
-
-  const handleRemovePassword = async () => {
-    setPwSaving(true);
-    try {
-      const res = await fetch(`/api/agents/${agent.id}/owner-password`, {
-        method: "DELETE",
-        headers: authH,
-      });
-      if (!res.ok) { toast.error("Erreur lors de la suppression"); return; }
-      toast.success("Mot de passe supprimé — mode propriétaire désactivé");
-      setPwSet(false); setPwInput(""); setPwConfirm("");
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setPwSaving(false);
-    }
-  };
-
   return (
     <div className="space-y-4">
       <SaveBar dirty={dirty} onSave={save} />
@@ -775,265 +671,6 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
         );
       })}
 
-      {/* ── Mode Propriétaire ─────────────────────────────────────────────── */}
-      <div className="mt-6 rounded-2xl overflow-hidden"
-        style={{ border: "1px solid rgba(212,175,55,0.18)", background: "rgba(212,175,55,0.03)" }}>
-
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4"
-          style={{ borderBottom: "1px solid rgba(212,175,55,0.12)", background: "rgba(212,175,55,0.05)" }}>
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-            style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.2)" }}>
-            🔐
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-semibold" style={{ color: "var(--color-gold)" }}>Mode Propriétaire</p>
-              {pwSet && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-                  style={{ background: "rgba(52,211,153,0.1)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)" }}>
-                  Activé
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-              Accès réservé — vous seul pouvez activer ce mode depuis WhatsApp
-            </p>
-          </div>
-        </div>
-
-        <div className="px-5 py-5 space-y-5">
-
-          {/* Explainer */}
-          <div className="rounded-xl px-4 py-3 text-xs space-y-1.5"
-            style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
-            <p style={{ color: "var(--text-secondary)" }}>
-              Depuis votre WhatsApp personnel, envoyez <span className="font-mono font-semibold px-1 rounded" style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)" }}>/votre-mot-de-passe</span> à votre agent.
-            </p>
-            <p style={{ color: "var(--text-disabled)" }}>
-              Votre agent bascule en mode consultant IA : conseiller stratégique, community manager, planification annuelle. Session active 8h. Tapez <span className="font-mono font-semibold">/exit</span> pour quitter.
-            </p>
-          </div>
-
-          {/* Capacités owner actives */}
-          {(caps.strategy_advisor || caps.community_management) && (
-            <div className="flex gap-2 flex-wrap">
-              {caps.strategy_advisor && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                  style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.15)" }}>
-                  <span className="text-sm">🧠</span>
-                  <span className="text-2xs font-medium" style={{ color: "var(--color-gold)" }}>Conseiller Stratégique</span>
-                </div>
-              )}
-              {caps.community_management && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                  style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.15)" }}>
-                  <span className="text-sm">📅</span>
-                  <span className="text-2xs font-medium" style={{ color: "var(--color-gold)" }}>Community Management IA</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {!caps.strategy_advisor && !caps.community_management && (
-            <p className="text-xs" style={{ color: "var(--text-disabled)" }}>
-              Activez <strong style={{ color: "var(--text-tertiary)" }}>Conseiller Stratégique</strong> ou <strong style={{ color: "var(--text-tertiary)" }}>Community Management</strong> ci-dessus pour utiliser le mode propriétaire.
-            </p>
-          )}
-
-          {/* Password fields */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-disabled)" }}>
-              {pwSet ? "Changer le mot de passe" : "Définir le mot de passe"}
-            </p>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="relative">
-                <input
-                  type={pwRevealNew ? "text" : "password"}
-                  value={pwInput}
-                  onChange={(e) => setPwInput(e.target.value)}
-                  placeholder="Nouveau mot de passe"
-                  className="w-full px-3 py-2 rounded-lg text-xs outline-none pr-9"
-                  style={{
-                    background: "var(--bg-elevated)",
-                    border: "1px solid var(--border-default)",
-                    color: "var(--text-primary)",
-                  }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(212,175,55,0.4)"; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setPwRevealNew((v) => !v)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs"
-                  style={{ color: "var(--text-disabled)" }}>
-                  {pwRevealNew ? "🙈" : "👁"}
-                </button>
-              </div>
-
-              <div className="relative">
-                <input
-                  type={pwRevealConf ? "text" : "password"}
-                  value={pwConfirm}
-                  onChange={(e) => setPwConfirm(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSavePassword()}
-                  placeholder="Confirmer"
-                  className="w-full px-3 py-2 rounded-lg text-xs outline-none pr-9"
-                  style={{
-                    background: "var(--bg-elevated)",
-                    border: `1px solid ${pwConfirm && pwConfirm !== pwInput ? "rgba(248,113,113,0.4)" : "var(--border-default)"}`,
-                    color: "var(--text-primary)",
-                  }}
-                  onFocus={(e) => { if (!pwConfirm || pwConfirm === pwInput) e.currentTarget.style.borderColor = "rgba(212,175,55,0.4)"; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = pwConfirm && pwConfirm !== pwInput ? "rgba(248,113,113,0.4)" : "var(--border-default)"; }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setPwRevealConf((v) => !v)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs"
-                  style={{ color: "var(--text-disabled)" }}>
-                  {pwRevealConf ? "🙈" : "👁"}
-                </button>
-              </div>
-            </div>
-
-            {pwConfirm && pwConfirm !== pwInput && (
-              <p className="text-[11px]" style={{ color: "#f87171" }}>Les mots de passe ne correspondent pas</p>
-            )}
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSavePassword}
-                disabled={pwSaving || !pwInput || !pwConfirm || pwInput !== pwConfirm}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-40"
-                style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.25)" }}>
-                {pwSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                {pwSet ? "Mettre à jour" : "Définir le mot de passe"}
-              </button>
-
-              {pwSet && (
-                <button
-                  onClick={handleRemovePassword}
-                  disabled={pwSaving}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-40"
-                  style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.06)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                  <Trash2 className="w-3 h-3" />
-                  Désactiver
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* ── Sessions propriétaire actives ──────────────────────────── */}
-          <div style={{ borderTop: "1px solid rgba(212,175,55,0.12)", paddingTop: "1.25rem" }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-disabled)" }}>
-                  Sessions actives
-                </p>
-                {ownerSessions.length > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold tabular-nums"
-                    style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
-                    {ownerSessions.length}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={fetchOwnerSessions}
-                  disabled={sessionsLoading}
-                  className="p-1.5 rounded-lg transition-colors disabled:opacity-40"
-                  style={{ color: "var(--text-disabled)" }}
-                  title="Rafraîchir"
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                  <RefreshCw className={`w-3 h-3 ${sessionsLoading ? "animate-spin" : ""}`} />
-                </button>
-                {ownerSessions.length > 1 && (
-                  <button
-                    onClick={handleRevokeAll}
-                    disabled={revokingAll}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40"
-                    style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.06)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    {revokingAll ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                    Tout révoquer
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {sessionsLoading && ownerSessions.length === 0 && (
-              <p className="text-xs py-3 text-center" style={{ color: "var(--text-disabled)" }}>Chargement…</p>
-            )}
-
-            {!sessionsLoading && ownerSessions.length === 0 && (
-              <div className="rounded-xl px-4 py-3 text-center"
-                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
-                <p className="text-xs" style={{ color: "var(--text-disabled)" }}>Aucune session propriétaire active</p>
-              </div>
-            )}
-
-            {ownerSessions.length > 0 && (
-              <div className="space-y-2">
-                {ownerSessions.map((s) => {
-                  const authDate  = new Date(s.authenticated_at);
-                  const expiresAt = new Date(s.expires_at);
-                  const minutesLeft = Math.round((expiresAt.getTime() - Date.now()) / 60000);
-                  const timeLeft = minutesLeft > 60
-                    ? `${Math.floor(minutesLeft / 60)}h${minutesLeft % 60 > 0 ? String(minutesLeft % 60).padStart(2,"0") : ""}` + " restant"
-                    : `${minutesLeft}min restant`;
-
-                  return (
-                    <div
-                      key={s.id}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                      style={{ background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.1)" }}>
-
-                      {/* Indicateur actif */}
-                      <div className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse"
-                        style={{ background: "#34D399", boxShadow: "0 0 6px #34D399" }} />
-
-                      {/* Infos */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium font-mono" style={{ color: "var(--text-primary)" }}>
-                          {s.phone}
-                        </p>
-                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                          Connecté {authDate.toLocaleString("fr-FR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
-                          {" · "}
-                          <span style={{ color: minutesLeft < 30 ? "#f87171" : "var(--text-disabled)" }}>
-                            {timeLeft}
-                          </span>
-                        </p>
-                      </div>
-
-                      {/* Bouton révoquer */}
-                      <button
-                        onClick={() => handleRevokeSession(s.phone, s.id)}
-                        disabled={revokingId === s.id}
-                        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40"
-                        style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.08)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                        {revokingId === s.id
-                          ? <RefreshCw className="w-3 h-3 animate-spin" />
-                          : <><Trash2 className="w-3 h-3" /><span>Révoquer</span></>
-                        }
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-        </div>
-      </div>
     </div>
   );
 }
@@ -1233,6 +870,79 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
 
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
   const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+  // ── Mode Propriétaire — mot de passe ────────────────────────────────────────
+  const [pwInput,      setPwInput]      = useState("");
+  const [pwConfirm,    setPwConfirm]    = useState("");
+  const [pwSaving,     setPwSaving]     = useState(false);
+  const [pwSet,        setPwSet]        = useState(!!agent.owner_password_hash);
+  const [pwRevealNew,  setPwRevealNew]  = useState(false);
+  const [pwRevealConf, setPwRevealConf] = useState(false);
+
+  // ── Mode Propriétaire — sessions actives ────────────────────────────────────
+  const [ownerSessions,   setOwnerSessions]   = useState<OwnerSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokingId,      setRevokingId]      = useState<string | null>(null);
+  const [revokingAll,     setRevokingAll]      = useState(false);
+
+  const fetchOwnerSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/owner-session`, { headers: authH });
+      if (!res.ok) return;
+      const data = await res.json() as { sessions?: OwnerSession[] };
+      setOwnerSessions(data.sessions ?? []);
+    } catch { /* ignore */ } finally { setSessionsLoading(false); }
+  }, [agent.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { fetchOwnerSessions(); }, [fetchOwnerSessions]);
+
+  const handleRevokeSession = async (sessionPhone: string, sessionId: string) => {
+    setRevokingId(sessionId);
+    try {
+      await fetch(`/api/agents/${agent.id}/owner-session?phone=${encodeURIComponent(sessionPhone)}`, {
+        method: "DELETE", headers: authH,
+      });
+      toast.success("Session révoquée");
+      setOwnerSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch { toast.error("Erreur réseau"); } finally { setRevokingId(null); }
+  };
+
+  const handleRevokeAll = async () => {
+    setRevokingAll(true);
+    try {
+      await fetch(`/api/agents/${agent.id}/owner-session?all=true`, { method: "DELETE", headers: authH });
+      toast.success("Toutes les sessions révoquées");
+      setOwnerSessions([]);
+    } catch { toast.error("Erreur réseau"); } finally { setRevokingAll(false); }
+  };
+
+  const handleSavePassword = async () => {
+    if (!pwInput.trim()) { toast.error("Entrez un mot de passe"); return; }
+    if (pwInput !== pwConfirm) { toast.error("Les mots de passe ne correspondent pas"); return; }
+    if (pwInput.length < 4) { toast.error("Minimum 4 caractères"); return; }
+    setPwSaving(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/owner-password`, {
+        method: "POST",
+        headers: { ...authH, "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwInput }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})) as { error?: string }; toast.error(d.error ?? "Erreur"); return; }
+      toast.success("Mot de passe défini ✅");
+      setPwInput(""); setPwConfirm(""); setPwSet(true);
+    } catch { toast.error("Erreur réseau"); } finally { setPwSaving(false); }
+  };
+
+  const handleRemovePassword = async () => {
+    setPwSaving(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/owner-password`, { method: "DELETE", headers: authH });
+      if (!res.ok) { toast.error("Erreur lors de la suppression"); return; }
+      toast.success("Mot de passe supprimé — mode propriétaire désactivé");
+      setPwSet(false); setPwInput(""); setPwConfirm("");
+    } catch { toast.error("Erreur réseau"); } finally { setPwSaving(false); }
+  };
 
   // ── WhatsApp helpers ────────────────────────────────────────────────────────
   const fetchQr = useCallback(async (sName: string) => {
@@ -1701,6 +1411,215 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── MODE PROPRIÉTAIRE ────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <SectionHeader label="Mode Propriétaire" />
+
+        <div className="rounded-2xl overflow-hidden"
+          style={{ border: "1px solid rgba(212,175,55,0.25)", background: "rgba(212,175,55,0.02)" }}>
+
+          {/* Header */}
+          <div className="flex items-center gap-3 px-5 py-4"
+            style={{ background: "rgba(212,175,55,0.05)", borderBottom: "1px solid rgba(212,175,55,0.12)" }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+              style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.2)" }}>
+              🔐
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold" style={{ color: "var(--color-gold)" }}>Mode Propriétaire</p>
+                {pwSet
+                  ? <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                      style={{ background: "rgba(52,211,153,0.1)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)" }}>Configuré</span>
+                  : <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                      style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>Non configuré</span>
+                }
+              </div>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+                Accès exclusif depuis votre WhatsApp — conseiller stratégique & CM IA
+              </p>
+            </div>
+          </div>
+
+          <div className="px-5 py-5 space-y-5">
+
+            {/* Comment ça marche */}
+            <div className="rounded-xl px-4 py-3 space-y-1.5"
+              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Envoyez <span className="font-mono font-semibold px-1 py-0.5 rounded"
+                  style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)" }}>/votre-mot-de-passe</span> à votre agent depuis WhatsApp.
+              </p>
+              <p className="text-[11px]" style={{ color: "var(--text-disabled)" }}>
+                L'agent bascule en consultant IA : stratégie, calendriers éditoriaux, campagnes, planning. Session 8h. Tapez <span className="font-mono font-semibold">/exit</span> pour quitter.
+              </p>
+            </div>
+
+            {/* ─── Mot de passe ─────────────────────────────────────── */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-disabled)" }}>
+                {pwSet ? "Changer le mot de passe" : "Définir le mot de passe d'accès"}
+              </p>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="relative">
+                  <input
+                    type={pwRevealNew ? "text" : "password"}
+                    value={pwInput}
+                    onChange={(e) => setPwInput(e.target.value)}
+                    placeholder="Nouveau mot de passe"
+                    className="w-full px-3 py-2.5 rounded-lg text-xs outline-none pr-9"
+                    style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(212,175,55,0.4)"; }}
+                    onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
+                  />
+                  <button type="button" onClick={() => setPwRevealNew((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--text-disabled)" }}>
+                    {pwRevealNew ? "🙈" : "👁"}
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={pwRevealConf ? "text" : "password"}
+                    value={pwConfirm}
+                    onChange={(e) => setPwConfirm(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSavePassword()}
+                    placeholder="Confirmer"
+                    className="w-full px-3 py-2.5 rounded-lg text-xs outline-none pr-9"
+                    style={{
+                      background: "var(--bg-elevated)",
+                      border: `1px solid ${pwConfirm && pwConfirm !== pwInput ? "rgba(248,113,113,0.4)" : "var(--border-default)"}`,
+                      color: "var(--text-primary)",
+                    }}
+                    onFocus={(e) => { if (!pwConfirm || pwConfirm === pwInput) e.currentTarget.style.borderColor = "rgba(212,175,55,0.4)"; }}
+                    onBlur={(e)  => { e.currentTarget.style.borderColor = pwConfirm && pwConfirm !== pwInput ? "rgba(248,113,113,0.4)" : "var(--border-default)"; }}
+                  />
+                  <button type="button" onClick={() => setPwRevealConf((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--text-disabled)" }}>
+                    {pwRevealConf ? "🙈" : "👁"}
+                  </button>
+                </div>
+              </div>
+
+              {pwConfirm && pwConfirm !== pwInput && (
+                <p className="text-[11px]" style={{ color: "#f87171" }}>Les mots de passe ne correspondent pas</p>
+              )}
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleSavePassword}
+                  disabled={pwSaving || !pwInput || !pwConfirm || pwInput !== pwConfirm}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-40"
+                  style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.25)" }}>
+                  {pwSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  {pwSet ? "Mettre à jour" : "Définir le mot de passe"}
+                </button>
+                {pwSet && (
+                  <button
+                    onClick={handleRemovePassword}
+                    disabled={pwSaving}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-40"
+                    style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.06)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                    <Trash2 className="w-3 h-3" />Désactiver le mode proprio
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ─── Sessions actives ──────────────────────────────────── */}
+            <div style={{ borderTop: "1px solid rgba(212,175,55,0.12)", paddingTop: "1.25rem" }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-disabled)" }}>
+                    Sessions WhatsApp actives
+                  </p>
+                  {ownerSessions.length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold tabular-nums"
+                      style={{ background: "rgba(52,211,153,0.12)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)" }}>
+                      {ownerSessions.length}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={fetchOwnerSessions} disabled={sessionsLoading}
+                    className="p-1.5 rounded-lg transition-colors disabled:opacity-40"
+                    style={{ color: "var(--text-disabled)" }} title="Rafraîchir"
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                    <RefreshCw className={`w-3 h-3 ${sessionsLoading ? "animate-spin" : ""}`} />
+                  </button>
+                  {ownerSessions.length > 0 && (
+                    <button onClick={handleRevokeAll} disabled={revokingAll}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40"
+                      style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.06)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                      {revokingAll ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                      Tout révoquer
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {sessionsLoading && ownerSessions.length === 0 && (
+                <p className="text-xs py-3 text-center" style={{ color: "var(--text-disabled)" }}>Chargement…</p>
+              )}
+
+              {!sessionsLoading && ownerSessions.length === 0 && (
+                <div className="rounded-xl px-4 py-3 text-center"
+                  style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
+                  <p className="text-xs" style={{ color: "var(--text-disabled)" }}>Aucune session propriétaire active</p>
+                </div>
+              )}
+
+              {ownerSessions.length > 0 && (
+                <div className="space-y-2">
+                  {ownerSessions.map((s) => {
+                    const authDate    = new Date(s.authenticated_at);
+                    const expiresAt   = new Date(s.expires_at);
+                    const minutesLeft = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 60000));
+                    const timeLeft    = minutesLeft > 60
+                      ? `${Math.floor(minutesLeft / 60)}h${minutesLeft % 60 > 0 ? String(minutesLeft % 60).padStart(2,"0") : ""} restant`
+                      : `${minutesLeft}min restant`;
+
+                    return (
+                      <div key={s.id}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                        style={{ background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.1)" }}>
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse"
+                          style={{ background: "#34D399", boxShadow: "0 0 6px rgba(52,211,153,0.6)" }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium font-mono" style={{ color: "var(--text-primary)" }}>{s.phone}</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                            Connecté {authDate.toLocaleString("fr-FR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
+                            {" · "}
+                            <span style={{ color: minutesLeft < 30 ? "#f87171" : "var(--text-disabled)" }}>{timeLeft}</span>
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleRevokeSession(s.phone, s.id)}
+                          disabled={revokingId === s.id}
+                          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40"
+                          style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.08)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                          {revokingId === s.id
+                            ? <RefreshCw className="w-3 h-3 animate-spin" />
+                            : <><Trash2 className="w-3 h-3" /><span>Révoquer</span></>}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      </div>
 
       {/* ── Agent ID ──────────────────────────────────────────────────────────── */}
       <div className="rounded-2xl p-4 flex items-center gap-3"
