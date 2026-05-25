@@ -1,8 +1,10 @@
-// GET    /api/agents/[agentId]/owner-session?phone=xxx  → { is_owner: bool, expires_at?: string }
-// POST   /api/agents/[agentId]/owner-session            → { success: bool } — vérifie mot de passe + crée session
-// DELETE /api/agents/[agentId]/owner-session?phone=xxx  → { success: bool } — révoque session (/exit)
+// GET    /api/agents/[agentId]/owner-session?phone=xxx  → { is_owner: bool, expires_at? }
+// GET    /api/agents/[agentId]/owner-session             → { sessions: OwnerSession[] }  (admin — toutes sessions actives)
+// POST   /api/agents/[agentId]/owner-session             → { success: bool } — vérifie mot de passe + crée session
+// DELETE /api/agents/[agentId]/owner-session?phone=xxx   → { success: bool } — révoque 1 session (/exit)
+// DELETE /api/agents/[agentId]/owner-session?all=true    → { success: bool } — révoque TOUTES les sessions actives
 //
-// Appelé par n8n (pas de JWT — authentification par mot de passe WhatsApp)
+// Appelé par n8n (pas de JWT) et par le dashboard (JWT optionnel en admin mode)
 
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
@@ -12,15 +14,31 @@ const SESSION_DURATION_HOURS = 8;
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-/* ─── GET — Vérifier si une session propriétaire est active ──────────────── */
+/* ─── GET — Vérifier / lister les sessions propriétaire ─────────────────── */
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
   const phone = req.nextUrl.searchParams.get("phone");
 
+  // Sans phone → mode admin dashboard : liste toutes les sessions actives
   if (!phone) {
-    return NextResponse.json({ error: "Paramètre phone manquant" }, { status: 400 });
+    try {
+      const result = await query(
+        `SELECT id, phone, authenticated_at, last_activity, expires_at
+         FROM camille.owner_sessions
+         WHERE agent_id = $1
+           AND is_active = TRUE
+           AND expires_at > NOW()
+         ORDER BY authenticated_at DESC`,
+        [agentId]
+      );
+      return NextResponse.json({ sessions: result.rows });
+    } catch (err) {
+      console.error("[GET /api/agents/:id/owner-session]", err);
+      return NextResponse.json({ sessions: [] });
+    }
   }
 
+  // Avec phone → vérification session active (appel n8n)
   try {
     const result = await query(
       `SELECT id, expires_at, last_activity
@@ -125,13 +143,32 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-/* ─── DELETE — Révoquer la session (/exit) ───────────────────────────────── */
+/* ─── DELETE — Révoquer une ou toutes les sessions ──────────────────────── */
 export async function DELETE(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const phone = req.nextUrl.searchParams.get("phone");
+  const phone  = req.nextUrl.searchParams.get("phone");
+  const allStr = req.nextUrl.searchParams.get("all");
 
+  // ?all=true → désactiver TOUTES les sessions actives de cet agent
+  if (allStr === "true") {
+    try {
+      const result = await query(
+        `UPDATE camille.owner_sessions
+         SET is_active = FALSE
+         WHERE agent_id = $1 AND is_active = TRUE
+         RETURNING phone`,
+        [agentId]
+      );
+      return NextResponse.json({ success: true, revoked: result.rowCount ?? 0 });
+    } catch (err) {
+      console.error("[DELETE /api/agents/:id/owner-session all]", err);
+      return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    }
+  }
+
+  // ?phone=xxx → désactiver une session spécifique (/exit depuis WhatsApp)
   if (!phone) {
-    return NextResponse.json({ error: "Paramètre phone manquant" }, { status: 400 });
+    return NextResponse.json({ error: "Paramètre phone ou all=true requis" }, { status: 400 });
   }
 
   try {
@@ -141,7 +178,6 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
        WHERE agent_id = $1 AND phone = $2 AND is_active = TRUE`,
       [agentId, phone]
     );
-
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[DELETE /api/agents/:id/owner-session]", err);

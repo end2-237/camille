@@ -1,8 +1,11 @@
-// POST /api/waha/disconnect — arrête la session Waha (sans la supprimer)
+// POST /api/waha/disconnect — marque la session comme arrêtée en DB uniquement.
+// IMPORTANT : on ne touche PAS à la session WAHA (pas de stop, pas de delete).
+// La session WhatsApp reste vivante sur le VPS — pas besoin de re-scanner le QR.
+// Seul Coolify/WAHA peut stopper la session physiquement.
+
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
-import { wahaStopSession } from "@/lib/waha";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,11 +26,9 @@ export async function POST(req: NextRequest) {
 
     const { session_name } = sessionRes.rows[0];
 
-    // Stop uniquement — on ne supprime PAS la session Waha
-    // pour éviter de devoir la recréer manuellement dans le dashboard
-    try { await wahaStopSession(session_name); } catch { /* ignore */ }
-
-    // Mettre à jour le statut en DB (ne pas supprimer l'enregistrement)
+    // On met uniquement le statut en DB à STOPPED.
+    // On n'appelle JAMAIS wahaStopSession ni wahaDeleteSession :
+    // la session WAHA (et l'auth WhatsApp) restent intactes côté VPS.
     await query(
       "UPDATE camille.whatsapp_sessions SET status = 'STOPPED', updated_at = NOW() WHERE session_name = $1",
       [session_name]

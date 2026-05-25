@@ -572,6 +572,14 @@ function KnowledgeTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Age
 
 // ── Tab: Capabilities ─────────────────────────────────────────────────────────
 
+type OwnerSession = {
+  id: string;
+  phone: string;
+  authenticated_at: string;
+  last_activity: string;
+  expires_at: string;
+};
+
 function CapabilitiesTab({ agent, onSave, capabilities }: {
   agent: Agent;
   onSave: (p: Partial<Agent>) => void;
@@ -591,8 +599,59 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
   const [pwRevealNew,   setPwRevealNew]   = useState(false);
   const [pwRevealConf,  setPwRevealConf]  = useState(false);
 
+  // ── Mode Propriétaire — sessions actives ────────────────────────────────
+  const [ownerSessions,    setOwnerSessions]    = useState<OwnerSession[]>([]);
+  const [sessionsLoading,  setSessionsLoading]  = useState(false);
+  const [revokingId,       setRevokingId]       = useState<string | null>(null);
+  const [revokingAll,      setRevokingAll]      = useState(false);
+
   const token = typeof window !== "undefined" ? localStorage.getItem("camille_token") : null;
   const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+  // ── Charger les sessions propriétaire actives ────────────────────────────
+  const fetchOwnerSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/owner-session`, { headers: authH });
+      if (!res.ok) return;
+      const data = await res.json() as { sessions?: OwnerSession[] };
+      setOwnerSessions(data.sessions ?? []);
+    } catch { /* ignore */ } finally {
+      setSessionsLoading(false);
+    }
+  }, [agent.id]);
+
+  useEffect(() => { fetchOwnerSessions(); }, [fetchOwnerSessions]);
+
+  const handleRevokeSession = async (sessionPhone: string, sessionId: string) => {
+    setRevokingId(sessionId);
+    try {
+      await fetch(`/api/agents/${agent.id}/owner-session?phone=${encodeURIComponent(sessionPhone)}`, {
+        method: "DELETE", headers: authH,
+      });
+      toast.success("Session révoquée");
+      setOwnerSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleRevokeAll = async () => {
+    setRevokingAll(true);
+    try {
+      await fetch(`/api/agents/${agent.id}/owner-session?all=true`, {
+        method: "DELETE", headers: authH,
+      });
+      toast.success("Toutes les sessions révoquées");
+      setOwnerSessions([]);
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setRevokingAll(false);
+    }
+  };
 
   const handleSavePassword = async () => {
     if (!pwInput.trim()) { toast.error("Entrez un mot de passe"); return; }
@@ -867,6 +926,112 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
               )}
             </div>
           </div>
+
+          {/* ── Sessions propriétaire actives ──────────────────────────── */}
+          <div style={{ borderTop: "1px solid rgba(212,175,55,0.12)", paddingTop: "1.25rem" }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-disabled)" }}>
+                  Sessions actives
+                </p>
+                {ownerSessions.length > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold tabular-nums"
+                    style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
+                    {ownerSessions.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchOwnerSessions}
+                  disabled={sessionsLoading}
+                  className="p-1.5 rounded-lg transition-colors disabled:opacity-40"
+                  style={{ color: "var(--text-disabled)" }}
+                  title="Rafraîchir"
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                  <RefreshCw className={`w-3 h-3 ${sessionsLoading ? "animate-spin" : ""}`} />
+                </button>
+                {ownerSessions.length > 1 && (
+                  <button
+                    onClick={handleRevokeAll}
+                    disabled={revokingAll}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40"
+                    style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.06)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                    {revokingAll ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    Tout révoquer
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {sessionsLoading && ownerSessions.length === 0 && (
+              <p className="text-xs py-3 text-center" style={{ color: "var(--text-disabled)" }}>Chargement…</p>
+            )}
+
+            {!sessionsLoading && ownerSessions.length === 0 && (
+              <div className="rounded-xl px-4 py-3 text-center"
+                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
+                <p className="text-xs" style={{ color: "var(--text-disabled)" }}>Aucune session propriétaire active</p>
+              </div>
+            )}
+
+            {ownerSessions.length > 0 && (
+              <div className="space-y-2">
+                {ownerSessions.map((s) => {
+                  const authDate  = new Date(s.authenticated_at);
+                  const expiresAt = new Date(s.expires_at);
+                  const minutesLeft = Math.round((expiresAt.getTime() - Date.now()) / 60000);
+                  const timeLeft = minutesLeft > 60
+                    ? `${Math.floor(minutesLeft / 60)}h${minutesLeft % 60 > 0 ? String(minutesLeft % 60).padStart(2,"0") : ""}` + " restant"
+                    : `${minutesLeft}min restant`;
+
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                      style={{ background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.1)" }}>
+
+                      {/* Indicateur actif */}
+                      <div className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse"
+                        style={{ background: "#34D399", boxShadow: "0 0 6px #34D399" }} />
+
+                      {/* Infos */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium font-mono" style={{ color: "var(--text-primary)" }}>
+                          {s.phone}
+                        </p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                          Connecté {authDate.toLocaleString("fr-FR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
+                          {" · "}
+                          <span style={{ color: minutesLeft < 30 ? "#f87171" : "var(--text-disabled)" }}>
+                            {timeLeft}
+                          </span>
+                        </p>
+                      </div>
+
+                      {/* Bouton révoquer */}
+                      <button
+                        onClick={() => handleRevokeSession(s.phone, s.id)}
+                        disabled={revokingId === s.id}
+                        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40"
+                        style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.08)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                        {revokingId === s.id
+                          ? <RefreshCw className="w-3 h-3 animate-spin" />
+                          : <><Trash2 className="w-3 h-3" /><span>Révoquer</span></>
+                        }
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </div>
