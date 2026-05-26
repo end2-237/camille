@@ -603,6 +603,9 @@ function MediaUploadCard({
   const [dragOver,  setDragOver]  = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Sync avec la DB si l'agent est rechargé (ex: après une sauvegarde SQL directe)
+  useEffect(() => { setUrl(initialUrl); }, [initialUrl]);
+
   const accept = type === "audio"
     ? "audio/ogg,audio/mpeg,audio/mp4,audio/aac,audio/x-m4a"
     : "video/mp4,video/quicktime";
