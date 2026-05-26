@@ -1,4 +1,4 @@
-// GET /api/waha/status?agentId=ID — statut de la session Waha d'un agent
+// GET /api/waha/status?agentId=ID — statut de la session Camille Core d'un agent
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
@@ -23,19 +23,20 @@ export async function GET(req: NextRequest) {
 
     const { session_name, phone_number } = sessionRes.rows[0];
 
-    const wahaSession = await wahaGetSession(session_name);
-    if (!wahaSession) {
+    const coreSession = await wahaGetSession(session_name);
+    if (!coreSession) {
       return NextResponse.json({ connected: false, status: "STOPPED", session_name });
     }
 
-    const status = wahaSession.status;
+    // wahaGetSession mappe déjà CONNECTED → WORKING
+    const status    = coreSession.status;
     const connected = status === "WORKING";
-    const phoneFromWaha = wahaSession.me?.id?.replace("@c.us", "") ?? phone_number;
+    const phoneFromCore = coreSession.me?.id?.replace("@c.us", "") ?? phone_number;
 
-    if (connected && phoneFromWaha) {
+    if (connected && phoneFromCore) {
       await query(
         "UPDATE camille.whatsapp_sessions SET status = $1, phone_number = $2, updated_at = NOW() WHERE session_name = $3",
-        [status, phoneFromWaha, session_name]
+        [status, phoneFromCore, session_name]
       );
     } else {
       await query(
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ connected, status, session_name, phone_number: connected ? phoneFromWaha : null });
+    return NextResponse.json({ connected, status, session_name, phone_number: connected ? phoneFromCore : null });
   } catch (err) {
     console.error("[GET /api/waha/status]", err);
     const msg = err instanceof Error ? err.message : String(err);

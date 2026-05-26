@@ -1,8 +1,8 @@
-// POST /api/waha/connect — crée et démarre une session Waha pour un agent
+// POST /api/waha/connect — démarre une session Camille Core pour un agent
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
-import { wahaCreateSession, wahaStartSession, wahaGetSession, makeSessionName } from "@/lib/waha";
+import { wahaStartSession, makeSessionName } from "@/lib/waha";
 
 const MAX_SESSIONS = 3;
 
@@ -40,27 +40,8 @@ export async function POST(req: NextRequest) {
     );
     const sessionName = existing.rows[0]?.session_name ?? makeSessionName(agentId);
 
-    // Waha Core : "default" est pré-existante, on essaie START en premier.
-    // Si 404, on tente CREATE + START. Si ça échoue encore, message clair.
-    try {
-      await wahaStartSession(sessionName);
-    } catch (startErr) {
-      const msg = startErr instanceof Error ? startErr.message : String(startErr);
-      if (msg.includes("404")) {
-        try {
-          await wahaCreateSession(sessionName);
-          await wahaStartSession(sessionName);
-        } catch {
-          throw new Error(
-            `Session Waha "${sessionName}" introuvable. ` +
-            `Créez-la manuellement dans le dashboard Waha (${process.env.WAHA_URL ?? "https://waha.vps.buyticle.com"}) ` +
-            `puis réessayez.`
-          );
-        }
-      } else {
-        throw startErr;
-      }
-    }
+    // Camille Core : un seul appel suffit pour créer + démarrer la session
+    await wahaStartSession(sessionName);
 
     await query(
       `INSERT INTO camille.whatsapp_sessions (session_name, agent_id, user_id, status)
