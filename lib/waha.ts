@@ -40,8 +40,17 @@ export async function wahaGetSession(sessionName: string): Promise<{
   if (!res.ok) return null;
   const data = await res.json() as { name: string; status: string; phone?: string | null };
 
-  // Camille Core status "CONNECTED" → WAHA équivalent "WORKING"
-  const wahaStatus = data.status === "CONNECTED" ? "WORKING" : data.status;
+  // Mapping statuts Camille Core → statuts WAHA attendus par le dashboard
+  const STATUS_MAP: Record<string, string> = {
+    CONNECTED:     "WORKING",
+    QR_READY:      "SCAN_QR_CODE",
+    INITIALIZING:  "STARTING",
+    AUTHENTICATED: "STARTING",
+    DISCONNECTED:  "STOPPED",
+    AUTH_FAILURE:  "FAILED",
+    ERROR:         "ERROR",
+  };
+  const wahaStatus = STATUS_MAP[data.status] ?? data.status;
 
   return {
     name:   data.name,
@@ -64,15 +73,15 @@ export async function wahaGetQR(sessionName: string): Promise<Buffer | null> {
   return Buffer.from(base64, "base64");
 }
 
-// Arrête une session sur Camille Core
+// Arrête une session ET efface les fichiers d'auth (permet de connecter un autre numéro)
 export async function wahaStopSession(sessionName: string) {
-  await fetch(`${CORE_URL}/api/sessions/${sessionName}/stop`, {
+  await fetch(`${CORE_URL}/api/sessions/${sessionName}/reset`, {
     method: "DELETE",
     headers: coreHeaders(),
   });
 }
 
-// Alias — Camille Core n'a qu'un seul endpoint stop
+// Alias
 export async function wahaDeleteSession(sessionName: string) {
   return wahaStopSession(sessionName);
 }
