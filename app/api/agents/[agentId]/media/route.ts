@@ -1,14 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/agents/[agentId]/media  → upload audio ou vidéo vers Supabase Storage
+// POST   /api/agents/[agentId]/media  → upload audio ou vidéo vers Camille Core
 // DELETE /api/agents/[agentId]/media?type=audio|video → supprime le fichier
-// GET  /api/agents/[agentId]/media  → diagnostic (config storage)
+// GET    /api/agents/[agentId]/media  → diagnostic
 //
-// Utilise l'API REST Supabase Storage directement (pas le SDK JS) pour éviter
-// les problèmes d'initialisation au build/runtime.
-//
-// Vars Coolify requises :
-//   STORAGE_URL              → https://storage.vps.buyticle.com
-//   SUPABASE_SERVICE_ROLE_KEY → clé service role
+// Les fichiers sont stockés sur Camille Core (public/media/) et servis
+// directement depuis https://camille-core.vps.buyticle.com/media/...
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
@@ -23,7 +19,6 @@ type RouteContext = { params: Promise<{ agentId: string }> };
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const BUCKET       = "agent-media";
 const MAX_AUDIO_MB = 10;
 const MAX_VIDEO_MB = 50;
 const MAX_AUDIO_B  = MAX_AUDIO_MB * 1024 * 1024;
@@ -40,64 +35,22 @@ const MIME_TO_EXT: Record<string, string> = {
   "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm",
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Camille Core helpers ──────────────────────────────────────────────────────
 
-function storageBase(): string {
-  const raw = process.env.STORAGE_URL
-           || process.env.SUPABASE_URL
-           || process.env.NEXT_PUBLIC_SUPABASE_URL
-           || "";
-  const trimmed = raw.replace(/\/$/, "");
-  return trimmed.endsWith("/storage/v1") ? trimmed : trimmed + "/storage/v1";
+function coreUrl(): string {
+  return (process.env.CAMILLE_CORE_URL ?? "https://camille-core.vps.buyticle.com").replace(/\/$/, "");
 }
 
-function serviceKey(): string {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+function coreKey(): string {
+  return process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
 }
 
-function storageHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    Authorization: `Bearer ${serviceKey()}`,
-    apikey: serviceKey(),
-    ...extra,
-  };
+function coreHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return { "X-Api-Key": coreKey(), "Content-Type": "application/json", ...extra };
 }
 
-/** Crée le bucket public s'il n'existe pas déjà. */
-async function ensureBucket(): Promise<void> {
-  const base = storageBase();
-  const key  = serviceKey();
+// ── DB helpers ────────────────────────────────────────────────────────────────
 
-  if (!base || base === "/storage/v1" || !key) {
-    throw new Error(
-      `Storage non configuré. Vérifiez STORAGE_URL (actuel: "${base}") et SUPABASE_SERVICE_ROLE_KEY.`
-    );
-  }
-
-  // Vérifier si le bucket existe
-  const checkRes = await fetch(`${base}/bucket/${BUCKET}`, {
-    headers: storageHeaders(),
-  });
-
-  if (checkRes.ok) return; // existe déjà
-
-  // Créer le bucket public
-  const createRes = await fetch(`${base}/bucket`, {
-    method: "POST",
-    headers: storageHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ id: BUCKET, name: BUCKET, public: true }),
-  });
-
-  if (!createRes.ok) {
-    const text = await createRes.text();
-    // Ignorer "already exists"
-    if (!text.toLowerCase().includes("already") && !text.toLowerCase().includes("exist")) {
-      throw new Error(`Création bucket: ${createRes.status} — ${text}`);
-    }
-  }
-}
-
-/** Lit capabilities depuis la DB. */
 async function readCapabilities(agentId: string): Promise<Record<string, unknown>> {
   const r = await query("SELECT capabilities FROM camille.agents WHERE id = $1", [agentId]);
   if (!r.rows.length) return {};
@@ -107,7 +60,6 @@ async function readCapabilities(agentId: string): Promise<Record<string, unknown
   try { return JSON.parse(raw as string); } catch { return {}; }
 }
 
-/** Écrit capabilities en DB. */
 async function writeCapabilities(agentId: string, caps: Record<string, unknown>): Promise<void> {
   await query(
     "UPDATE camille.agents SET capabilities = $1, updated_at = NOW() WHERE id = $2",
@@ -121,26 +73,21 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const base = storageBase();
-  const key  = serviceKey();
-
-  let bucketsTest = "non testé";
+  const core = coreUrl();
+  let coreTest = "non testé";
   try {
-    const r = await fetch(`${base}/bucket`, { headers: storageHeaders() });
+    const r = await fetch(`${core}/api/server/info`, { headers: { "X-Api-Key": coreKey() } });
     const txt = await r.text();
-    bucketsTest = `HTTP ${r.status} — ${txt.slice(0, 200)}`;
+    coreTest = `HTTP ${r.status} — ${txt.slice(0, 200)}`;
   } catch (e) {
-    bucketsTest = `Erreur fetch: ${e instanceof Error ? e.message : String(e)}`;
+    coreTest = `Erreur: ${e instanceof Error ? e.message : String(e)}`;
   }
 
   return NextResponse.json({
-    storageBase:      base,
-    hasKey:           !!key,
-    keyPrefix:        key ? key.slice(0, 20) + "..." : "MANQUANTE",
-    STORAGE_URL:      process.env.STORAGE_URL              || "(non défini)",
-    SUPABASE_URL:     process.env.SUPABASE_URL              || "(non défini)",
-    NP_SUPABASE_URL:  process.env.NEXT_PUBLIC_SUPABASE_URL  || "(non défini)",
-    bucketsApiTest:   bucketsTest,
+    storageBackend: "Camille Core",
+    coreUrl:        core,
+    hasKey:         !!coreKey(),
+    coreApiTest:    coreTest,
   });
 }
 
@@ -195,37 +142,47 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    await ensureBucket();
+    const ext      = MIME_TO_EXT[file.type] ?? (type === "audio" ? "ogg" : "mp4");
+    // Nom de fichier unique : agentId_type_timestamp.ext
+    const filename = `${agentId.replace(/-/g, "")}_welcome_${type}_${Date.now()}.${ext}`;
 
-    const ext         = MIME_TO_EXT[file.type] ?? (type === "audio" ? "ogg" : "mp4");
-    const storagePath = `${agentId}/welcome_${type}.${ext}`;
-    const base        = storageBase();
-
-    // Upload via REST (upsert)
+    // Lire le fichier et encoder en base64
     const arrayBuffer = await file.arrayBuffer();
-    const uploadRes = await fetch(
-      `${base}/object/${BUCKET}/${storagePath}?upsert=true`,
-      {
-        method:  "POST",
-        headers: storageHeaders({ "Content-Type": file.type }),
-        body:    arrayBuffer,
-      }
-    );
+    const base64      = Buffer.from(arrayBuffer).toString("base64");
+
+    // Envoyer vers Camille Core
+    const uploadRes = await fetch(`${coreUrl()}/api/media/upload`, {
+      method:  "POST",
+      headers: coreHeaders(),
+      body:    JSON.stringify({ name: filename, data: base64, mimeType: file.type }),
+    });
 
     if (!uploadRes.ok) {
       const text = await uploadRes.text();
-      throw new Error(`Upload storage: ${uploadRes.status} — ${text}`);
+      throw new Error(`Upload Camille Core: ${uploadRes.status} — ${text.slice(0, 300)}`);
     }
 
-    // URL publique
-    const publicUrl = `${base}/object/public/${BUCKET}/${storagePath}`;
+    const { url } = await uploadRes.json() as { url: string };
 
-    // Persist en DB
+    // Supprimer l'ancienne URL de même type avant de sauvegarder la nouvelle
     const caps = await readCapabilities(agentId);
-    caps[`welcome_${type}_url`] = publicUrl;
+
+    // Effacer l'ancienne version du fichier sur Core si elle existe
+    const oldUrl = caps[`welcome_${type}_url`] as string | undefined;
+    if (oldUrl) {
+      const oldFilename = oldUrl.split("/media/").pop();
+      if (oldFilename) {
+        await fetch(`${coreUrl()}/api/media/${encodeURIComponent(oldFilename)}`, {
+          method:  "DELETE",
+          headers: { "X-Api-Key": coreKey() },
+        }).catch(() => {});
+      }
+    }
+
+    caps[`welcome_${type}_url`] = url;
     await writeCapabilities(agentId, caps);
 
-    return NextResponse.json({ url: publicUrl, path: storagePath });
+    return NextResponse.json({ url, filename });
 
   } catch (err) {
     console.error("[POST /api/agents/:id/media]", err);
@@ -256,23 +213,21 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    const base = storageBase();
-    const exts = type === "audio"
-      ? ["ogg", "mp3", "m4a", "aac", "webm"]
-      : ["mp4", "mov", "webm"];
+    // Lire l'URL actuelle depuis la DB pour supprimer le bon fichier
+    const caps = await readCapabilities(agentId);
+    const currentUrl = caps[`welcome_${type}_url`] as string | undefined;
 
-    // Supprimer toutes les extensions possibles (on ne sait pas laquelle est stockée)
-    await Promise.allSettled(
-      exts.map((ext) =>
-        fetch(`${base}/object/${BUCKET}/${agentId}/welcome_${type}.${ext}`, {
+    if (currentUrl) {
+      const filename = currentUrl.split("/media/").pop();
+      if (filename) {
+        await fetch(`${coreUrl()}/api/media/${encodeURIComponent(filename)}`, {
           method:  "DELETE",
-          headers: storageHeaders(),
-        })
-      )
-    );
+          headers: { "X-Api-Key": coreKey() },
+        }).catch(() => {});
+      }
+    }
 
     // Effacer l'URL en DB
-    const caps = await readCapabilities(agentId);
     delete caps[`welcome_${type}_url`];
     await writeCapabilities(agentId, caps);
 
