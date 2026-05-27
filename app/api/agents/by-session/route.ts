@@ -5,37 +5,49 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
+const AGENT_COLS = `
+  a.id,
+  a.name,
+  a.compiled_prompt,
+  a.target_model,
+  a.primary_language,
+  a.secondary_languages,
+  a.brand_voice,
+  a.business_name,
+  a.sector,
+  a.description,
+  a.owner_name,
+  a.owner_email,
+  a.whatsapp_number,
+  a.capabilities,
+  a.status,
+  (a.owner_password_hash IS NOT NULL) AS has_owner_password
+`;
+
 export async function GET(req: NextRequest) {
   const sessionName = req.nextUrl.searchParams.get("session");
+  const fallbackId  = req.nextUrl.searchParams.get("fallback");
 
   if (!sessionName) {
     return NextResponse.json({ error: "Paramètre session manquant" }, { status: 400 });
   }
 
   try {
-    const result = await query(
-      `SELECT
-        a.id,
-        a.name,
-        a.compiled_prompt,
-        a.target_model,
-        a.primary_language,
-        a.secondary_languages,
-        a.brand_voice,
-        a.business_name,
-        a.sector,
-        a.description,
-        a.owner_name,
-        a.owner_email,
-        a.whatsapp_number,
-        a.capabilities,
-        a.status,
-        (a.owner_password_hash IS NOT NULL) AS has_owner_password
+    let result = await query(
+      `SELECT ${AGENT_COLS}
        FROM camille.whatsapp_sessions ws
        JOIN camille.agents a ON a.id = ws.agent_id
        WHERE ws.session_name = $1 AND a.status = 'active'`,
       [sessionName]
     );
+
+    // Fallback : si la session n'est pas encore liée en DB, charge l'agent par ID
+    if (result.rows.length === 0 && fallbackId) {
+      result = await query(
+        `SELECT ${AGENT_COLS} FROM camille.agents a WHERE a.id = $1 AND a.status = 'active'`,
+        [fallbackId]
+      );
+    }
 
     if (result.rows.length === 0) {
       return NextResponse.json(
