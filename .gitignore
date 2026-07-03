@@ -34,3 +34,8 @@ yarn-debug.log*
 yarn-error.log*
 .vercel
 .turbo
+
+# TypeScript incremental build info (ne doit jamais être versionné —
+# casse le cache-mount Nixpacks au build : "not a directory")
+*.tsbuildinfo
+tsconfig.tsbuildinfo
