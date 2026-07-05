@@ -75,9 +75,9 @@
 
 /* ── Boutons pilule (Render : noir plein + outline discret) ────────────────── */
 .cl-btn-black {
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   background: var(--cl-black); color: #FFFFFF;
-  border-radius: 999px; padding: 12px 24px;
+  border-radius: 8px; padding: 12px 22px;
   font-size: 0.94rem; font-weight: 500; letter-spacing: -0.012em;
   transition: background 0.16s ease, transform 0.16s ease;
   white-space: nowrap;
@@ -86,10 +86,10 @@
 .cl-btn-black:active { transform: scale(0.985); }
 
 .cl-btn-outline {
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   background: #FFFFFF; color: var(--cl-ink);
   border: 1px solid var(--cl-line);
-  border-radius: 999px; padding: 11px 23px;
+  border-radius: 8px; padding: 11px 21px;
   font-size: 0.94rem; font-weight: 500; letter-spacing: -0.012em;
   transition: border-color 0.16s ease, background 0.16s ease;
   white-space: nowrap;
@@ -97,9 +97,9 @@
 .cl-btn-outline:hover { border-color: #C9C4D2; background: #FAF9FB; }
 
 .cl-btn-white {
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   background: #FFFFFF; color: var(--cl-ink);
-  border-radius: 999px; padding: 12px 24px;
+  border-radius: 8px; padding: 12px 22px;
   font-size: 0.94rem; font-weight: 550; letter-spacing: -0.012em;
   box-shadow: 0 1px 6px rgba(25, 23, 27, 0.14);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
@@ -121,7 +121,18 @@
 .cl-card {
   background: var(--cl-card);
   border: 1px solid var(--cl-line);
-  border-radius: 16px;
+  border-radius: 12px;
+}
+
+/* ── Grille décorative de fond (hero, façon Render) ────────────────────────── */
+.cl-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(25, 23, 27, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(25, 23, 27, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center top;
+  -webkit-mask-image: radial-gradient(ellipse 78% 70% at 50% 12%, #000 38%, transparent 80%);
+  mask-image: radial-gradient(ellipse 78% 70% at 50% 12%, #000 38%, transparent 80%);
 }
 .cl-card-hover { transition: box-shadow 0.2s ease; }
 .cl-card-hover:hover { box-shadow: 0 10px 30px rgba(25, 23, 27, 0.07); }
@@ -172,7 +183,7 @@
 .cl-band-tile {
   display: flex; align-items: center; justify-content: center;
   background: #FFFFFF;
-  border-radius: 14px;
+  border-radius: 10px;
   aspect-ratio: 1 / 1;
   box-shadow: 0 2px 8px rgba(40, 20, 90, 0.16);
 }

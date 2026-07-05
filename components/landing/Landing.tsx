@@ -92,15 +92,28 @@ function MiniBrowser({ title, children }: { title: string; children: React.React
 
 function AnnouncementBar() {
   return (
-    <div className="relative z-40 px-4 py-2.5 text-center" style={{ background: "var(--cl-lavender)" }}>
-      <p className="text-[13px]" style={{ color: "var(--cl-ink)" }}>
-        <span className="font-semibold">Camille v3 est là</span>
-        <span className="hidden sm:inline"> — monitoring en direct, sessions ultra-stables et accueils médias enrichis.</span>{" "}
-        <Link href="/company" className="font-semibold underline underline-offset-2 hover:opacity-70">
-          Découvrir →
-        </Link>
-      </p>
-    </div>
+    <Link
+      href="/company"
+      className="group relative z-40 flex items-center justify-center gap-2.5 px-4 py-2.5 text-center transition-colors"
+      style={{ background: "#16141A" }}
+    >
+      <span
+        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+        style={{ background: "var(--cl-accent)", color: "#fff" }}
+      >
+        Nouveau
+      </span>
+      <span className="text-[13px]" style={{ color: "rgba(255,255,255,0.9)" }}>
+        <span className="font-semibold" style={{ color: "#fff" }}>Camille v3 est là</span>
+        <span className="hidden sm:inline"> — monitoring en direct, sessions ultra-stables et accueils médias enrichis.</span>
+      </span>
+      <span
+        className="inline-flex items-center gap-1 text-[12.5px] font-semibold transition-transform group-hover:translate-x-0.5"
+        style={{ color: "#fff" }}
+      >
+        Découvrir <ArrowRight className="h-3.5 w-3.5" />
+      </span>
+    </Link>
   );
 }
 
@@ -127,10 +140,10 @@ function LandingNav() {
     <header
       className="sticky top-0 z-50 transition-all duration-300"
       style={{
-        background: scrolled ? "rgba(251,247,240,0.85)" : "transparent",
-        backdropFilter: scrolled ? "blur(14px) saturate(1.4)" : "none",
-        WebkitBackdropFilter: scrolled ? "blur(14px) saturate(1.4)" : "none",
-        borderBottom: scrolled ? "1px solid var(--cl-line-soft)" : "1px solid transparent",
+        background: scrolled ? "rgba(255,255,255,0.82)" : "rgba(255,255,255,0.6)",
+        backdropFilter: "blur(14px) saturate(1.4)",
+        WebkitBackdropFilter: "blur(14px) saturate(1.4)",
+        borderBottom: "1px solid var(--cl-line)",
       }}
     >
       <div className="cl-container flex h-[64px] items-center justify-between gap-4">
@@ -218,53 +231,83 @@ function useTypewriter(words: readonly string[]) {
   return text;
 }
 
-function WhatsAppMock() {
+/** Composant fort #1 — carte tableau de bord « analytics » (façon Render) */
+function AnalyticsCard() {
+  const bars = [38, 52, 44, 61, 55, 72, 68, 84, 79, 92, 88, 100];
   return (
-    <div
-      className="w-[330px] overflow-hidden rounded-2xl"
-      style={{ border: "1px solid var(--cl-line)", boxShadow: "0 18px 50px rgba(25,23,27,0.10)", background: "#EFE7DB" }}
-    >
-      {/* Header conversation */}
-      <div className="flex items-center gap-3 px-4 py-3" style={{ background: "#FFFFFF", borderBottom: "1px solid var(--cl-line-soft)" }}>
-        <span
-          className="flex h-9 w-9 items-center justify-center rounded-full"
-          style={{ background: "#131007", border: "1px solid rgba(212,175,55,0.5)" }}
-        >
-          <span style={{ fontFamily: "Blackout", fontSize: 16, color: "#D4AF37", lineHeight: 1 }}>C</span>
+    <div className="cl-card w-full overflow-hidden" style={{ boxShadow: "0 20px 50px rgba(25,23,27,0.10)" }}>
+      <div className="flex items-center justify-between px-5 pt-5">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "#16141A" }}>
+            <span style={{ fontFamily: "Blackout", fontSize: 15, color: "#8E6BFA", lineHeight: 1 }}>C</span>
+          </span>
+          <div>
+            <p className="text-[13px] font-semibold leading-tight" style={{ color: "var(--cl-ink)" }}>Vue d&apos;ensemble</p>
+            <p className="text-[10.5px]" style={{ color: "var(--cl-ink-faint)" }}>7 derniers jours</p>
+          </div>
+        </div>
+        <span className="rounded-md px-2 py-1 text-[10px] font-bold" style={{ background: "rgba(29,171,85,0.12)", color: "#1B8F47" }}>
+          +18%
         </span>
-        <div className="min-w-0">
-          <p className="truncate text-[13.5px] font-semibold" style={{ color: "var(--cl-ink)" }}>
-            Boutique Aïcha · Camille
-          </p>
-          <p className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--cl-green)" }}>
+      </div>
+
+      <div className="px-5 pt-4">
+        <p className="text-[30px] font-semibold leading-none tracking-[-0.03em]" style={{ color: "var(--cl-ink)" }}>
+          9 842
+        </p>
+        <p className="mt-1 text-[11.5px]" style={{ color: "var(--cl-ink-soft)" }}>conversations traitées par l&apos;IA</p>
+      </div>
+
+      {/* Histogramme */}
+      <div className="flex items-end gap-1.5 px-5 pb-4 pt-5" style={{ height: 96 }}>
+        {bars.map((h, i) => (
+          <span
+            key={i}
+            className="flex-1 rounded-[3px]"
+            style={{
+              height: `${h}%`,
+              background: i >= bars.length - 3 ? "var(--cl-accent)" : "var(--cl-lavender)",
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 border-t" style={{ borderColor: "var(--cl-line)" }}>
+        <div className="border-r px-5 py-3.5" style={{ borderColor: "var(--cl-line)" }}>
+          <p className="text-[16px] font-semibold" style={{ color: "var(--cl-ink)" }}>98%</p>
+          <p className="text-[10.5px]" style={{ color: "var(--cl-ink-faint)" }}>taux de réponse</p>
+        </div>
+        <div className="px-5 py-3.5">
+          <p className="text-[16px] font-semibold" style={{ color: "var(--cl-ink)" }}>1,2 s</p>
+          <p className="text-[10.5px]" style={{ color: "var(--cl-ink-faint)" }}>temps moyen</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Composant fort #2 — carte « agent en ligne » compacte (preuve produit) */
+function LiveAgentCard() {
+  return (
+    <div className="cl-card w-[262px] overflow-hidden" style={{ boxShadow: "0 16px 40px rgba(25,23,27,0.14)" }}>
+      <div className="flex items-center gap-2.5 border-b px-4 py-3" style={{ borderColor: "var(--cl-line)" }}>
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "#25D366" }}>
+          <MessageCircle className="h-4 w-4 text-white" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12.5px] font-semibold" style={{ color: "var(--cl-ink)" }}>Boutique Aïcha</p>
+          <p className="flex items-center gap-1.5 text-[10px]" style={{ color: "var(--cl-green)" }}>
             <span className="cl-pulse inline-block h-1.5 w-1.5 rounded-full" style={{ background: "var(--cl-green)" }} />
-            en ligne
+            agent en ligne
           </p>
         </div>
       </div>
-
-      {/* Fil de messages */}
-      <div className="space-y-2 px-3.5 py-4">
-        <div className="max-w-[82%] rounded-xl rounded-tl-[4px] bg-white px-3 py-2 text-[12.5px] shadow-sm" style={{ color: "var(--cl-ink)" }}>
-          Bonsoir, vous avez la robe wax en taille M ? 🙈
-          <span className="ml-2 align-bottom text-[9.5px]" style={{ color: "var(--cl-ink-faint)" }}>19:42</span>
+      <div className="space-y-2 px-3.5 py-3.5">
+        <div className="max-w-[86%] rounded-lg rounded-tl-[3px] px-2.5 py-1.5 text-[11.5px]" style={{ background: "var(--cl-bg-soft)", color: "var(--cl-ink)" }}>
+          La robe wax en taille M ?
         </div>
-        <div className="ml-auto max-w-[85%] rounded-xl rounded-tr-[4px] px-3 py-2 text-[12.5px] shadow-sm" style={{ background: "#D9FDD3", color: "#111B12" }}>
-          Bonsoir ! 👋 Oui, il nous en reste 3 en taille M. Je vous envoie les photos ?
-          <span className="ml-2 align-bottom text-[9.5px] text-[#5CA36B]">19:42 ✓✓</span>
-        </div>
-        <div className="max-w-[60%] rounded-xl rounded-tl-[4px] bg-white px-3 py-2 text-[12.5px] shadow-sm" style={{ color: "var(--cl-ink)" }}>
-          Oui volontiers !
-          <span className="ml-2 align-bottom text-[9.5px]" style={{ color: "var(--cl-ink-faint)" }}>19:43</span>
-        </div>
-        <div className="ml-auto max-w-[85%] overflow-hidden rounded-xl rounded-tr-[4px] shadow-sm" style={{ background: "#D9FDD3" }}>
-          <div className="m-1 flex h-[74px] items-center justify-center rounded-lg" style={{ background: "linear-gradient(135deg,#C7A44A 0%,#8F6E1C 100%)" }}>
-            <ImageIcon className="h-6 w-6 text-white/85" />
-          </div>
-          <p className="px-3 pb-2 pt-1 text-[12.5px]" style={{ color: "#111B12" }}>
-            Robe Wax « Douala Chic » — 12 500 FCFA. Je vous la réserve ? 😊
-            <span className="ml-2 align-bottom text-[9.5px] text-[#5CA36B]">19:43 ✓✓</span>
-          </p>
+        <div className="ml-auto max-w-[92%] rounded-lg rounded-tr-[3px] px-2.5 py-1.5 text-[11.5px]" style={{ background: "var(--cl-accent-soft)", color: "#2E2158" }}>
+          Oui, 3 en stock ! Je vous réserve la vôtre ? 😊
         </div>
       </div>
     </div>
@@ -275,29 +318,30 @@ function Hero() {
   const typed = useTypewriter(TYPED_WORDS);
 
   return (
-    <section className="relative overflow-hidden">
-      <div className="cl-container grid items-center gap-14 pb-20 pt-14 md:pb-28 md:pt-20 lg:grid-cols-[1.2fr_0.85fr]">
+    <section className="relative">
+      {/* Grille décorative en arrière-plan (façon Render) */}
+      <div className="cl-grid-bg pointer-events-none absolute inset-0" aria-hidden="true" />
+
+      <div className="cl-container relative grid items-center gap-14 pb-16 pt-8 md:pb-20 md:pt-12 lg:grid-cols-[1.05fr_0.95fr]">
         {/* Colonne texte */}
         <div>
           <h1 className="cl-h1 cl-rise" aria-label="La voie la plus rapide vers un agent IA pour votre entreprise">
             <span aria-hidden="true">
-              La voie la plus
+              La voie la plus rapide
               <br />
-              rapide vers un
-              <br />
-              agent IA pour
+              vers un agent IA pour
               <br />
               <span style={{ color: "var(--cl-accent-deep)" }}>votre {typed}</span>
               <span className="cl-caret" />
             </span>
           </h1>
 
-          <p className="cl-sub cl-rise cl-rise-2 mt-7 max-w-[46ch]">
+          <p className="cl-sub cl-rise cl-rise-2 mt-6 max-w-[44ch]">
             L&apos;infrastructure intuitive pour créer, connecter et faire grandir votre
             assistant WhatsApp — de votre premier client au millionième.
           </p>
 
-          <div className="cl-rise cl-rise-3 mt-9 flex flex-wrap items-center gap-3">
+          <div className="cl-rise cl-rise-3 mt-8 flex flex-wrap items-center gap-3">
             <Link href="/configure" className="cl-btn-black">
               Commencer gratuitement
             </Link>
@@ -307,26 +351,13 @@ function Hero() {
           </div>
         </div>
 
-        {/* Colonne mockup */}
-        <div className="cl-rise cl-rise-4 relative hidden justify-center lg:flex">
-          <WhatsAppMock />
-          {/* Carte statistique flottante */}
-          <div
-            className="cl-card absolute -bottom-5 -left-2 flex items-center gap-3 px-4 py-3"
-            style={{ boxShadow: "0 12px 36px rgba(25,23,27,0.12)" }}
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)" }}>
-              <Bot className="h-4.5 w-4.5" style={{ color: "var(--cl-accent-deep)", width: 18, height: 18 }} />
-            </span>
-            <div>
-              <p className="text-[13px] font-semibold leading-tight" style={{ color: "var(--cl-ink)" }}>
-                1 400 conversations / jour
-              </p>
-              <p className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
-                <span className="cl-pulse inline-block h-1.5 w-1.5 rounded-full" style={{ background: "var(--cl-green)" }} />
-                Agent en ligne 24/7 — sans intervention
-              </p>
-            </div>
+        {/* Colonne démo — deux composants produit forts empilés */}
+        <div className="cl-rise cl-rise-4 relative hidden justify-center pb-8 lg:flex">
+          <div className="w-[360px]">
+            <AnalyticsCard />
+          </div>
+          <div className="absolute -bottom-2 -left-3">
+            <LiveAgentCard />
           </div>
         </div>
       </div>
@@ -549,7 +580,7 @@ function SectorBand() {
     <section className="py-6">
       <div className="cl-container">
         <Reveal>
-          <div className="cl-band grid items-center gap-12 overflow-hidden rounded-[28px] px-8 py-14 md:grid-cols-[1fr_1.05fr] md:px-14 md:py-20">
+          <div className="cl-band grid items-center gap-12 overflow-hidden rounded-2xl px-8 py-14 md:grid-cols-[1fr_1.05fr] md:px-14 md:py-20">
             {/* Texte à gauche — comme Render */}
             <div>
               <h2 className="cl-h2 max-w-[16ch]">
@@ -645,7 +676,7 @@ function ZeroOpsSection() {
           </p>
         </Reveal>
 
-        <div className="mt-12 rounded-[28px] p-5 sm:p-7 md:p-9" style={{ background: "var(--cl-bg-soft)" }}>
+        <div className="mt-12 rounded-2xl p-5 sm:p-7 md:p-9" style={{ background: "var(--cl-bg-soft)" }}>
 
           <div className="grid gap-5 md:grid-cols-6">
             {/* Hébergement + mots-clés colorés */}
