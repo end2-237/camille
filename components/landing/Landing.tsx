@@ -48,9 +48,9 @@ function Wordmark({ dark = false }: { dark?: boolean }) {
     <Link href="/" className="flex items-center gap-2.5 flex-shrink-0" aria-label="Camille — accueil">
       <span
         className="flex h-8 w-8 items-center justify-center rounded-[9px]"
-        style={{ background: "#131007", border: "1px solid rgba(212,175,55,0.5)" }}
+        style={{ background: "#16141A", border: "1px solid rgba(124,90,248,0.55)" }}
       >
-        <span style={{ fontFamily: "Blackout", fontSize: 17, color: "#D4AF37", lineHeight: 1 }}>C</span>
+        <span style={{ fontFamily: "Blackout", fontSize: 17, color: "#8E6BFA", lineHeight: 1 }}>C</span>
       </span>
       <span
         style={{

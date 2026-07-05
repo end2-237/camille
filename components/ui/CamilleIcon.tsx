@@ -15,17 +15,17 @@ export function CamilleIcon({ size = "md", className }: CamilleIconProps) {
       style={{
         width: dim,
         height: dim,
-        borderRadius: size === "sm" ? 8 : 10,
-        background: "#0a0a00",
-        border: "1px solid rgba(212,175,55,0.45)",
-        boxShadow: "0 0 12px rgba(212,175,55,0.08)",
+        borderRadius: size === "sm" ? 7 : 8,
+        background: "#16141A",
+        border: "1px solid rgba(124,90,248,0.45)",
+        boxShadow: "0 0 12px rgba(124,90,248,0.10)",
       }}
     >
       <span
         style={{
           fontFamily: "Blackout",
           fontSize: font,
-          color: "#D4AF37",
+          color: "#8E6BFA",
           lineHeight: 1,
           userSelect: "none",
         }}

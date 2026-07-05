@@ -14,19 +14,19 @@ export default async function Icon() {
         style={{
           width: 32,
           height: 32,
-          borderRadius: 8,
-          background: "#0a0a00",
+          borderRadius: 7,
+          background: "#16141A",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          border: "1px solid rgba(212,175,55,0.5)",
+          border: "1px solid rgba(124,90,248,0.55)",
         }}
       >
         <span
           style={{
             fontFamily: "Blackout",
             fontSize: 22,
-            color: "#D4AF37",
+            color: "#8E6BFA",
             lineHeight: 1,
             marginTop: 2,
           }}
