@@ -11,7 +11,7 @@
   --cl-card:       #FFFFFF;
   --cl-ink:        #14110B;
   --cl-ink-soft:   rgba(20, 17, 11, 0.62);
-  --cl-ink-faint:  rgba(20, 17, 11, 0.42);
+  --cl-ink-faint:  rgba(20, 17, 11, 0.52);
   --cl-line:       rgba(20, 17, 11, 0.10);
   --cl-line-soft:  rgba(20, 17, 11, 0.06);
   --cl-gold:       #C4961E;
@@ -190,7 +190,7 @@
 /* ── Footer noir ───────────────────────────────────────────────────────────── */
 .cl-footer-link {
   font-size: 0.875rem;
-  color: rgba(251,247,240,0.55);
+  color: rgba(251,247,240,0.66);
   transition: color 0.15s ease;
 }
 .cl-footer-link:hover { color: #FBF7F0; }
@@ -213,3 +213,14 @@
 .cl-keyword { font-weight: 600; }
 
 .cl-landing img { max-width: 100%; }
+
+/* ── Mouvement réduit — on fige les animations décoratives ─────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .cl-float, .cl-pulse, .cl-caret,
+  .cl-rise, .cl-rise-1, .cl-rise-2, .cl-rise-3, .cl-rise-4,
+  .cl-tile-anim {
+    animation: none !important;
+  }
+  .cl-rise, .cl-rise-1, .cl-rise-2, .cl-rise-3, .cl-rise-4 { opacity: 1; transform: none; }
+  .cl-card-hover:hover, .cl-btn-black:hover, .cl-btn-outline:hover, .cl-btn-white:hover { transform: none; }
+}

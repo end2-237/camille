@@ -279,15 +279,17 @@ function Hero() {
       <div className="cl-container grid items-center gap-14 pb-20 pt-14 md:pb-28 md:pt-20 lg:grid-cols-[1.2fr_0.85fr]">
         {/* Colonne texte */}
         <div>
-          <h1 className="cl-h1 cl-rise">
-            La voie la plus
-            <br />
-            rapide vers un
-            <br />
-            agent IA pour
-            <br />
-            <span style={{ color: "var(--cl-gold-deep)" }}>votre {typed}</span>
-            <span className="cl-caret" aria-hidden="true" />
+          <h1 className="cl-h1 cl-rise" aria-label="La voie la plus rapide vers un agent IA pour votre entreprise">
+            <span aria-hidden="true">
+              La voie la plus
+              <br />
+              rapide vers un
+              <br />
+              agent IA pour
+              <br />
+              <span style={{ color: "var(--cl-gold-deep)" }}>votre {typed}</span>
+              <span className="cl-caret" />
+            </span>
           </h1>
 
           <p className="cl-sub cl-rise cl-rise-2 mt-7 max-w-[46ch]">
@@ -387,7 +389,7 @@ function StepBadge({ n }: { n: number }) {
   return (
     <span
       className="flex h-8 w-8 items-center justify-center rounded-[9px] text-[14px] font-bold text-white"
-      style={{ background: "var(--cl-gold)" }}
+      style={{ background: "var(--cl-gold-deep)" }}
     >
       {n}
     </span>
@@ -563,6 +565,8 @@ function SectorBand() {
                 <motion.div
                   key={s.label}
                   title={s.label}
+                  role="img"
+                  aria-label={s.label}
                   initial={{ opacity: 0, scale: 0.55 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true, margin: "-40px" }}
@@ -912,7 +916,7 @@ function BuilderGridSection() {
    ══════════════════════════════════════════════════════════════════════════ */
 
 const SECURITY_CARDS: { icon: React.ElementType; title: string; desc: string; badges?: string[] }[] = [
-  { icon: Lock,        title: "Chiffrement de bout en bout", desc: "Vos conversations transitent par le chiffrement natif de WhatsApp — personne d'autre ne les lit." },
+  { icon: Lock,        title: "Chiffrement WhatsApp natif",  desc: "Vos conversations transitent par le chiffrement de WhatsApp, de l'appareil du client à votre agent." },
   { icon: KeyRound,    title: "Clés API dédiées",            desc: "Chaque agent expose sa propre clé, révocable en un clic depuis le dashboard." },
   { icon: Database,    title: "Données isolées",             desc: "Contacts et historiques cloisonnés agent par agent, sans fuite entre comptes.", badges: ["RGPD", "Chiffré", "Isolé"] },
   { icon: ShieldCheck, title: "Contrôle des accès",          desc: "Dashboard protégé, sessions propriétaire authentifiées et rôles séparés." },
@@ -1105,7 +1109,7 @@ function LandingFooter() {
           className="mt-14 flex flex-col items-center justify-between gap-4 pt-7 md:flex-row"
           style={{ borderTop: "1px solid rgba(251,247,240,0.1)" }}
         >
-          <p className="text-[12.5px]" style={{ color: "rgba(251,247,240,0.4)" }}>
+          <p className="text-[12.5px]" style={{ color: "rgba(251,247,240,0.55)" }} suppressHydrationWarning>
             © {new Date().getFullYear()} Buyticle. Tous droits réservés.
           </p>
           <a
