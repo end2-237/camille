@@ -92,7 +92,7 @@ function MiniBrowser({ title, children }: { title: string; children: React.React
 
 function AnnouncementBar() {
   return (
-    <div className="relative z-40 px-4 py-2.5 text-center" style={{ background: "#F1E2B8" }}>
+    <div className="relative z-40 px-4 py-2.5 text-center" style={{ background: "var(--cl-lavender)" }}>
       <p className="text-[13px]" style={{ color: "var(--cl-ink)" }}>
         <span className="font-semibold">Camille v3 est là</span>
         <span className="hidden sm:inline"> — monitoring en direct, sessions ultra-stables et accueils médias enrichis.</span>{" "}
@@ -221,8 +221,8 @@ function useTypewriter(words: readonly string[]) {
 function WhatsAppMock() {
   return (
     <div
-      className="cl-float w-[330px] overflow-hidden rounded-[22px]"
-      style={{ border: "1px solid var(--cl-line)", boxShadow: "0 24px 70px rgba(20,17,11,0.16)", background: "#EFE7DB" }}
+      className="w-[330px] overflow-hidden rounded-2xl"
+      style={{ border: "1px solid var(--cl-line)", boxShadow: "0 18px 50px rgba(25,23,27,0.10)", background: "#EFE7DB" }}
     >
       {/* Header conversation */}
       <div className="flex items-center gap-3 px-4 py-3" style={{ background: "#FFFFFF", borderBottom: "1px solid var(--cl-line-soft)" }}>
@@ -287,7 +287,7 @@ function Hero() {
               <br />
               agent IA pour
               <br />
-              <span style={{ color: "var(--cl-gold-deep)" }}>votre {typed}</span>
+              <span style={{ color: "var(--cl-accent-deep)" }}>votre {typed}</span>
               <span className="cl-caret" />
             </span>
           </h1>
@@ -297,10 +297,9 @@ function Hero() {
             assistant WhatsApp — de votre premier client au millionième.
           </p>
 
-          <div className="cl-rise cl-rise-3 mt-9 flex flex-wrap items-center gap-3.5">
+          <div className="cl-rise cl-rise-3 mt-9 flex flex-wrap items-center gap-3">
             <Link href="/configure" className="cl-btn-black">
-              Créer mon agent
-              <ArrowRight className="h-4 w-4" />
+              Commencer gratuitement
             </Link>
             <Link href="/pricing" className="cl-btn-outline">
               Voir les tarifs
@@ -314,10 +313,10 @@ function Hero() {
           {/* Carte statistique flottante */}
           <div
             className="cl-card absolute -bottom-5 -left-2 flex items-center gap-3 px-4 py-3"
-            style={{ boxShadow: "0 16px 44px rgba(20,17,11,0.14)" }}
+            style={{ boxShadow: "0 12px 36px rgba(25,23,27,0.12)" }}
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: "var(--cl-gold-soft)" }}>
-              <Bot className="h-4.5 w-4.5" style={{ color: "var(--cl-gold-deep)", width: 18, height: 18 }} />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)" }}>
+              <Bot className="h-4.5 w-4.5" style={{ color: "var(--cl-accent-deep)", width: 18, height: 18 }} />
             </span>
             <div>
               <p className="text-[13px] font-semibold leading-tight" style={{ color: "var(--cl-ink)" }}>
@@ -389,7 +388,7 @@ function StepBadge({ n }: { n: number }) {
   return (
     <span
       className="flex h-8 w-8 items-center justify-center rounded-[9px] text-[14px] font-bold text-white"
-      style={{ background: "var(--cl-gold-deep)" }}
+      style={{ background: "var(--cl-accent-deep)" }}
     >
       {n}
     </span>
@@ -402,12 +401,12 @@ function PersonaRow({ icon: Icon, label, selected = false }: { icon: React.Eleme
       className="flex items-center gap-2.5 rounded-lg px-3 py-2"
       style={{
         border: selected ? "1.5px solid var(--cl-gold)" : "1px solid var(--cl-line-soft)",
-        background: selected ? "var(--cl-gold-soft)" : "#fff",
+        background: selected ? "var(--cl-accent-soft)" : "#fff",
       }}
     >
-      <Icon className="h-4 w-4" style={{ color: selected ? "var(--cl-gold-deep)" : "var(--cl-ink-faint)" }} />
+      <Icon className="h-4 w-4" style={{ color: selected ? "var(--cl-accent-deep)" : "var(--cl-ink-faint)" }} />
       <span className="flex-1 text-[12.5px] font-medium" style={{ color: "var(--cl-ink)" }}>{label}</span>
-      {selected && <Check className="h-4 w-4" style={{ color: "var(--cl-gold-deep)" }} />}
+      {selected && <Check className="h-4 w-4" style={{ color: "var(--cl-accent-deep)" }} />}
     </div>
   );
 }
@@ -543,7 +542,6 @@ const SECTORS: { icon: React.ElementType; label: string; bg: string; color: stri
   { icon: Coffee,          label: "Café",         bg: "#F4EDE6", color: "#8A5A34" },
   { icon: Truck,           label: "Livraison",    bg: "#E9F3F1", color: "#33827A" },
   { icon: Dumbbell,        label: "Fitness",      bg: "#F6ECEC", color: "#A34F4F" },
-  { icon: Sparkles,        label: "Événementiel", bg: "#FBF0DC", color: "#B0821F" },
 ];
 
 function SectorBand() {
@@ -551,40 +549,42 @@ function SectorBand() {
     <section className="py-6">
       <div className="cl-container">
         <Reveal>
-          <div className="cl-band overflow-hidden rounded-[32px] px-7 py-14 text-center md:px-14 md:py-20">
-            <h2 className="cl-h2 mx-auto max-w-[22ch]">
-              Quel que soit votre métier, Camille répond.
-            </h2>
-            <p className="cl-sub mx-auto mt-4 max-w-[52ch]" style={{ color: "rgba(20,17,11,0.66)" }}>
-              Des modèles d&apos;agents pensés pour chaque activité — le vôtre
-              parle déjà la langue de vos clients.
-            </p>
+          <div className="cl-band grid items-center gap-12 overflow-hidden rounded-[28px] px-8 py-14 md:grid-cols-[1fr_1.05fr] md:px-14 md:py-20">
+            {/* Texte à gauche — comme Render */}
+            <div>
+              <h2 className="cl-h2 max-w-[16ch]">
+                Quel que soit votre métier, Camille répond.
+              </h2>
+              <p className="cl-sub mt-5 max-w-[42ch]" style={{ color: "rgba(25,23,27,0.72)" }}>
+                Des modèles d&apos;agents pensés pour chaque activité — le vôtre
+                parle déjà la langue de vos clients.
+              </p>
+              <div className="mt-9">
+                <Link href="/configure" className="cl-btn-black">
+                  Découvrir les modèles
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
 
-            <div className="mx-auto mt-11 grid max-w-[760px] grid-cols-4 gap-3 sm:grid-cols-8">
+            {/* Grille de tuiles blanches à droite — comme Render */}
+            <div className="grid grid-cols-4 gap-3 sm:grid-cols-5 md:gap-3.5">
               {SECTORS.map((s, i) => (
                 <motion.div
                   key={s.label}
                   title={s.label}
                   role="img"
                   aria-label={s.label}
-                  initial={{ opacity: 0, scale: 0.55 }}
+                  initial={{ opacity: 0, scale: 0.6 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true, margin: "-40px" }}
-                  transition={{ duration: 0.45, delay: 0.03 * i, ease: EASE }}
-                  whileHover={{ scale: 1.1, rotate: -3 }}
-                  className="cl-tile cursor-default"
-                  style={{ background: s.bg, boxShadow: "0 2px 8px rgba(20,17,11,0.08)" }}
+                  transition={{ duration: 0.4, delay: 0.025 * i, ease: EASE }}
+                  whileHover={{ scale: 1.08 }}
+                  className="cl-band-tile cursor-default"
                 >
                   <s.icon className="h-6 w-6" style={{ color: s.color }} />
                 </motion.div>
               ))}
-            </div>
-
-            <div className="mt-11">
-              <Link href="/configure" className="cl-btn-white">
-                Découvrir les modèles d&apos;agents
-                <ArrowRight className="h-4 w-4" />
-              </Link>
             </div>
           </div>
         </Reveal>
@@ -634,34 +634,38 @@ function ZeroOpsSection() {
   return (
     <section id="features" className="scroll-mt-24 py-16 md:py-24">
       <div className="cl-container">
-        <div className="rounded-[36px] p-5 sm:p-8 md:p-12" style={{ background: "var(--cl-bg-soft)" }}>
-          <Reveal>
-            <h2 className="cl-h2 max-w-[18ch]">Des agents IA, zéro maintenance.</h2>
-            <p className="cl-sub mt-4 max-w-[56ch]">
-              Camille héberge, connecte et surveille tout — vous vous concentrez
-              sur vos clients, pas sur la tuyauterie.
-            </p>
-          </Reveal>
+        <Reveal>
+          <h2 className="cl-h2 mx-auto max-w-[22ch] text-center">
+            Déployez des agents IA avec{" "}
+            <span style={{ color: "var(--cl-accent)" }}>zéro ops</span>
+          </h2>
+          <p className="cl-sub mx-auto mt-5 max-w-[52ch] text-center">
+            Camille héberge, connecte et surveille tout — vous vous concentrez
+            sur vos clients, pas sur la tuyauterie.
+          </p>
+        </Reveal>
 
-          <div className="mt-10 grid gap-5 md:grid-cols-6">
+        <div className="mt-12 rounded-[28px] p-5 sm:p-7 md:p-9" style={{ background: "var(--cl-bg-soft)" }}>
+
+          <div className="grid gap-5 md:grid-cols-6">
             {/* Hébergement + mots-clés colorés */}
             <Reveal className="md:col-span-4" delay={0.04}>
               <div className="cl-card cl-card-hover h-full p-7">
                 <h3 className="cl-h3 max-w-[30ch] !leading-snug">
                   Un hébergement intuitif et des sessions WhatsApp gérées pour{" "}
-                  <span className="cl-keyword" style={{ color: "#B58A17" }}>réponses IA</span>,{" "}
-                  <span className="cl-keyword" style={{ color: "#2E8B62" }}>accueils médias</span>,{" "}
-                  <span className="cl-keyword" style={{ color: "#3E6FB8" }}>prise de rendez-vous</span>,{" "}
-                  <span className="cl-keyword" style={{ color: "#C77E28" }}>relances</span>,{" "}
-                  <span className="cl-keyword" style={{ color: "#7A5BC0" }}>FAQ</span> et{" "}
-                  <span className="cl-keyword" style={{ color: "#BC4B84" }}>multilingue</span>.
+                  <span className="cl-keyword" style={{ color: "#7C5AF8" }}>réponses IA</span>,{" "}
+                  <span className="cl-keyword" style={{ color: "#2E9E63" }}>accueils médias</span>,{" "}
+                  <span className="cl-keyword" style={{ color: "#3D77E3" }}>prise de rendez-vous</span>,{" "}
+                  <span className="cl-keyword" style={{ color: "#E07A2E" }}>relances</span>,{" "}
+                  <span className="cl-keyword" style={{ color: "#E05262" }}>FAQ</span> et{" "}
+                  <span className="cl-keyword" style={{ color: "#2A9D8F" }}>multilingue</span>.
                 </h3>
                 <div className="mt-6 space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--cl-ink-faint)" }}>
                       Sessions WhatsApp
                     </p>
-                    <span className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-semibold" style={{ background: "var(--cl-gold-soft)", color: "var(--cl-gold-deep)" }}>
+                    <span className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-semibold" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
                       <Plus className="h-3 w-3" /> Nouvelle session
                     </span>
                   </div>
@@ -683,7 +687,7 @@ function ZeroOpsSection() {
                   <div className="max-w-[90%] rounded-lg rounded-tl-[3px] px-3 py-2 text-[11.5px]" style={{ background: "var(--cl-bg)", color: "var(--cl-ink)" }}>
                     Je préfère parler à un humain 🙏
                   </div>
-                  <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold" style={{ background: "var(--cl-gold-soft)", color: "var(--cl-gold-deep)" }}>
+                  <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
                     <UserCheck className="h-3.5 w-3.5 flex-shrink-0" />
                     Le Dr Ngo a repris la conversation
                   </div>
@@ -694,8 +698,8 @@ function ZeroOpsSection() {
               </div>
             </Reveal>
 
-            {/* Pics de charge */}
-            <Reveal className="md:col-span-3" delay={0.05}>
+            {/* Pics de charge — pleine largeur, comme l'autoscaling Render */}
+            <Reveal className="md:col-span-6" delay={0.05}>
               <div className="cl-card cl-card-hover h-full p-7">
                 <h3 className="cl-h3">Des pics de messages absorbés sans broncher</h3>
                 <p className="mt-3 text-[13.5px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
@@ -703,29 +707,29 @@ function ZeroOpsSection() {
                   encaissent des rafales ×100 sans perdre un seul message.
                 </p>
                 <div className="relative mt-6">
-                  <svg viewBox="0 0 320 130" className="w-full" role="img" aria-label="Courbe de trafic avec pic absorbé">
+                  <svg viewBox="0 0 720 150" className="w-full" role="img" aria-label="Courbe de trafic avec pic absorbé" preserveAspectRatio="none" style={{ height: 150 }}>
                     <defs>
                       <linearGradient id="clSpike" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#C4961E" stopOpacity="0.34" />
-                        <stop offset="100%" stopColor="#C4961E" stopOpacity="0" />
+                        <stop offset="0%" stopColor="#7C5AF8" stopOpacity="0.28" />
+                        <stop offset="100%" stopColor="#7C5AF8" stopOpacity="0" />
                       </linearGradient>
                     </defs>
-                    {[26, 52, 78, 104].map((y) => (
-                      <line key={y} x1="0" x2="320" y1={y} y2={y} stroke="rgba(20,17,11,0.06)" strokeWidth="1" />
+                    {[30, 60, 90, 120].map((y) => (
+                      <line key={y} x1="0" x2="720" y1={y} y2={y} stroke="rgba(25,23,27,0.06)" strokeWidth="1" />
                     ))}
                     <path
-                      d="M0,108 C36,106 62,103 88,99 C114,95 132,90 150,82 C165,75 176,34 190,22 C199,14 208,28 222,58 C238,86 276,97 320,100 L320,130 L0,130 Z"
+                      d="M0,126 C80,124 140,120 200,114 C260,108 300,102 340,92 C372,84 396,40 424,26 C443,17 462,33 492,68 C526,100 620,112 720,116 L720,150 L0,150 Z"
                       fill="url(#clSpike)"
                     />
                     <path
-                      d="M0,108 C36,106 62,103 88,99 C114,95 132,90 150,82 C165,75 176,34 190,22 C199,14 208,28 222,58 C238,86 276,97 320,100"
-                      fill="none" stroke="#B58A17" strokeWidth="2.5" strokeLinecap="round"
+                      d="M0,126 C80,124 140,120 200,114 C260,108 300,102 340,92 C372,84 396,40 424,26 C443,17 462,33 492,68 C526,100 620,112 720,116"
+                      fill="none" stroke="#7C5AF8" strokeWidth="2.5" strokeLinecap="round"
                     />
-                    <circle cx="190" cy="22" r="4.5" fill="#B58A17" stroke="#fff" strokeWidth="2" />
+                    <circle cx="424" cy="26" r="4.5" fill="#7C5AF8" stroke="#fff" strokeWidth="2" />
                   </svg>
                   <span
                     className="absolute rounded-full px-2.5 py-1 text-[10px] font-bold text-white"
-                    style={{ background: "var(--cl-black)", left: "48%", top: "-4px" }}
+                    style={{ background: "var(--cl-black)", left: "51%", top: "-2px" }}
                   >
                     pic ×100 absorbé
                   </span>
@@ -745,19 +749,19 @@ function ZeroOpsSection() {
                   <pre className="whitespace-pre">
 {`{`}
 {`
-  `}<span className="cl-t-gold">&quot;accueil&quot;</span>{`: {`}
+  `}<span className="cl-t-key">&quot;accueil&quot;</span>{`: {`}
 {`
-    `}<span className="cl-t-gold">&quot;message&quot;</span>{`: `}<span className="cl-t-green">&quot;Bienvenue chez Boutique Aïcha 👋&quot;</span>{`,`}
+    `}<span className="cl-t-key">&quot;message&quot;</span>{`: `}<span className="cl-t-green">&quot;Bienvenue chez Boutique Aïcha 👋&quot;</span>{`,`}
 {`
-    `}<span className="cl-t-gold">&quot;video&quot;</span>{`:   `}<span className="cl-t-green">&quot;presentation.mp4&quot;</span>{`,`}
+    `}<span className="cl-t-key">&quot;video&quot;</span>{`:   `}<span className="cl-t-green">&quot;presentation.mp4&quot;</span>{`,`}
 {`
-    `}<span className="cl-t-gold">&quot;langues&quot;</span>{`: [`}<span className="cl-t-green">&quot;fr&quot;</span>{`, `}<span className="cl-t-green">&quot;en&quot;</span>{`]`}
+    `}<span className="cl-t-key">&quot;langues&quot;</span>{`: [`}<span className="cl-t-green">&quot;fr&quot;</span>{`, `}<span className="cl-t-green">&quot;en&quot;</span>{`]`}
 {`
   },`}
 {`
-  `}<span className="cl-t-gold">&quot;ia&quot;</span>{`: { `}<span className="cl-t-gold">&quot;ton&quot;</span>{`: `}<span className="cl-t-green">&quot;chaleureux&quot;</span>{` },`}
+  `}<span className="cl-t-key">&quot;ia&quot;</span>{`: { `}<span className="cl-t-key">&quot;ton&quot;</span>{`: `}<span className="cl-t-green">&quot;chaleureux&quot;</span>{` },`}
 {`
-  `}<span className="cl-t-gold">&quot;reprise_humaine&quot;</span>{`: `}<span className="cl-t-blue">true</span>
+  `}<span className="cl-t-key">&quot;reprise_humaine&quot;</span>{`: `}<span className="cl-t-blue">true</span>
 {`
 }`}
                   </pre>
@@ -765,8 +769,8 @@ function ZeroOpsSection() {
               </div>
             </Reveal>
 
-            {/* Logs & monitoring */}
-            <Reveal className="md:col-span-4" delay={0.05}>
+            {/* Logs & monitoring — pleine largeur, en dernière ligne */}
+            <Reveal className="md:order-last md:col-span-6" delay={0.05}>
               <div className="cl-card cl-card-hover h-full p-7">
                 <h3 className="cl-h3">Des logs et un monitoring en direct pour chaque session</h3>
                 <p className="mt-3 text-[13.5px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
@@ -785,7 +789,7 @@ function ZeroOpsSection() {
             </Reveal>
 
             {/* Base de données */}
-            <Reveal className="md:col-span-2" delay={0.1}>
+            <Reveal className="md:col-span-3" delay={0.1}>
               <div className="cl-card cl-card-hover flex h-full flex-col p-7">
                 <h3 className="cl-h3">Contacts &amp; historiques en base sécurisée</h3>
                 <p className="mt-3 text-[13.5px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
@@ -838,7 +842,7 @@ function TestimonialSection() {
             >
               « Avant Camille, 3 agents traitaient 200 conversations par jour.
               Aujourd&apos;hui, Camille en gère{" "}
-              <span style={{ color: "var(--cl-gold-deep)" }}>1 400 seule</span> —
+              <span style={{ color: "var(--cl-accent-deep)" }}>1 400 seule</span> —
               et nos clients ne voient aucune différence. »
             </p>
           </blockquote>
@@ -846,7 +850,7 @@ function TestimonialSection() {
           <div className="mt-8 flex items-center justify-center gap-3">
             <span
               className="flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
-              style={{ background: "linear-gradient(135deg,#C4961E,#8F6E1C)" }}
+              style={{ background: "linear-gradient(135deg,#8E6BFA,#6442E8)" }}
             >
               AB
             </span>
@@ -893,8 +897,8 @@ function BuilderGridSection() {
           {BUILDER_FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={0.04 * i}>
               <div>
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "var(--cl-gold-soft)" }}>
-                  <f.icon className="h-[18px] w-[18px]" style={{ color: "var(--cl-gold-deep)" }} />
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "var(--cl-accent-soft)" }}>
+                  <f.icon className="h-[18px] w-[18px]" style={{ color: "var(--cl-accent-deep)" }} />
                 </span>
                 <h3 className="mt-4 text-[15.5px] font-semibold tracking-[-0.01em]" style={{ color: "var(--cl-ink)" }}>
                   {f.title}
@@ -951,7 +955,7 @@ function SecuritySection() {
                 {c.badges && (
                   <div className="mt-4 flex gap-2">
                     {c.badges.map((b) => (
-                      <span key={b} className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ background: "var(--cl-gold-soft)", color: "var(--cl-gold-deep)" }}>
+                      <span key={b} className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
                         {b}
                       </span>
                     ))}
@@ -973,8 +977,8 @@ function SecuritySection() {
 const PLAYGROUND_TILES: { icon: React.ElementType; left: string; top: string; size: number; bg: string; color: string; hideMobile?: boolean }[] = [
   { icon: MessageCircle, left: "4%",  top: "12%", size: 54, bg: "#DCF5E4", color: "#1DAB55" },
   { icon: Store,         left: "13%", top: "58%", size: 46, bg: "#FDECEC", color: "#C2504B", hideMobile: true },
-  { icon: Bot,           left: "7%",  top: "80%", size: 58, bg: "#FBF0D4", color: "#B0821F" },
-  { icon: Stethoscope,   left: "21%", top: "26%", size: 42, bg: "#E7F4EE", color: "#2E8B62", hideMobile: true },
+  { icon: Bot,           left: "7%",  top: "80%", size: 58, bg: "#EFEAFF", color: "#7C5AF8" },
+  { icon: Stethoscope,   left: "21%", top: "26%", size: 42, bg: "#E7F4EE", color: "#2E9E63", hideMobile: true },
   { icon: Coffee,        left: "27%", top: "74%", size: 44, bg: "#F4EDE6", color: "#8A5A34", hideMobile: true },
   { icon: Languages,     left: "17%", top: "5%",  size: 40, bg: "#EAF1FB", color: "#3E6FB8", hideMobile: true },
   { icon: Gem,           left: "31%", top: "10%", size: 46, bg: "#FBF3DF", color: "#A9822B", hideMobile: true },
@@ -982,7 +986,7 @@ const PLAYGROUND_TILES: { icon: React.ElementType; left: string; top: string; si
   { icon: UtensilsCrossed, left: "78%", top: "22%", size: 52, bg: "#FFF3E0", color: "#C77E28" },
   { icon: Webhook,       left: "89%", top: "10%", size: 44, bg: "#F2ECFB", color: "#7A5BC0", hideMobile: true },
   { icon: Shirt,         left: "84%", top: "52%", size: 46, bg: "#EEF0FA", color: "#5460B4", hideMobile: true },
-  { icon: Sparkles,      left: "93%", top: "38%", size: 40, bg: "#FBF0DC", color: "#B0821F" },
+  { icon: Sparkles,      left: "93%", top: "38%", size: 40, bg: "#EFEAFF", color: "#7C5AF8" },
   { icon: Truck,         left: "74%", top: "78%", size: 50, bg: "#E9F3F1", color: "#33827A", hideMobile: true },
   { icon: Pill,          left: "90%", top: "76%", size: 54, bg: "#EAF7EA", color: "#3E8B3E" },
   { icon: GraduationCap, left: "62%", top: "88%", size: 42, bg: "#EAF1FB", color: "#3E6FB8", hideMobile: true },

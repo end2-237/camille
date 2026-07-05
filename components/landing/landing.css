@@ -1,25 +1,26 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   landing.css — Landing v4 "Render-like" · Camille by Buyticle
-   Design system scopé .cl-landing : crème chaud + encre + or, indépendant du
-   ThemeProvider (la landing est toujours claire, comme la référence).
+   landing.css — Landing v5 "Render-faithful" · Camille by Buyticle
+   Réplique fidèle du design render.com : fond blanc, encre quasi-noire,
+   accent violet, lavande, pilules noires, footer noir.
+   Scopé .cl-landing, indépendant du ThemeProvider (toujours clair).
    ───────────────────────────────────────────────────────────────────────────── */
 
 .cl-landing {
-  --cl-bg:         #FBF7F0;
-  --cl-bg-soft:    #F3EDE1;
-  --cl-bg-band:    #F6E8C3;
-  --cl-card:       #FFFFFF;
-  --cl-ink:        #14110B;
-  --cl-ink-soft:   rgba(20, 17, 11, 0.62);
-  --cl-ink-faint:  rgba(20, 17, 11, 0.52);
-  --cl-line:       rgba(20, 17, 11, 0.10);
-  --cl-line-soft:  rgba(20, 17, 11, 0.06);
-  --cl-gold:       #C4961E;
-  --cl-gold-deep:  #9A7B18;
-  --cl-gold-soft:  rgba(196, 150, 30, 0.12);
-  --cl-black:      #131007;
-  --cl-green:      #1DAB55;
-  --cl-wa:         #25D366;
+  --cl-bg:          #FFFFFF;
+  --cl-bg-soft:     #F6F4F1;
+  --cl-card:        #FFFFFF;
+  --cl-ink:         #19171B;
+  --cl-ink-soft:    #5B5660;
+  --cl-ink-faint:   #7C7683;
+  --cl-line:        #E9E6EC;
+  --cl-line-soft:   #F0EEF3;
+  --cl-accent:      #7C5AF8;
+  --cl-accent-deep: #6442E8;
+  --cl-accent-soft: #F0EBFF;
+  --cl-lavender:    #E9E1FF;
+  --cl-black:       #16141A;
+  --cl-green:       #1DAB55;
+  --cl-wa:          #25D366;
 
   background: var(--cl-bg);
   color: var(--cl-ink);
@@ -27,161 +28,167 @@
   font-size: 16px;
   line-height: 1.5;
   overflow-x: clip;
+  font-feature-settings: "ss01" on, "cv05" on;
 }
 
 .cl-landing ::selection {
-  background: rgba(196, 150, 30, 0.22);
+  background: rgba(124, 90, 248, 0.22);
   color: var(--cl-ink);
 }
 
 /* ── Conteneur ─────────────────────────────────────────────────────────────── */
 .cl-container {
-  max-width: 1200px;
+  max-width: 1216px;
   margin-inline: auto;
   padding-inline: 24px;
 }
 @media (min-width: 768px) { .cl-container { padding-inline: 40px; } }
 
-/* ── Typographie display (fidèle : grotesque medium, tracking serré) ───────── */
+/* ── Typographie display — grotesque medium, tracking très serré (Render) ──── */
 .cl-h1 {
-  font-size: clamp(2.6rem, 6.4vw, 5rem);
-  font-weight: 550;
-  letter-spacing: -0.045em;
-  line-height: 1.02;
+  font-size: clamp(2.9rem, 6.6vw, 5.1rem);
+  font-weight: 500;
+  letter-spacing: -0.038em;
+  line-height: 1.03;
   color: var(--cl-ink);
 }
 .cl-h2 {
-  font-size: clamp(2rem, 4.4vw, 3.4rem);
-  font-weight: 550;
-  letter-spacing: -0.04em;
-  line-height: 1.05;
+  font-size: clamp(2.1rem, 4.1vw, 3.3rem);
+  font-weight: 500;
+  letter-spacing: -0.032em;
+  line-height: 1.06;
   color: var(--cl-ink);
 }
 .cl-h3 {
-  font-size: clamp(1.25rem, 2vw, 1.55rem);
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  font-size: clamp(1.2rem, 1.8vw, 1.42rem);
+  font-weight: 550;
+  letter-spacing: -0.022em;
+  line-height: 1.25;
   color: var(--cl-ink);
 }
 .cl-sub {
-  font-size: clamp(1rem, 1.4vw, 1.185rem);
+  font-size: clamp(1.02rem, 1.35vw, 1.14rem);
   line-height: 1.55;
   color: var(--cl-ink-soft);
+  letter-spacing: -0.008em;
 }
 
-/* ── Boutons pilule ────────────────────────────────────────────────────────── */
+/* ── Boutons pilule (Render : noir plein + outline discret) ────────────────── */
 .cl-btn-black {
   display: inline-flex; align-items: center; gap: 8px;
-  background: var(--cl-black); color: #FBF7F0;
-  border-radius: 999px; padding: 13px 26px;
-  font-size: 0.925rem; font-weight: 550; letter-spacing: -0.01em;
-  transition: transform 0.18s cubic-bezier(0.22,1,0.36,1), background 0.18s ease, box-shadow 0.18s ease;
+  background: var(--cl-black); color: #FFFFFF;
+  border-radius: 999px; padding: 12px 24px;
+  font-size: 0.94rem; font-weight: 500; letter-spacing: -0.012em;
+  transition: background 0.16s ease, transform 0.16s ease;
   white-space: nowrap;
 }
-.cl-btn-black:hover { background: #2B2410; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(20,17,11,0.18); }
-.cl-btn-black:active { transform: translateY(0) scale(0.985); }
+.cl-btn-black:hover { background: #2E2A35; }
+.cl-btn-black:active { transform: scale(0.985); }
 
 .cl-btn-outline {
   display: inline-flex; align-items: center; gap: 8px;
-  background: transparent; color: var(--cl-ink);
-  border: 1px solid rgba(20,17,11,0.22);
-  border-radius: 999px; padding: 12px 25px;
-  font-size: 0.925rem; font-weight: 550; letter-spacing: -0.01em;
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s cubic-bezier(0.22,1,0.36,1);
+  background: #FFFFFF; color: var(--cl-ink);
+  border: 1px solid var(--cl-line);
+  border-radius: 999px; padding: 11px 23px;
+  font-size: 0.94rem; font-weight: 500; letter-spacing: -0.012em;
+  transition: border-color 0.16s ease, background 0.16s ease;
   white-space: nowrap;
 }
-.cl-btn-outline:hover { border-color: rgba(20,17,11,0.55); background: rgba(255,255,255,0.55); transform: translateY(-1px); }
+.cl-btn-outline:hover { border-color: #C9C4D2; background: #FAF9FB; }
 
 .cl-btn-white {
   display: inline-flex; align-items: center; gap: 8px;
   background: #FFFFFF; color: var(--cl-ink);
-  border-radius: 999px; padding: 13px 26px;
-  font-size: 0.925rem; font-weight: 600; letter-spacing: -0.01em;
-  box-shadow: 0 2px 10px rgba(20,17,11,0.12);
-  transition: transform 0.18s cubic-bezier(0.22,1,0.36,1), box-shadow 0.18s ease;
+  border-radius: 999px; padding: 12px 24px;
+  font-size: 0.94rem; font-weight: 550; letter-spacing: -0.012em;
+  box-shadow: 0 1px 6px rgba(25, 23, 27, 0.14);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
   white-space: nowrap;
 }
-.cl-btn-white:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(20,17,11,0.18); }
+.cl-btn-white:hover { box-shadow: 0 6px 18px rgba(25, 23, 27, 0.18); }
 
 /* ── Nav ───────────────────────────────────────────────────────────────────── */
 .cl-nav-link {
-  padding: 8px 13px; border-radius: 999px;
-  font-size: 0.895rem; font-weight: 500; color: var(--cl-ink-soft);
-  transition: color 0.15s ease, background 0.15s ease;
+  padding: 8px 12px; border-radius: 8px;
+  font-size: 0.885rem; font-weight: 450; color: var(--cl-ink-soft);
+  letter-spacing: -0.008em;
+  transition: color 0.14s ease;
   white-space: nowrap;
 }
-.cl-nav-link:hover { color: var(--cl-ink); background: rgba(20,17,11,0.05); }
+.cl-nav-link:hover { color: var(--cl-ink); }
 
-/* ── Cartes ────────────────────────────────────────────────────────────────── */
+/* ── Cartes (Render : blanches, bord fin, radius moyen, ombre quasi nulle) ─── */
 .cl-card {
   background: var(--cl-card);
   border: 1px solid var(--cl-line);
-  border-radius: 20px;
-  box-shadow: 0 1px 2px rgba(20,17,11,0.04);
+  border-radius: 16px;
 }
-.cl-card-hover { transition: transform 0.25s cubic-bezier(0.22,1,0.36,1), box-shadow 0.25s ease; }
-.cl-card-hover:hover { transform: translateY(-3px); box-shadow: 0 14px 40px rgba(20,17,11,0.10); }
+.cl-card-hover { transition: box-shadow 0.2s ease; }
+.cl-card-hover:hover { box-shadow: 0 10px 30px rgba(25, 23, 27, 0.07); }
 
-/* ── Curseur de frappe du hero ─────────────────────────────────────────────── */
+/* ── Curseur de frappe (barre violette, comme Render) ──────────────────────── */
 .cl-caret {
   display: inline-block;
-  width: 0.085em;
-  height: 0.86em;
-  margin-left: 0.06em;
-  background: var(--cl-gold);
+  width: 0.075em;
+  height: 0.84em;
+  margin-left: 0.05em;
+  background: var(--cl-accent);
   vertical-align: baseline;
-  transform: translateY(0.08em);
+  transform: translateY(0.07em);
   animation: cl-blink 1.05s steps(1) infinite;
   border-radius: 1px;
 }
 @keyframes cl-blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
 
 /* ── Animations d'apparition ───────────────────────────────────────────────── */
-@keyframes cl-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
-.cl-rise    { animation: cl-rise 0.7s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes cl-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+.cl-rise    { animation: cl-rise 0.65s cubic-bezier(0.22,1,0.36,1) both; }
 .cl-rise-1  { animation-delay: 0.05s; }
-.cl-rise-2  { animation-delay: 0.14s; }
-.cl-rise-3  { animation-delay: 0.23s; }
-.cl-rise-4  { animation-delay: 0.34s; }
-
-/* Flottement doux de la carte chat du hero */
-@keyframes cl-float { 0%,100% { transform: translateY(0) rotate(1.6deg); } 50% { transform: translateY(-9px) rotate(1.6deg); } }
-.cl-float { animation: cl-float 7s ease-in-out infinite; }
+.cl-rise-2  { animation-delay: 0.13s; }
+.cl-rise-3  { animation-delay: 0.21s; }
+.cl-rise-4  { animation-delay: 0.3s; }
 
 /* Pulse du point de statut */
 @keyframes cl-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 .cl-pulse { animation: cl-pulse 2s ease-in-out infinite; }
 
-/* ── Logos clients (marques typographiques) ────────────────────────────────── */
+/* ── Logos clients (monochromes gris, comme Render) ────────────────────────── */
 .cl-logo {
-  color: rgba(20,17,11,0.52);
-  transition: color 0.2s ease, opacity 0.2s ease;
+  color: #3A363F;
+  opacity: 0.78;
+  transition: opacity 0.2s ease;
   white-space: nowrap;
   user-select: none;
 }
-.cl-logo:hover { color: var(--cl-ink); }
+.cl-logo:hover { opacity: 1; }
 
-/* ── Bande gradient or ─────────────────────────────────────────────────────── */
+/* ── Bande gradient violette (Render) ──────────────────────────────────────── */
 .cl-band {
   background:
-    radial-gradient(120% 140% at 8% 0%,   rgba(255,255,255,0.55) 0%, transparent 42%),
-    radial-gradient(120% 160% at 92% 110%, rgba(154,123,24,0.34) 0%, transparent 52%),
-    linear-gradient(118deg, #F7ECCB 0%, #F0D998 34%, #E4BE5B 68%, #D2A52F 100%);
+    radial-gradient(90% 120% at 0% 0%, rgba(255,255,255,0.5) 0%, transparent 45%),
+    radial-gradient(110% 140% at 100% 110%, rgba(64, 35, 170, 0.42) 0%, transparent 55%),
+    linear-gradient(115deg, #D5C6FF 0%, #B195FF 36%, #8E66FA 68%, #7A4FEF 100%);
+}
+.cl-band-tile {
+  display: flex; align-items: center; justify-content: center;
+  background: #FFFFFF;
+  border-radius: 14px;
+  aspect-ratio: 1 / 1;
+  box-shadow: 0 2px 8px rgba(40, 20, 90, 0.16);
 }
 
 /* ── Terminal / code ───────────────────────────────────────────────────────── */
 .cl-terminal {
-  background: #16130B;
+  background: #17151C;
   border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 14px;
+  border-radius: 12px;
   font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.75;
-  color: rgba(240,237,230,0.88);
+  color: rgba(240, 238, 245, 0.88);
 }
-.cl-t-dim    { color: rgba(240,237,230,0.34); }
-.cl-t-gold   { color: #E3C566; }
+.cl-t-dim    { color: rgba(240, 238, 245, 0.34); }
+.cl-t-key    { color: #B9A5FF; }
 .cl-t-green  { color: #7ED99A; }
 .cl-t-red    { color: #F08A8A; }
 .cl-t-orange { color: #E8B380; }
@@ -189,38 +196,35 @@
 
 /* ── Footer noir ───────────────────────────────────────────────────────────── */
 .cl-footer-link {
-  font-size: 0.875rem;
-  color: rgba(251,247,240,0.66);
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.62);
   transition: color 0.15s ease;
+  letter-spacing: -0.005em;
 }
-.cl-footer-link:hover { color: #FBF7F0; }
+.cl-footer-link:hover { color: #FFFFFF; }
 
-/* ── Grille terrain de jeu (pré-footer) ────────────────────────────────────── */
+/* ── Tuiles décoratives (pré-footer) ───────────────────────────────────────── */
 .cl-tile {
   display: flex; align-items: center; justify-content: center;
   border-radius: 16px;
   aspect-ratio: 1 / 1;
 }
-@keyframes cl-tile-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
-.cl-tile-anim { animation: cl-tile-in 0.6s cubic-bezier(0.34,1.56,0.64,1) both; }
 
 /* ── Divers ────────────────────────────────────────────────────────────────── */
 .cl-kicker {
-  font-size: 0.72rem; font-weight: 650;
-  letter-spacing: 0.14em; text-transform: uppercase;
+  font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--cl-ink-faint);
 }
-.cl-keyword { font-weight: 600; }
+.cl-keyword { font-weight: 550; }
 
 .cl-landing img { max-width: 100%; }
 
 /* ── Mouvement réduit — on fige les animations décoratives ─────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .cl-float, .cl-pulse, .cl-caret,
-  .cl-rise, .cl-rise-1, .cl-rise-2, .cl-rise-3, .cl-rise-4,
-  .cl-tile-anim {
+  .cl-pulse, .cl-caret,
+  .cl-rise, .cl-rise-1, .cl-rise-2, .cl-rise-3, .cl-rise-4 {
     animation: none !important;
   }
   .cl-rise, .cl-rise-1, .cl-rise-2, .cl-rise-3, .cl-rise-4 { opacity: 1; transform: none; }
-  .cl-card-hover:hover, .cl-btn-black:hover, .cl-btn-outline:hover, .cl-btn-white:hover { transform: none; }
 }
