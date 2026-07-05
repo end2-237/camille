@@ -33,7 +33,8 @@ const LINKS = {
 
 export function Footer() {
   const pathname = usePathname();
-  if (pathname.startsWith("/dashboard")) return null;
+  // Masqué sur le dashboard et sur la landing (elle embarque son propre footer)
+  if (pathname.startsWith("/dashboard") || pathname === "/") return null;
 
   return (
     <footer

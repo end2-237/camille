@@ -1,0 +1,215 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   landing.css — Landing v4 "Render-like" · Camille by Buyticle
+   Design system scopé .cl-landing : crème chaud + encre + or, indépendant du
+   ThemeProvider (la landing est toujours claire, comme la référence).
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-landing {
+  --cl-bg:         #FBF7F0;
+  --cl-bg-soft:    #F3EDE1;
+  --cl-bg-band:    #F6E8C3;
+  --cl-card:       #FFFFFF;
+  --cl-ink:        #14110B;
+  --cl-ink-soft:   rgba(20, 17, 11, 0.62);
+  --cl-ink-faint:  rgba(20, 17, 11, 0.42);
+  --cl-line:       rgba(20, 17, 11, 0.10);
+  --cl-line-soft:  rgba(20, 17, 11, 0.06);
+  --cl-gold:       #C4961E;
+  --cl-gold-deep:  #9A7B18;
+  --cl-gold-soft:  rgba(196, 150, 30, 0.12);
+  --cl-black:      #131007;
+  --cl-green:      #1DAB55;
+  --cl-wa:         #25D366;
+
+  background: var(--cl-bg);
+  color: var(--cl-ink);
+  font-family: "Inter Variable", "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-x: clip;
+}
+
+.cl-landing ::selection {
+  background: rgba(196, 150, 30, 0.22);
+  color: var(--cl-ink);
+}
+
+/* ── Conteneur ─────────────────────────────────────────────────────────────── */
+.cl-container {
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+@media (min-width: 768px) { .cl-container { padding-inline: 40px; } }
+
+/* ── Typographie display (fidèle : grotesque medium, tracking serré) ───────── */
+.cl-h1 {
+  font-size: clamp(2.6rem, 6.4vw, 5rem);
+  font-weight: 550;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  color: var(--cl-ink);
+}
+.cl-h2 {
+  font-size: clamp(2rem, 4.4vw, 3.4rem);
+  font-weight: 550;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  color: var(--cl-ink);
+}
+.cl-h3 {
+  font-size: clamp(1.25rem, 2vw, 1.55rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--cl-ink);
+}
+.cl-sub {
+  font-size: clamp(1rem, 1.4vw, 1.185rem);
+  line-height: 1.55;
+  color: var(--cl-ink-soft);
+}
+
+/* ── Boutons pilule ────────────────────────────────────────────────────────── */
+.cl-btn-black {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--cl-black); color: #FBF7F0;
+  border-radius: 999px; padding: 13px 26px;
+  font-size: 0.925rem; font-weight: 550; letter-spacing: -0.01em;
+  transition: transform 0.18s cubic-bezier(0.22,1,0.36,1), background 0.18s ease, box-shadow 0.18s ease;
+  white-space: nowrap;
+}
+.cl-btn-black:hover { background: #2B2410; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(20,17,11,0.18); }
+.cl-btn-black:active { transform: translateY(0) scale(0.985); }
+
+.cl-btn-outline {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; color: var(--cl-ink);
+  border: 1px solid rgba(20,17,11,0.22);
+  border-radius: 999px; padding: 12px 25px;
+  font-size: 0.925rem; font-weight: 550; letter-spacing: -0.01em;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s cubic-bezier(0.22,1,0.36,1);
+  white-space: nowrap;
+}
+.cl-btn-outline:hover { border-color: rgba(20,17,11,0.55); background: rgba(255,255,255,0.55); transform: translateY(-1px); }
+
+.cl-btn-white {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #FFFFFF; color: var(--cl-ink);
+  border-radius: 999px; padding: 13px 26px;
+  font-size: 0.925rem; font-weight: 600; letter-spacing: -0.01em;
+  box-shadow: 0 2px 10px rgba(20,17,11,0.12);
+  transition: transform 0.18s cubic-bezier(0.22,1,0.36,1), box-shadow 0.18s ease;
+  white-space: nowrap;
+}
+.cl-btn-white:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(20,17,11,0.18); }
+
+/* ── Nav ───────────────────────────────────────────────────────────────────── */
+.cl-nav-link {
+  padding: 8px 13px; border-radius: 999px;
+  font-size: 0.895rem; font-weight: 500; color: var(--cl-ink-soft);
+  transition: color 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
+}
+.cl-nav-link:hover { color: var(--cl-ink); background: rgba(20,17,11,0.05); }
+
+/* ── Cartes ────────────────────────────────────────────────────────────────── */
+.cl-card {
+  background: var(--cl-card);
+  border: 1px solid var(--cl-line);
+  border-radius: 20px;
+  box-shadow: 0 1px 2px rgba(20,17,11,0.04);
+}
+.cl-card-hover { transition: transform 0.25s cubic-bezier(0.22,1,0.36,1), box-shadow 0.25s ease; }
+.cl-card-hover:hover { transform: translateY(-3px); box-shadow: 0 14px 40px rgba(20,17,11,0.10); }
+
+/* ── Curseur de frappe du hero ─────────────────────────────────────────────── */
+.cl-caret {
+  display: inline-block;
+  width: 0.085em;
+  height: 0.86em;
+  margin-left: 0.06em;
+  background: var(--cl-gold);
+  vertical-align: baseline;
+  transform: translateY(0.08em);
+  animation: cl-blink 1.05s steps(1) infinite;
+  border-radius: 1px;
+}
+@keyframes cl-blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+
+/* ── Animations d'apparition ───────────────────────────────────────────────── */
+@keyframes cl-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+.cl-rise    { animation: cl-rise 0.7s cubic-bezier(0.22,1,0.36,1) both; }
+.cl-rise-1  { animation-delay: 0.05s; }
+.cl-rise-2  { animation-delay: 0.14s; }
+.cl-rise-3  { animation-delay: 0.23s; }
+.cl-rise-4  { animation-delay: 0.34s; }
+
+/* Flottement doux de la carte chat du hero */
+@keyframes cl-float { 0%,100% { transform: translateY(0) rotate(1.6deg); } 50% { transform: translateY(-9px) rotate(1.6deg); } }
+.cl-float { animation: cl-float 7s ease-in-out infinite; }
+
+/* Pulse du point de statut */
+@keyframes cl-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.cl-pulse { animation: cl-pulse 2s ease-in-out infinite; }
+
+/* ── Logos clients (marques typographiques) ────────────────────────────────── */
+.cl-logo {
+  color: rgba(20,17,11,0.52);
+  transition: color 0.2s ease, opacity 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+.cl-logo:hover { color: var(--cl-ink); }
+
+/* ── Bande gradient or ─────────────────────────────────────────────────────── */
+.cl-band {
+  background:
+    radial-gradient(120% 140% at 8% 0%,   rgba(255,255,255,0.55) 0%, transparent 42%),
+    radial-gradient(120% 160% at 92% 110%, rgba(154,123,24,0.34) 0%, transparent 52%),
+    linear-gradient(118deg, #F7ECCB 0%, #F0D998 34%, #E4BE5B 68%, #D2A52F 100%);
+}
+
+/* ── Terminal / code ───────────────────────────────────────────────────────── */
+.cl-terminal {
+  background: #16130B;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: rgba(240,237,230,0.88);
+}
+.cl-t-dim    { color: rgba(240,237,230,0.34); }
+.cl-t-gold   { color: #E3C566; }
+.cl-t-green  { color: #7ED99A; }
+.cl-t-red    { color: #F08A8A; }
+.cl-t-orange { color: #E8B380; }
+.cl-t-blue   { color: #8FBFEF; }
+
+/* ── Footer noir ───────────────────────────────────────────────────────────── */
+.cl-footer-link {
+  font-size: 0.875rem;
+  color: rgba(251,247,240,0.55);
+  transition: color 0.15s ease;
+}
+.cl-footer-link:hover { color: #FBF7F0; }
+
+/* ── Grille terrain de jeu (pré-footer) ────────────────────────────────────── */
+.cl-tile {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 16px;
+  aspect-ratio: 1 / 1;
+}
+@keyframes cl-tile-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+.cl-tile-anim { animation: cl-tile-in 0.6s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+/* ── Divers ────────────────────────────────────────────────────────────────── */
+.cl-kicker {
+  font-size: 0.72rem; font-weight: 650;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--cl-ink-faint);
+}
+.cl-keyword { font-weight: 600; }
+
+.cl-landing img { max-width: 100%; }

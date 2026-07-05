@@ -48,7 +48,8 @@ export function Navbar() {
 
   useEffect(() => { setMobileOpen(false); setMoreOpen(false); }, [pathname]);
 
-  if (pathname.startsWith("/dashboard")) return null;
+  // Masqué sur le dashboard et sur la landing (elle embarque son propre header)
+  if (pathname.startsWith("/dashboard") || pathname === "/") return null;
 
   return (
     <>
