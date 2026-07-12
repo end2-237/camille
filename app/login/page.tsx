@@ -69,9 +69,9 @@ export default function LoginPage() {
     <main className="relative min-h-dvh flex items-center justify-center px-4 py-20 overflow-hidden">
 
       <div aria-hidden className="pointer-events-none fixed inset-0"
-        style={{ background: "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(212,175,55,0.12) 0%, transparent 65%)" }} />
+        style={{ background: "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(124,90,248,0.12) 0%, transparent 65%)" }} />
       <div aria-hidden className="pointer-events-none fixed inset-0 opacity-[0.018]"
-        style={{ backgroundImage: "linear-gradient(rgba(212,175,55,1) 1px,transparent 1px),linear-gradient(90deg,rgba(212,175,55,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }} />
+        style={{ backgroundImage: "linear-gradient(rgba(124,90,248,1) 1px,transparent 1px),linear-gradient(90deg,rgba(124,90,248,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }} />
 
       <motion.div
         initial={{ opacity: 0, y: 28 }}
@@ -89,14 +89,14 @@ export default function LoginPage() {
         >
           <div
             className="absolute top-0 left-8 right-8 h-px"
-            style={{ background: "linear-gradient(90deg, transparent, rgba(212,175,55,0.5), transparent)" }}
+            style={{ background: "linear-gradient(90deg, transparent, rgba(124,90,248,0.5), transparent)" }}
           />
 
           {/* Header */}
           <div className="flex flex-col items-center gap-4 mb-6">
             <div
               className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.25)" }}
+              style={{ background: "rgba(124,90,248,0.1)", border: "1px solid rgba(124,90,248,0.25)" }}
             >
               <Lock className="w-5 h-5" style={{ color: "var(--color-gold)" }} />
             </div>
@@ -117,7 +117,7 @@ export default function LoginPage() {
                 onClick={() => setMode(m)}
                 className="flex-1 py-2 text-xs font-medium transition-all duration-150"
                 style={{
-                  background: mode === m ? "rgba(212,175,55,0.1)" : "transparent",
+                  background: mode === m ? "rgba(124,90,248,0.1)" : "transparent",
                   color: mode === m ? "var(--color-gold)" : "var(--text-disabled)",
                   borderBottom: mode === m ? "2px solid var(--color-gold)" : "2px solid transparent",
                 }}

@@ -112,7 +112,7 @@ function FInput({ className, ...props }: React.InputHTMLAttributes<HTMLInputElem
     <input
       className={cn("w-full px-3 py-1.5 rounded-md text-xs outline-none transition-all duration-150", className)}
       style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-      onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(212,175,55,0.4)"; }}
+      onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,90,248,0.4)"; }}
       onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
       {...props}
     />
@@ -125,7 +125,7 @@ function FTextarea({ className, rows = 3, ...props }: React.TextareaHTMLAttribut
       rows={rows}
       className={cn("w-full px-3 py-2 rounded-md text-xs resize-none outline-none transition-all duration-150", className)}
       style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", color: "var(--text-primary)", lineHeight: 1.6 }}
-      onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(212,175,55,0.4)"; }}
+      onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,90,248,0.4)"; }}
       onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
       {...props}
     />
@@ -156,16 +156,16 @@ function SaveBar({ dirty, onSave }: { dirty: boolean; onSave: () => void }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
           className="flex items-center justify-between px-4 py-2.5 rounded-lg mb-5"
-          style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.2)" }}
+          style={{ background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.2)" }}
         >
-          <p className="text-xs" style={{ color: "rgba(212,175,55,0.8)" }}>
+          <p className="text-xs" style={{ color: "rgba(124,90,248,0.8)" }}>
             Modifications non sauvegardées
           </p>
           <button
             onClick={onSave}
             className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium
                        transition-all duration-150 hover:brightness-110"
-            style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.25)" }}
+            style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.25)" }}
           >
             <Save className="w-3 h-3" />
             Sauvegarder
@@ -231,7 +231,7 @@ function UsageSection({ agentId, token }: { agentId: string; token: string | nul
           <TrendingUp className="w-3.5 h-3.5" style={{ color: "var(--text-disabled)" }} />
           <span className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>Utilisation · {current.period}</span>
         </div>
-        <span className="text-2xs font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(212,175,55,0.1)", color: PLAN_COLORS[plan.id] ?? "var(--color-gold)", border: `1px solid ${PLAN_COLORS[plan.id] ?? "var(--color-gold)"}30` }}>
+        <span className="text-2xs font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(124,90,248,0.1)", color: PLAN_COLORS[plan.id] ?? "var(--color-gold)", border: `1px solid ${PLAN_COLORS[plan.id] ?? "var(--color-gold)"}30` }}>
           {plan.label}
         </span>
       </div>
@@ -313,7 +313,7 @@ function OverviewTab({ agent, onToggleStatus, token, capabilities }: { agent: Ag
       <div className="flex items-center gap-3 pb-5"
         style={{ borderBottom: "1px solid var(--border-subtle)" }}>
         <div className="w-9 h-9 rounded-lg flex items-center justify-center text-xl flex-shrink-0"
-          style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.15)" }}>
+          style={{ background: "rgba(124,90,248,0.08)", border: "1px solid rgba(124,90,248,0.15)" }}>
           {agent.identity.avatar_emoji ?? "🤖"}
         </div>
         <div className="flex-1 min-w-0">
@@ -360,8 +360,8 @@ function OverviewTab({ agent, onToggleStatus, token, capabilities }: { agent: Ag
               <div key={cap.id}
                 className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
                 style={{
-                  background: active ? "rgba(212,175,55,0.08)" : "var(--bg-muted)",
-                  border: `1px solid ${active ? "rgba(212,175,55,0.2)" : "var(--border-subtle)"}`,
+                  background: active ? "rgba(124,90,248,0.08)" : "var(--bg-muted)",
+                  border: `1px solid ${active ? "rgba(124,90,248,0.2)" : "var(--border-subtle)"}`,
                   opacity: active ? 1 : 0.4,
                 }}>
                 <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
@@ -692,7 +692,7 @@ function MediaUploadCard({
           style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
           {/* Icon bubble */}
           <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{ background: "rgba(212,175,55,0.12)" }}>
+            style={{ background: "rgba(124,90,248,0.12)" }}>
             <MediaIcon className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} />
           </div>
 
@@ -738,7 +738,7 @@ function MediaUploadCard({
           className="flex flex-col items-center justify-center gap-1.5 py-5 px-4 rounded-xl transition-all duration-200"
           style={{
             border:     `1.5px dashed ${dragOver ? "var(--color-gold)" : "var(--border-default)"}`,
-            background: dragOver ? "rgba(212,175,55,0.04)" : "var(--bg-elevated)",
+            background: dragOver ? "rgba(124,90,248,0.04)" : "var(--bg-elevated)",
             cursor:     uploading ? "wait" : "pointer",
           }}>
           {uploading ? (
@@ -854,7 +854,7 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
                       background: cap.badge === "Core"    ? "rgba(52,211,153,0.1)"   :
                                   cap.badge === "Bientôt" ? "rgba(255,255,255,0.05)" :
                                   cap.badge === "Nouveau" ? "rgba(56,189,248,0.1)"   :
-                                  "rgba(212,175,55,0.12)",
+                                  "rgba(124,90,248,0.12)",
                       color:      cap.badge === "Core"    ? "#34D399"                :
                                   cap.badge === "Bientôt" ? "var(--text-disabled)"   :
                                   cap.badge === "Nouveau" ? "#38bdf8"                :
@@ -941,7 +941,7 @@ function ModelTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>)
               onClick={() => opt.available && setModel(opt.value as AgentModel)}
               className="flex items-center gap-4 p-4 rounded-xl transition-all duration-200"
               style={{
-                background: model === opt.value ? "rgba(212,175,55,0.08)" : "var(--bg-elevated)",
+                background: model === opt.value ? "rgba(124,90,248,0.08)" : "var(--bg-elevated)",
                 border: `1px solid ${model === opt.value ? "var(--border-gold)" : "var(--border-subtle)"}`,
                 cursor: opt.available ? "pointer" : "not-allowed",
                 opacity: opt.available ? 1 : 0.45,
@@ -1021,7 +1021,7 @@ function PromptTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? "Copié !" : "Copier"}
           </button>
-          <button onClick={handleRegenerate} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:brightness-110" style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
+          <button onClick={handleRegenerate} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:brightness-110" style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}>
             <RefreshCw className="w-3.5 h-3.5" />Régénérer
           </button>
           {!editing ? (
@@ -1548,8 +1548,8 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
                 style={{ background: calendarConnected ? "rgba(52,211,153,0.05)" : "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                   style={{
-                    background: calendarConnected ? "rgba(52,211,153,0.12)" : "rgba(212,175,55,0.08)",
-                    border: `1px solid ${calendarConnected ? "rgba(52,211,153,0.3)" : "rgba(212,175,55,0.2)"}`,
+                    background: calendarConnected ? "rgba(52,211,153,0.12)" : "rgba(124,90,248,0.08)",
+                    border: `1px solid ${calendarConnected ? "rgba(52,211,153,0.3)" : "rgba(124,90,248,0.2)"}`,
                   }}>
                   <Calendar className="w-4 h-4" style={{ color: calendarConnected ? "#34D399" : "var(--color-gold)" }} />
                 </div>
@@ -1664,13 +1664,13 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
         <SectionHeader label="Mode Propriétaire" />
 
         <div className="rounded-2xl overflow-hidden"
-          style={{ border: "1px solid rgba(212,175,55,0.25)", background: "rgba(212,175,55,0.02)" }}>
+          style={{ border: "1px solid rgba(124,90,248,0.25)", background: "rgba(124,90,248,0.02)" }}>
 
           {/* Header */}
           <div className="flex items-center gap-3 px-5 py-4"
-            style={{ background: "rgba(212,175,55,0.05)", borderBottom: "1px solid rgba(212,175,55,0.12)" }}>
+            style={{ background: "rgba(124,90,248,0.05)", borderBottom: "1px solid rgba(124,90,248,0.12)" }}>
             <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-              style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.2)" }}>
+              style={{ background: "rgba(124,90,248,0.1)", border: "1px solid rgba(124,90,248,0.2)" }}>
               🔐
             </div>
             <div className="flex-1 min-w-0">
@@ -1696,7 +1696,7 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
               style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 Envoyez <span className="font-mono font-semibold px-1 py-0.5 rounded"
-                  style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)" }}>/votre-mot-de-passe</span> à votre agent depuis WhatsApp.
+                  style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)" }}>/votre-mot-de-passe</span> à votre agent depuis WhatsApp.
               </p>
               <p className="text-[11px]" style={{ color: "var(--text-disabled)" }}>
                 L'agent bascule en consultant IA : stratégie, calendriers éditoriaux, campagnes, planning. Session 8h. Tapez <span className="font-mono font-semibold">/exit</span> pour quitter.
@@ -1718,7 +1718,7 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
                     placeholder="Nouveau mot de passe"
                     className="w-full px-3 py-2.5 rounded-lg text-xs outline-none pr-9"
                     style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(212,175,55,0.4)"; }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,90,248,0.4)"; }}
                     onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
                   />
                   <button type="button" onClick={() => setPwRevealNew((v) => !v)}
@@ -1739,7 +1739,7 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
                       border: `1px solid ${pwConfirm && pwConfirm !== pwInput ? "rgba(248,113,113,0.4)" : "var(--border-default)"}`,
                       color: "var(--text-primary)",
                     }}
-                    onFocus={(e) => { if (!pwConfirm || pwConfirm === pwInput) e.currentTarget.style.borderColor = "rgba(212,175,55,0.4)"; }}
+                    onFocus={(e) => { if (!pwConfirm || pwConfirm === pwInput) e.currentTarget.style.borderColor = "rgba(124,90,248,0.4)"; }}
                     onBlur={(e)  => { e.currentTarget.style.borderColor = pwConfirm && pwConfirm !== pwInput ? "rgba(248,113,113,0.4)" : "var(--border-default)"; }}
                   />
                   <button type="button" onClick={() => setPwRevealConf((v) => !v)}
@@ -1758,7 +1758,7 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
                   onClick={handleSavePassword}
                   disabled={pwSaving || !pwInput || !pwConfirm || pwInput !== pwConfirm}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-40"
-                  style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.25)" }}>
+                  style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.25)" }}>
                   {pwSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                   {pwSet ? "Mettre à jour" : "Définir le mot de passe"}
                 </button>
@@ -1777,7 +1777,7 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
             </div>
 
             {/* ─── Sessions actives ──────────────────────────────────── */}
-            <div style={{ borderTop: "1px solid rgba(212,175,55,0.12)", paddingTop: "1.25rem" }}>
+            <div style={{ borderTop: "1px solid rgba(124,90,248,0.12)", paddingTop: "1.25rem" }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-disabled)" }}>
@@ -1835,7 +1835,7 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
                     return (
                       <div key={s.id}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                        style={{ background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.1)" }}>
+                        style={{ background: "rgba(124,90,248,0.04)", border: "1px solid rgba(124,90,248,0.1)" }}>
                         <div className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse"
                           style={{ background: "#34D399", boxShadow: "0 0 6px rgba(52,211,153,0.6)" }} />
                         <div className="flex-1 min-w-0">

@@ -118,7 +118,7 @@ function AgentRow({ agent, onConfigure, onToggle, onDelete }: {
       <td className="py-2.5 pl-6 pr-4">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-            style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.12)" }}>
+            style={{ background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.12)" }}>
             {agent.identity.avatar_emoji ?? "🤖"}
           </div>
           <div className="min-w-0">
@@ -139,7 +139,7 @@ function AgentRow({ agent, onConfigure, onToggle, onDelete }: {
         </span>
       </td>
       <td className="py-2.5 px-4">
-        <span className="inline-flex items-center gap-1 text-xs" style={{ color: "rgba(212,175,55,0.65)" }}>
+        <span className="inline-flex items-center gap-1 text-xs" style={{ color: "rgba(124,90,248,0.65)" }}>
           <Sparkles className="w-2.5 h-2.5 flex-shrink-0" />
           {MODEL_SHORT[agent.target_model] ?? agent.target_model}
         </span>
@@ -159,7 +159,7 @@ function AgentRow({ agent, onConfigure, onToggle, onDelete }: {
         <div className="flex items-center justify-end gap-1.5">
           <button onClick={(e) => { e.stopPropagation(); onConfigure(); }}
             className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-all duration-150 opacity-0 group-hover:opacity-100"
-            style={{ color: "var(--color-gold)", background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)" }}>
+            style={{ color: "var(--color-gold)", background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.15)" }}>
             Configurer <ArrowUpRight className="w-2.5 h-2.5" />
           </button>
           <RowActions agent={agent} onConfigure={onConfigure} onToggle={onToggle} onDelete={onDelete} />
@@ -190,7 +190,7 @@ function EmptyState({ query, onNew }: { query: string; onNew: () => void }) {
       {!query && (
         <button onClick={onNew}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-150 hover:brightness-110"
-          style={{ color: "var(--color-gold)", background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.18)" }}>
+          style={{ color: "var(--color-gold)", background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.18)" }}>
           <Plus className="w-3 h-3" />
           Créer mon premier agent
         </button>
@@ -253,7 +253,7 @@ export default function DashboardPage() {
         </div>
         <button onClick={() => router.push("/configure")}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150 hover:brightness-110"
-          style={{ color: "var(--color-gold)", background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.18)" }}>
+          style={{ color: "var(--color-gold)", background: "rgba(124,90,248,0.08)", border: "1px solid rgba(124,90,248,0.18)" }}>
           <Plus className="w-3 h-3" />
           Nouvel agent
         </button>

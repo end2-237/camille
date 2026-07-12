@@ -93,7 +93,7 @@ function TwilioMark() {
 // ── Partner data ──────────────────────────────────────────────────────────────
 
 const PARTNERS = [
-  { name: "Anthropic",  role: "Modèles IA",        Mark: AnthropicMark,  accent: "#D4AF37" },
+  { name: "Anthropic",  role: "Modèles IA",        Mark: AnthropicMark,  accent: "#7C5AF8" },
   { name: "OpenAI",     role: "Modèles IA",         Mark: OpenAIMark,     accent: "#10A37F" },
   { name: "Supabase",   role: "Base de données",    Mark: SupabaseMark,   accent: "#3ECF8E" },
   { name: "Vercel",     role: "Infrastructure",     Mark: VercelMark,     accent: "#E0E0E0" },
@@ -208,7 +208,7 @@ export function PartnersStrip() {
     >
       {/* Ambient */}
       <div aria-hidden className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(212,175,55,0.03) 0%, transparent 70%)" }}
+        style={{ background: "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(124,90,248,0.03) 0%, transparent 70%)" }}
       />
 
       <div className="max-w-5xl mx-auto relative">
@@ -264,7 +264,7 @@ export function PartnersStrip() {
         >
           {["Données hébergées en UE", "Conformité RGPD", "99,9 % disponibilité", "SOC 2 compatible"].map((item) => (
             <div key={item} className="flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: "rgba(212,175,55,0.5)" }} />
+              <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: "rgba(124,90,248,0.5)" }} />
               <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>
                 {item}
               </span>

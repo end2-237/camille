@@ -42,7 +42,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       <div className="flex items-center flex-shrink-0 px-3 gap-2"
         style={{ height: TOPBAR_H, borderBottom: "1px solid var(--border-subtle)" }}>
         <Link href="/" className="flex items-center gap-2 group flex-shrink-0" aria-label="Retour à l'accueil">
-          <CamilleIcon size="sm" className="transition-shadow duration-200 group-hover:shadow-[0_0_12px_rgba(212,175,55,0.3)]" />
+          <CamilleIcon size="sm" className="transition-shadow duration-200 group-hover:shadow-[0_0_12px_rgba(124,90,248,0.3)]" />
           <AnimatePresence>
             {!collapsed && (
               <motion.span
@@ -73,9 +73,9 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         <button onClick={() => router.push("/configure")}
           className="w-full flex items-center gap-2 rounded-lg text-xs font-medium transition-all duration-150 hover:brightness-110 active:scale-[0.97]"
           style={{
-            background: "rgba(212,175,55,0.08)",
+            background: "rgba(124,90,248,0.08)",
             color: "var(--color-gold)",
-            border: "1px solid rgba(212,175,55,0.18)",
+            border: "1px solid rgba(124,90,248,0.18)",
             padding: collapsed ? "8px 0" : "8px 10px",
             justifyContent: collapsed ? "center" : undefined,
           }}
@@ -174,7 +174,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           style={{ padding: collapsed ? "4px 0" : "4px 6px", justifyContent: collapsed ? "center" : undefined }}>
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0"
-            style={{ background: "rgba(212,175,55,0.15)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.22)" }}
+            style={{ background: "rgba(124,90,248,0.15)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.22)" }}
             title={collapsed && mounted ? displayName : undefined}
           >
             {mounted ? (displayName[0]?.toUpperCase() ?? "?") : "?"}
@@ -248,7 +248,7 @@ function NavItem({ href, label, icon, active, collapsed, badge }: {
       </AnimatePresence>
       {!collapsed && badge !== undefined && badge > 0 && (
         <span className="text-[10px] tabular-nums px-1.5 py-px rounded-md font-bold flex-shrink-0"
-          style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)" }}>
+          style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)" }}>
           {badge}
         </span>
       )}
@@ -327,7 +327,7 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
           className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs transition-all duration-150"
           style={{
             background: searchOpen ? "var(--bg-muted)" : "rgba(255,255,255,0.03)",
-            border: `1px solid ${searchOpen ? "rgba(212,175,55,0.3)" : "var(--border-subtle)"}`,
+            border: `1px solid ${searchOpen ? "rgba(124,90,248,0.3)" : "var(--border-subtle)"}`,
             color: "var(--text-disabled)",
           }}
         >
@@ -374,7 +374,7 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
       <div className="ml-auto flex items-center gap-1 flex-shrink-0">
         <button onClick={() => router.push("/configure")} title="Créer un agent"
           className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:brightness-110"
-          style={{ background: "rgba(212,175,55,0.08)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.18)" }}>
+          style={{ background: "rgba(124,90,248,0.08)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.18)" }}>
           <Plus className="w-3 h-3" />
           Nouvel agent
         </button>
@@ -399,7 +399,7 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
                 <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
                   <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>Notifications</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
-                    style={{ background: "rgba(212,175,55,0.12)", color: "var(--color-gold)" }}>
+                    style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)" }}>
                     {NOTIFS.length}
                   </span>
                 </div>

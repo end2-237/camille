@@ -92,20 +92,20 @@ function PlanCard({ plan, index, allPlanIds }: {
         ["--mx" as string]: "50%",
         ["--my" as string]: "50%",
         ["--spot" as string]: "0",
-        background: plan.highlight ? "rgba(212,175,55,0.04)" : "var(--bg-elevated)",
-        border: `1px solid ${plan.highlight ? "rgba(212,175,55,0.32)" : "var(--border-subtle)"}`,
+        background: plan.highlight ? "rgba(124,90,248,0.04)" : "var(--bg-elevated)",
+        border: `1px solid ${plan.highlight ? "rgba(124,90,248,0.32)" : "var(--border-subtle)"}`,
         boxShadow: plan.highlight
-          ? "0 0 0 1px rgba(212,175,55,0.16), 0 24px 60px rgba(212,175,55,0.08)"
+          ? "0 0 0 1px rgba(124,90,248,0.16), 0 24px 60px rgba(124,90,248,0.08)"
           : "0 4px 24px rgba(0,0,0,0.18)",
       }}
     >
       {/* Spotlight */}
       <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl transition-opacity duration-300"
-        style={{ background: "radial-gradient(circle 260px at var(--mx) var(--my), rgba(212,175,55,0.07) 0%, transparent 70%)", opacity: "var(--spot)" }} />
+        style={{ background: "radial-gradient(circle 260px at var(--mx) var(--my), rgba(124,90,248,0.07) 0%, transparent 70%)", opacity: "var(--spot)" }} />
 
       {plan.badge && (
         <div className="absolute top-4 right-4 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full"
-          style={{ background: "rgba(212,175,55,0.15)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.28)" }}>
+          style={{ background: "rgba(124,90,248,0.15)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.28)" }}>
           {plan.badge}
         </div>
       )}
@@ -131,7 +131,7 @@ function PlanCard({ plan, index, allPlanIds }: {
         <p className="text-xs leading-relaxed mt-2.5" style={{ color: "var(--text-tertiary)" }}>{plan.description}</p>
 
         <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold"
-          style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.12)", color: "var(--color-gold)" }}>
+          style={{ background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.12)", color: "var(--color-gold)" }}>
           <Zap className="w-2.5 h-2.5" />
           {plan.tokens_label}
           <span style={{ color: "var(--text-disabled)", fontWeight: 400 }}>· {plan.conv_estimate}</span>
@@ -158,7 +158,7 @@ function PlanCard({ plan, index, allPlanIds }: {
           className="block w-full text-center py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
           style={
             plan.highlight
-              ? { background: "linear-gradient(135deg,#D4AF37 0%,#EDD96A 50%,#A8881A 100%)", color: "#000", boxShadow: "0 2px 16px rgba(212,175,55,0.22)" }
+              ? { background: "linear-gradient(135deg,#7C5AF8 0%,#A78BFA 50%,#6442E8 100%)", color: "#000", boxShadow: "0 2px 16px rgba(124,90,248,0.22)" }
               : { background: "var(--surface-glass)", color: "var(--text-secondary)", border: "1px solid var(--border-default)" }
           }>
           {plan.cta_label}
@@ -216,7 +216,7 @@ function CapRow({ cap, index, planIds }: {
         <div key={planId} className="flex justify-center flex-shrink-0">
           {cap.plans.includes(planId) ? (
             <div className="w-4 h-4 rounded-full flex items-center justify-center"
-              style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.3)" }}>
+              style={{ background: "rgba(124,90,248,0.12)", border: "1px solid rgba(124,90,248,0.3)" }}>
               <Check className="w-2.5 h-2.5" style={{ color: "var(--color-gold)" }} />
             </div>
           ) : (
@@ -323,8 +323,8 @@ function TokenEstimator({ plans }: { plans: DbPlan[] }) {
             <button key={val} onClick={() => setHistory(val)}
               className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
               style={{
-                background: history === val ? "rgba(212,175,55,0.1)" : "var(--bg-muted)",
-                border: `1px solid ${history === val ? "rgba(212,175,55,0.3)" : "var(--border-subtle)"}`,
+                background: history === val ? "rgba(124,90,248,0.1)" : "var(--bg-muted)",
+                border: `1px solid ${history === val ? "rgba(124,90,248,0.3)" : "var(--border-subtle)"}`,
                 color: history === val ? "var(--color-gold)" : "var(--text-disabled)",
               }}>
               {label}
@@ -342,8 +342,8 @@ function TokenEstimator({ plans }: { plans: DbPlan[] }) {
           <button key={label} onClick={() => set((v) => !v)}
             className="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all"
             style={{
-              background: val ? "rgba(212,175,55,0.08)" : "var(--bg-muted)",
-              border: `1px solid ${val ? "rgba(212,175,55,0.25)" : "var(--border-subtle)"}`,
+              background: val ? "rgba(124,90,248,0.08)" : "var(--bg-muted)",
+              border: `1px solid ${val ? "rgba(124,90,248,0.25)" : "var(--border-subtle)"}`,
             }}>
             <span style={{ color: val ? "var(--color-gold)" : "var(--text-tertiary)" }}>{label}</span>
             <span className="font-mono text-[10px]" style={{ color: "var(--text-disabled)" }}>{tokens}</span>
@@ -420,7 +420,7 @@ export default function PricingPage() {
     <main className="relative overflow-hidden">
       {/* Ambient glow */}
       <div aria-hidden className="pointer-events-none fixed inset-0"
-        style={{ background: "radial-gradient(ellipse 70% 40% at 50% -5%, rgba(212,175,55,0.09) 0%, transparent 60%)", zIndex: 0 }} />
+        style={{ background: "radial-gradient(ellipse 70% 40% at 50% -5%, rgba(124,90,248,0.09) 0%, transparent 60%)", zIndex: 0 }} />
 
       {/* ── Hero ────────────────────────────────────────────────────── */}
       <section className="relative pt-28 pb-16 px-6 text-center">
@@ -458,7 +458,7 @@ export default function PricingPage() {
               <p className="text-sm" style={{ color: "#f87171" }}>{error}</p>
               <button onClick={() => window.location.reload()}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium"
-                style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
+                style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}>
                 <RefreshCw className="w-3.5 h-3.5" />
                 Réessayer
               </button>
@@ -510,7 +510,7 @@ export default function PricingPage() {
             {/* Note exemple */}
             <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
               transition={{ delay: 0.3 }} className="mt-6 flex items-start gap-2.5 rounded-xl p-4"
-              style={{ background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.12)" }}>
+              style={{ background: "rgba(124,90,248,0.04)", border: "1px solid rgba(124,90,248,0.12)" }}>
               <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
               <p className="text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
                 <strong style={{ color: "var(--text-secondary)" }}>Exemple concret :</strong>{" "}
@@ -573,7 +573,7 @@ export default function PricingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/configure"
               className="inline-flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 active:scale-[0.97]"
-              style={{ background: "linear-gradient(135deg,#D4AF37 0%,#EDD96A 50%,#A8881A 100%)", color: "#000", boxShadow: "0 4px 24px rgba(212,175,55,0.22)" }}>
+              style={{ background: "linear-gradient(135deg,#7C5AF8 0%,#A78BFA 50%,#6442E8 100%)", color: "#000", boxShadow: "0 4px 24px rgba(124,90,248,0.22)" }}>
               <Sparkles className="w-3.5 h-3.5" />
               Créer mon agent
             </Link>

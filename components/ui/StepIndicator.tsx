@@ -75,7 +75,7 @@ export function StepIndicator({
                       ? "bg-gold/10 border-gold text-gold"
                       : "bg-midnight-800 border-white/10 text-white/30"
                   )}
-                  animate={isCurrent ? { boxShadow: "0 0 0 4px rgba(212,175,55,0.12)" } : {}}
+                  animate={isCurrent ? { boxShadow: "0 0 0 4px rgba(124,90,248,0.12)" } : {}}
                 >
                   {isCompleted ? (
                     <Check className="w-4 h-4" />

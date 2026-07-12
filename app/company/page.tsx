@@ -60,7 +60,7 @@ function Row({
     >
       <div
         className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.15)" }}
+        style={{ background: "rgba(124,90,248,0.08)", border: "1px solid rgba(124,90,248,0.15)" }}
       >
         <Icon className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} />
       </div>
@@ -77,7 +77,7 @@ export default function CompanyPage() {
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0"
-        style={{ background: "radial-gradient(ellipse 70% 40% at 50% -5%, rgba(212,175,55,0.08) 0%, transparent 60%)" }}
+        style={{ background: "radial-gradient(ellipse 70% 40% at 50% -5%, rgba(124,90,248,0.08) 0%, transparent 60%)" }}
       />
 
       {/* Hero */}

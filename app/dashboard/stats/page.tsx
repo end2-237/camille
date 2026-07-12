@@ -381,7 +381,7 @@ function HourlyHeatmap({ data }: { data: HourSlot[] }) {
       <div className="grid grid-cols-24 gap-0.5" style={{ gridTemplateColumns: "repeat(24, 1fr)" }}>
         {data.map((slot) => {
           const intensity = slot.count / maxCount;
-          const periodColor = PERIODS_OF_DAY.find((p) => p.hours.includes(slot.hour))?.color ?? "#D4AF37";
+          const periodColor = PERIODS_OF_DAY.find((p) => p.hours.includes(slot.hour))?.color ?? "#7C5AF8";
           const isHov = hovered === slot.hour;
           return (
             <div key={slot.hour} className="relative flex flex-col items-center gap-0.5 cursor-default"
@@ -453,7 +453,7 @@ function DowChart({ data }: { data: DowSlot[] }) {
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="w-full rounded-t-md"
               style={{
-                background: isWeekend ? "#A78BFA66" : "rgba(212,175,55,0.5)",
+                background: isWeekend ? "#A78BFA66" : "rgba(124,90,248,0.5)",
                 minHeight: slot.count > 0 ? 4 : 2,
               }}
             />
@@ -572,7 +572,7 @@ function Section({ title, subtitle, icon: Icon, children, actions }: {
         style={{ borderBottom: "1px solid var(--border-subtle)" }}>
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md flex items-center justify-center"
-            style={{ background: "rgba(212,175,55,0.1)" }}>
+            style={{ background: "rgba(124,90,248,0.1)" }}>
             <Icon className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} />
           </div>
           <div>
@@ -606,7 +606,7 @@ function ChartToggle({
           onClick={() => onChange(o.id)}
           className="px-2.5 py-1 text-[10px] font-semibold transition-colors duration-100"
           style={{
-            background: value === o.id ? "rgba(212,175,55,0.12)" : "transparent",
+            background: value === o.id ? "rgba(124,90,248,0.12)" : "transparent",
             color: value === o.id ? "var(--color-gold)" : "var(--text-disabled)",
           }}
         >
@@ -687,7 +687,7 @@ function AgentCompare({ agents, period }: { agents: AgentStat[]; period: string 
                     <p className="font-semibold" style={{ color: "var(--text-primary)" }}>{a.name}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-                        style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)" }}>
+                        style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)" }}>
                         {getPlanLabel(a.plan)}
                       </span>
                       <span className="text-[9px]" style={{ color: "var(--text-disabled)" }}>
@@ -886,7 +886,7 @@ export default function StatsPage() {
                 <button key={p.id} onClick={() => setPeriod(p.id)}
                   className="px-3 py-2 text-xs font-medium transition-colors duration-100"
                   style={{
-                    background: period === p.id ? "rgba(212,175,55,0.12)" : "var(--bg-elevated)",
+                    background: period === p.id ? "rgba(124,90,248,0.12)" : "var(--bg-elevated)",
                     color: period === p.id ? "var(--color-gold)" : "var(--text-disabled)",
                     borderRight: p.id !== "12m" ? "1px solid var(--border-subtle)" : undefined,
                   }}>
@@ -1099,7 +1099,7 @@ export default function StatsPage() {
                     return (
                       <div className="grid grid-cols-2 gap-2 pt-2">
                         <div className="rounded-lg p-3 text-center"
-                          style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)" }}>
+                          style={{ background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.15)" }}>
                           <p className="text-[9px] uppercase tracking-wider mb-1" style={{ color: "var(--text-disabled)" }}>Jour le + actif</p>
                           <p className="text-sm font-bold" style={{ color: "var(--color-gold)" }}>{peakDow?.label ?? "—"}</p>
                           <p className="text-[9px]" style={{ color: "var(--text-disabled)" }}>{fmtNum(peakDow?.count ?? 0)} messages</p>
@@ -1202,7 +1202,7 @@ export default function StatsPage() {
                             <span className="text-sm">{a.emoji}</span>
                             <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{a.name}</p>
                             <span className="text-[9px] px-1.5 py-0.5 rounded-full"
-                              style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)" }}>
+                              style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)" }}>
                               {getPlanLabel(a.plan)}
                             </span>
                           </div>
@@ -1343,7 +1343,7 @@ export default function StatsPage() {
             </div>
             <button onClick={() => router.push("/configure")}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold hover:brightness-110 transition-all"
-              style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
+              style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}>
               <Bot className="w-3.5 h-3.5" />
               Créer un agent
             </button>

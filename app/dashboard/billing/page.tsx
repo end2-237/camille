@@ -75,7 +75,7 @@ function CapabilityCostBreakdown({ agent, capabilities }: { agent: Agent; capabi
         </div>
         {totalPerMsg > 0 && (
           <span className="text-2xs font-bold px-2.5 py-1 rounded-full tabular-nums"
-            style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
+            style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}>
             ~{totalPerMsg.toLocaleString("fr-FR")} tokens / msg
           </span>
         )}
@@ -139,7 +139,7 @@ function CapabilityCostBreakdown({ agent, capabilities }: { agent: Agent; capabi
       </div>
 
       <div className="flex items-center justify-between rounded-lg px-3 py-3"
-        style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)" }}>
+        style={{ background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.15)" }}>
         <div>
           <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>Coût total estimé par message</p>
           <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>
@@ -277,7 +277,7 @@ function UpgradeModal({
         </div>
 
         {/* Amount */}
-        <div className="rounded-xl p-4 text-center" style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)" }}>
+        <div className="rounded-xl p-4 text-center" style={{ background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.15)" }}>
           <p className="text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
             {formatXAF(price)}
           </p>
@@ -332,9 +332,9 @@ function UpgradeModal({
           onClick={handlePay} disabled={loading}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-200"
           style={{
-            background: loading ? "var(--bg-muted)" : "rgba(212,175,55,0.15)",
+            background: loading ? "var(--bg-muted)" : "rgba(124,90,248,0.15)",
             color:      loading ? "var(--text-disabled)" : "var(--color-gold)",
-            border: "1px solid rgba(212,175,55,0.3)",
+            border: "1px solid rgba(124,90,248,0.3)",
           }}
         >
           {loading ? (
@@ -368,8 +368,8 @@ function PlanCard({
     <div
       className="rounded-xl p-5 space-y-4 flex flex-col relative"
       style={{
-        background: plan.highlight ? "rgba(212,175,55,0.05)" : "var(--bg-elevated)",
-        border: `1px solid ${isCurrent ? "var(--color-gold)" : plan.highlight ? "rgba(212,175,55,0.2)" : "var(--border-subtle)"}`,
+        background: plan.highlight ? "rgba(124,90,248,0.05)" : "var(--bg-elevated)",
+        border: `1px solid ${isCurrent ? "var(--color-gold)" : plan.highlight ? "rgba(124,90,248,0.2)" : "var(--border-subtle)"}`,
       }}
     >
       {plan.badge && (
@@ -431,9 +431,9 @@ function PlanCard({
         <button onClick={() => onUpgrade(plan)}
           className="w-full py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:brightness-110"
           style={{
-            background: plan.highlight ? "rgba(212,175,55,0.15)" : "var(--bg-muted)",
+            background: plan.highlight ? "rgba(124,90,248,0.15)" : "var(--bg-muted)",
             color:      plan.highlight ? "var(--color-gold)" : "var(--text-secondary)",
-            border: `1px solid ${plan.highlight ? "rgba(212,175,55,0.3)" : "var(--border-subtle)"}`,
+            border: `1px solid ${plan.highlight ? "rgba(124,90,248,0.3)" : "var(--border-subtle)"}`,
           }}>
           {plan.cta_label}
           <ChevronRight className="w-3 h-3 inline ml-1" />
@@ -655,7 +655,7 @@ function BillingContent() {
                     <button
                       onClick={() => { setSelectedAgent(a.id); setModal({ agent: a, planRow: proPlan }); }}
                       className="text-2xs font-semibold px-2.5 py-1 rounded-lg"
-                      style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}
+                      style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}
                     >
                       Upgrader
                     </button>
@@ -677,8 +677,8 @@ function BillingContent() {
                   onClick={() => setSelectedAgent(a.id)}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all duration-150"
                   style={{
-                    background: (selectedAgent ?? agents[0]?.id) === a.id ? "rgba(212,175,55,0.1)" : "var(--bg-muted)",
-                    border: `1px solid ${(selectedAgent ?? agents[0]?.id) === a.id ? "rgba(212,175,55,0.3)" : "var(--border-subtle)"}`,
+                    background: (selectedAgent ?? agents[0]?.id) === a.id ? "rgba(124,90,248,0.1)" : "var(--bg-muted)",
+                    border: `1px solid ${(selectedAgent ?? agents[0]?.id) === a.id ? "rgba(124,90,248,0.3)" : "var(--border-subtle)"}`,
                     color: (selectedAgent ?? agents[0]?.id) === a.id ? "var(--color-gold)" : "var(--text-tertiary)",
                   }}
                 >
@@ -704,7 +704,7 @@ function BillingContent() {
                 </p>
               </div>
               <span className="text-2xs font-bold px-2.5 py-1 rounded-full"
-                style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
+                style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}>
                 {usage.plan.label}
               </span>
             </div>

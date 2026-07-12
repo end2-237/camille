@@ -54,9 +54,9 @@ export default function ContactPage() {
     <main className="relative min-h-dvh overflow-hidden">
       {/* Background */}
       <div aria-hidden className="pointer-events-none fixed inset-0"
-        style={{ background: "radial-gradient(ellipse 80% 50% at 50% -5%, rgba(212,175,55,0.1) 0%, transparent 60%)" }} />
+        style={{ background: "radial-gradient(ellipse 80% 50% at 50% -5%, rgba(124,90,248,0.1) 0%, transparent 60%)" }} />
       <div aria-hidden className="pointer-events-none fixed inset-0 opacity-[0.018]"
-        style={{ backgroundImage: "linear-gradient(rgba(212,175,55,1) 1px,transparent 1px),linear-gradient(90deg,rgba(212,175,55,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }} />
+        style={{ backgroundImage: "linear-gradient(rgba(124,90,248,1) 1px,transparent 1px),linear-gradient(90deg,rgba(124,90,248,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }} />
 
       {/* Hero */}
       <section className="pt-28 pb-16 px-6 text-center">
@@ -96,7 +96,7 @@ export default function ContactPage() {
                 className="flex flex-col items-center justify-center gap-5 py-20 text-center"
               >
                 <div className="w-14 h-14 rounded-full flex items-center justify-center"
-                  style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.3)" }}>
+                  style={{ background: "rgba(124,90,248,0.1)", border: "1px solid rgba(124,90,248,0.3)" }}>
                   <Check className="w-6 h-6" style={{ color: "var(--color-gold)" }} />
                 </div>
                 <div>
@@ -118,8 +118,8 @@ export default function ContactPage() {
                       <button key={t} type="button" onClick={() => setTopic(t)}
                         className="px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200"
                         style={{
-                          background: topic === t ? "rgba(212,175,55,0.1)" : "var(--bg-muted)",
-                          border: topic === t ? "1px solid rgba(212,175,55,0.35)" : "1px solid var(--border-subtle)",
+                          background: topic === t ? "rgba(124,90,248,0.1)" : "var(--bg-muted)",
+                          border: topic === t ? "1px solid rgba(124,90,248,0.35)" : "1px solid var(--border-subtle)",
                           color: topic === t ? "var(--color-gold)" : "var(--text-tertiary)",
                         }}>
                         {t}
@@ -156,7 +156,7 @@ export default function ContactPage() {
                 <button type="submit" disabled={loading}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold
                              transition-all duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
-                  style={{ background: "linear-gradient(135deg,#D4AF37,#EDD96A 50%,#A8881A)", color: "#000", boxShadow: "0 4px 20px rgba(212,175,55,0.2)" }}>
+                  style={{ background: "linear-gradient(135deg,#7C5AF8,#A78BFA 50%,#6442E8)", color: "#000", boxShadow: "0 4px 20px rgba(124,90,248,0.2)" }}>
                   {loading ? (
                     <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 1, repeat: Infinity }}>
                       Envoi en cours…
@@ -187,7 +187,7 @@ export default function ContactPage() {
                       background: i % 2 === 0 ? "var(--bg-elevated)" : "var(--bg-muted)",
                     }}>
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                      style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.15)" }}>
+                      style={{ background: "rgba(124,90,248,0.08)", border: "1px solid rgba(124,90,248,0.15)" }}>
                       <Icon className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} />
                     </div>
                     <div>
@@ -204,7 +204,7 @@ export default function ContactPage() {
               })}
             </div>
 
-            <div className="rounded-xl px-4 py-3.5" style={{ background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.14)" }}>
+            <div className="rounded-xl px-4 py-3.5" style={{ background: "rgba(124,90,248,0.04)", border: "1px solid rgba(124,90,248,0.14)" }}>
               <p className="text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
                 Pour les demandes urgentes ou les démos personnalisées, mentionnez-le dans votre message — nous priorisons ces demandes.
               </p>

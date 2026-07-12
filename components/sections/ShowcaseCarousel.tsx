@@ -13,7 +13,7 @@ const SLIDES = [
     title: "En ligne en 4 minutes",
     body: "Pas de code. Pas d'infra. Votre agent IA est actif sur WhatsApp, votre site et vos canaux préférés en quelques clics.",
     icon: Zap,
-    accent: "#D4AF37",
+    accent: "#7C5AF8",
     stat: "< 4 min",
     statLabel: "temps de déploiement",
   },
@@ -100,7 +100,7 @@ export function ShowcaseCarousel() {
     <section className="relative py-24 overflow-hidden" style={{ borderTop: "1px solid var(--border-subtle)" }}>
       {/* Ambient */}
       <div aria-hidden className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 60% 40% at 50% 100%, rgba(212,175,55,0.04) 0%, transparent 70%)" }} />
+        style={{ background: "radial-gradient(ellipse 60% 40% at 50% 100%, rgba(124,90,248,0.04) 0%, transparent 70%)" }} />
 
       {/* Header */}
       <div className="max-w-7xl mx-auto px-6 mb-14">

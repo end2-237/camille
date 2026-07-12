@@ -115,8 +115,8 @@ function StepAgent({ register, errors, watch, setValue }: { register: any; error
                 onClick={() => setValue("brand_voice", t.value, { shouldValidate: true })}
                 className="flex flex-col items-start gap-0.5 px-4 py-3 rounded-xl text-left transition-all duration-200"
                 style={{
-                  background: active ? "rgba(212,175,55,0.08)" : "var(--bg-muted)",
-                  border:     active ? "1px solid rgba(212,175,55,0.35)" : "1px solid var(--border-subtle)",
+                  background: active ? "rgba(124,90,248,0.08)" : "var(--bg-muted)",
+                  border:     active ? "1px solid rgba(124,90,248,0.35)" : "1px solid var(--border-subtle)",
                   color:      active ? "var(--text-primary)" : "var(--text-secondary)",
                 }}>
                 <span className="text-xs font-semibold">{t.label}</span>
@@ -160,7 +160,7 @@ function StepLancer({ watch }: { watch: any }) {
         })}
       </div>
       <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl"
-        style={{ background: "rgba(212,175,55,0.05)", border: "1px solid rgba(212,175,55,0.15)" }}>
+        style={{ background: "rgba(124,90,248,0.05)", border: "1px solid rgba(124,90,248,0.15)" }}>
         <Zap className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
         <p className="text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
           Le system prompt sera généré automatiquement. Vous pourrez l'affiner dans le dashboard.
@@ -258,9 +258,9 @@ export default function ConfigurePage() {
   return (
     <main className="relative min-h-dvh flex flex-col items-center justify-center py-24 overflow-hidden">
       <div aria-hidden className="pointer-events-none fixed inset-0"
-        style={{ background: "radial-gradient(ellipse 80% 50% at 50% -5%, rgba(212,175,55,0.11) 0%, transparent 60%)" }} />
+        style={{ background: "radial-gradient(ellipse 80% 50% at 50% -5%, rgba(124,90,248,0.11) 0%, transparent 60%)" }} />
       <div aria-hidden className="pointer-events-none fixed inset-0 opacity-[0.018]"
-        style={{ backgroundImage: "linear-gradient(rgba(212,175,55,1) 1px,transparent 1px),linear-gradient(90deg,rgba(212,175,55,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }} />
+        style={{ backgroundImage: "linear-gradient(rgba(124,90,248,1) 1px,transparent 1px),linear-gradient(90deg,rgba(124,90,248,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }} />
 
       <div className="relative z-10 w-full max-w-lg mx-auto px-4 sm:px-6">
         <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
@@ -282,7 +282,7 @@ export default function ConfigurePage() {
               {[0, 1].map((i) => (
                 <div key={i} className="flex-1 flex" style={{ justifyContent: i === 0 ? "flex-end" : "flex-start", paddingLeft: i === 1 ? 8 : 0, paddingRight: i === 0 ? 8 : 0 }}>
                   <div className="h-px w-full transition-colors duration-500"
-                    style={{ background: step > i + 1 ? "rgba(212,175,55,0.45)" : "var(--border-subtle)", marginLeft: i === 0 ? "50%" : 0, marginRight: i === 1 ? "50%" : 0 }} />
+                    style={{ background: step > i + 1 ? "rgba(124,90,248,0.45)" : "var(--border-subtle)", marginLeft: i === 0 ? "50%" : 0, marginRight: i === 1 ? "50%" : 0 }} />
                 </div>
               ))}
             </div>
@@ -291,7 +291,7 @@ export default function ConfigurePage() {
               return (
                 <div key={s.id} className="relative flex flex-col items-center gap-2 flex-1">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 z-10"
-                    style={{ background: done ? "rgba(212,175,55,0.22)" : active ? "rgba(212,175,55,0.12)" : "var(--bg-muted)", border: done || active ? "1px solid rgba(212,175,55,0.4)" : "1px solid var(--border-subtle)", boxShadow: active ? "0 0 12px rgba(212,175,55,0.25)" : "none" }}>
+                    style={{ background: done ? "rgba(124,90,248,0.22)" : active ? "rgba(124,90,248,0.12)" : "var(--bg-muted)", border: done || active ? "1px solid rgba(124,90,248,0.4)" : "1px solid var(--border-subtle)", boxShadow: active ? "0 0 12px rgba(124,90,248,0.25)" : "none" }}>
                     {done ? <Check className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} /> : <Icon className="w-3.5 h-3.5" style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />}
                   </div>
                   <span className="text-[9px] font-bold uppercase tracking-wider text-center"
@@ -306,10 +306,10 @@ export default function ConfigurePage() {
           {/* Card */}
           <div className="relative rounded-3xl overflow-hidden"
             style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset" }}>
-            <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(212,175,55,0.5), transparent)" }} />
+            <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(124,90,248,0.5), transparent)" }} />
             <div className="h-0.5 w-full" style={{ background: "var(--border-subtle)" }}>
               <motion.div animate={{ width: `${progress}%` }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="h-full" style={{ background: "linear-gradient(90deg, #D4AF37, #EDD96A)" }} />
+                className="h-full" style={{ background: "linear-gradient(90deg, #7C5AF8, #A78BFA)" }} />
             </div>
 
             <form onSubmit={onSubmit} noValidate>
@@ -339,13 +339,13 @@ export default function ConfigurePage() {
                 {step < 3 ? (
                   <button type="button" onClick={goNext}
                     className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 hover:brightness-110 active:scale-[0.97]"
-                    style={{ background: "linear-gradient(135deg,#D4AF37,#EDD96A 50%,#A8881A)", color: "#000" }}>
+                    style={{ background: "linear-gradient(135deg,#7C5AF8,#A78BFA 50%,#6442E8)", color: "#000" }}>
                     Continuer <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 ) : (
                   <button type="submit" disabled={loading}
                     className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
-                    style={{ background: "linear-gradient(135deg,#D4AF37,#EDD96A 50%,#A8881A)", color: "#000" }}>
+                    style={{ background: "linear-gradient(135deg,#7C5AF8,#A78BFA 50%,#6442E8)", color: "#000" }}>
                     {loading ? (
                       <span className="flex items-center gap-1.5">
                         <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="inline-block">

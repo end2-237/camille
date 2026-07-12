@@ -49,20 +49,20 @@ export function CookieBanner() {
             style={{
               background: "var(--bg-elevated)",
               border: "1px solid var(--border-default)",
-              boxShadow: "0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(212,175,55,0.08)",
+              boxShadow: "0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(124,90,248,0.08)",
               backdropFilter: "blur(16px)",
             }}
           >
             {/* Gold hairline top */}
             <div className="h-px w-full"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(212,175,55,0.55), transparent)" }} />
+              style={{ background: "linear-gradient(90deg, transparent, rgba(124,90,248,0.55), transparent)" }} />
 
             <div className="px-5 py-5">
               {/* Header row */}
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.2)" }}>
+                    style={{ background: "rgba(124,90,248,0.1)", border: "1px solid rgba(124,90,248,0.2)" }}>
                     <Cookie className="w-4 h-4" style={{ color: "var(--color-gold)" }} />
                   </div>
                   <div>
@@ -114,7 +114,7 @@ export function CookieBanner() {
                           </p>
                         </div>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                          style={{ background: "rgba(212,175,55,0.1)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
+                          style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}>
                           Toujours actif
                         </span>
                       </div>
@@ -156,9 +156,9 @@ export function CookieBanner() {
                   onClick={acceptAll}
                   className="flex-1 min-w-[120px] py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 hover:brightness-110 active:scale-[0.97]"
                   style={{
-                    background: "linear-gradient(135deg,#D4AF37,#EDD96A 50%,#A8881A)",
+                    background: "linear-gradient(135deg,#7C5AF8,#A78BFA 50%,#6442E8)",
                     color: "#000",
-                    boxShadow: "0 2px 16px rgba(212,175,55,0.2)",
+                    boxShadow: "0 2px 16px rgba(124,90,248,0.2)",
                   }}
                 >
                   Tout accepter

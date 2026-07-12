@@ -114,7 +114,7 @@ export default function TermsPage() {
             <div className="space-y-4 pb-10"
               style={{ borderBottom: "1px solid var(--border-subtle)" }}>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium"
-                style={{ background: "rgba(212,175,55,0.08)", color: "var(--color-gold)", border: "1px solid rgba(212,175,55,0.2)" }}>
+                style={{ background: "rgba(124,90,248,0.08)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}>
                 Document légal
               </div>
               <h1 className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>

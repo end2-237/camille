@@ -20,22 +20,22 @@ const config: Config = {
           500: "#1D1D25",
         },
         gold: {
-          DEFAULT: "#D4AF37",
-          50:  "#FDF8E7",
-          100: "#F7EDB8",
-          200: "#EDD96A",
-          300: "#D4AF37",
-          400: "#C4961E",
-          500: "#A8881A",
-          600: "#9A7B18",
-          700: "#7A6012",
-          800: "#5A460D",
-          900: "#3A2D08",
+          DEFAULT: "#7C5AF8",
+          50:  "#F1EDFF",
+          100: "#DDD3FF",
+          200: "#A78BFA",
+          300: "#7C5AF8",
+          400: "#7C5AF8",
+          500: "#6442E8",
+          600: "#6D4AEF",
+          700: "#4E36B0",
+          800: "#3A2B7A",
+          900: "#241A4D",
         },
         surface: {
           DEFAULT: "rgba(255,255,255,0.035)",
           hover:   "rgba(255,255,255,0.065)",
-          active:  "rgba(212,175,55,0.08)",
+          active:  "rgba(124,90,248,0.08)",
         },
       },
 
@@ -78,8 +78,8 @@ const config: Config = {
 
       // ── Shadows ───────────────────────────────────────────────────
       boxShadow: {
-        gold:     "0 0 0 1px rgba(212,175,55,0.22), 0 4px 20px rgba(212,175,55,0.08)",
-        "gold-lg":"0 0 0 1px rgba(212,175,55,0.32), 0 8px 32px rgba(212,175,55,0.14)",
+        gold:     "0 0 0 1px rgba(124,90,248,0.22), 0 4px 20px rgba(124,90,248,0.08)",
+        "gold-lg":"0 0 0 1px rgba(124,90,248,0.32), 0 8px 32px rgba(124,90,248,0.14)",
         glass:    "0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(0,0,0,0.50)",
         "glass-sm":"0 1px 0 rgba(255,255,255,0.04) inset, 0 4px 16px rgba(0,0,0,0.40)",
       },
@@ -92,11 +92,11 @@ const config: Config = {
 
       // ── Gradients ─────────────────────────────────────────────────
       backgroundImage: {
-        "gold-gradient":   "linear-gradient(135deg, #D4AF37 0%, #EDD96A 48%, #A8881A 100%)",
-        "gold-shimmer":    "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.14) 50%, transparent 100%)",
+        "gold-gradient":   "linear-gradient(135deg, #7C5AF8 0%, #A78BFA 48%, #6442E8 100%)",
+        "gold-shimmer":    "linear-gradient(90deg, transparent 0%, rgba(124,90,248,0.14) 50%, transparent 100%)",
         "surface-gradient":"linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)",
-        "radial-gold":     "radial-gradient(ellipse 70% 45% at 50% 0%, rgba(212,175,55,0.12) 0%, transparent 70%)",
-        "radial-midnight": "radial-gradient(ellipse 100% 60% at 50% 100%, rgba(212,175,55,0.05) 0%, transparent 80%)",
+        "radial-gold":     "radial-gradient(ellipse 70% 45% at 50% 0%, rgba(124,90,248,0.12) 0%, transparent 70%)",
+        "radial-midnight": "radial-gradient(ellipse 100% 60% at 50% 100%, rgba(124,90,248,0.05) 0%, transparent 80%)",
         "noise":           "url('/noise.svg')",
       },
 
@@ -119,8 +119,8 @@ const config: Config = {
           "50%":      { opacity: "0.4" },
         },
         glow: {
-          "0%, 100%": { boxShadow: "0 0 8px rgba(212,175,55,0.3)" },
-          "50%":      { boxShadow: "0 0 24px rgba(212,175,55,0.6)" },
+          "0%, 100%": { boxShadow: "0 0 8px rgba(124,90,248,0.3)" },
+          "50%":      { boxShadow: "0 0 24px rgba(124,90,248,0.6)" },
         },
       },
       animation: {

@@ -103,14 +103,14 @@ function SpotlightCard({
         aria-hidden
         className="pointer-events-none absolute inset-0 transition-opacity duration-300"
         style={{
-          background: "radial-gradient(circle 220px at var(--mx) var(--my), rgba(212,175,55,0.07) 0%, transparent 70%)",
+          background: "radial-gradient(circle 220px at var(--mx) var(--my), rgba(124,90,248,0.07) 0%, transparent 70%)",
           opacity: "var(--spotlight-opacity)",
         }}
       />
 
       {/* Icon */}
       <div className="w-8 h-8 rounded-md flex items-center justify-center mb-5 transition-transform duration-300 group-hover:-translate-y-0.5"
-        style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.15)" }}>
+        style={{ background: "rgba(124,90,248,0.08)", border: "1px solid rgba(124,90,248,0.15)" }}>
         <Icon className="w-4 h-4" style={{ color: "var(--color-gold)" }} />
       </div>
 
@@ -126,7 +126,7 @@ function SpotlightCard({
       {/* Hover border highlight — bottom edge */}
       <div aria-hidden
         className="absolute bottom-0 left-0 h-px w-0 group-hover:w-full transition-all duration-500"
-        style={{ background: "linear-gradient(90deg, transparent, rgba(212,175,55,0.3), transparent)" }}
+        style={{ background: "linear-gradient(90deg, transparent, rgba(124,90,248,0.3), transparent)" }}
       />
     </motion.div>
   );

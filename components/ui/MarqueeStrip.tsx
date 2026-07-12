@@ -42,7 +42,7 @@ export function MarqueeStrip() {
             </span>
             <span
               className="w-1 h-1 rounded-full flex-shrink-0"
-              style={{ background: "rgba(212,175,55,0.25)" }}
+              style={{ background: "rgba(124,90,248,0.25)" }}
             />
           </span>
         ))}

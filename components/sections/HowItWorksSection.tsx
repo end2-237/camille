@@ -61,7 +61,7 @@ function StepCard({
       <span
         aria-hidden
         className="absolute top-4 right-5 font-mono font-bold select-none pointer-events-none"
-        style={{ fontSize: "3.5rem", lineHeight: 1, color: "rgba(212,175,55,0.07)", letterSpacing: "-0.04em" }}
+        style={{ fontSize: "3.5rem", lineHeight: 1, color: "rgba(124,90,248,0.07)", letterSpacing: "-0.04em" }}
       >
         {step.n}
       </span>
@@ -69,7 +69,7 @@ function StepCard({
       {/* Icon */}
       <div
         className="w-9 h-9 rounded-lg flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-0.5"
-        style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.15)" }}
+        style={{ background: "rgba(124,90,248,0.08)", border: "1px solid rgba(124,90,248,0.15)" }}
       >
         <Icon className="w-4 h-4" style={{ color: "var(--color-gold)" }} />
       </div>
@@ -142,7 +142,7 @@ export function HowItWorksSection() {
             style={{
               scaleX: lineScaleX,
               transformOrigin: "left",
-              background: "linear-gradient(90deg, rgba(212,175,55,0.65), rgba(212,175,55,0.15))",
+              background: "linear-gradient(90deg, rgba(124,90,248,0.65), rgba(124,90,248,0.15))",
             }}
           />
         </div>
@@ -160,7 +160,7 @@ export function HowItWorksSection() {
             >
               <div
                 className="w-2.5 h-2.5 rounded-full"
-                style={{ background: "var(--color-gold)", boxShadow: "0 0 10px rgba(212,175,55,0.45)" }}
+                style={{ background: "var(--color-gold)", boxShadow: "0 0 10px rgba(124,90,248,0.45)" }}
               />
             </motion.div>
           ))}

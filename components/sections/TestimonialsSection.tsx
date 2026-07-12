@@ -15,7 +15,7 @@ const TESTIMONIALS = [
     quote: "Camille a transformé notre service client. Avant, 3 agents traitaient 200 tickets par jour. Aujourd'hui, Camille en gère 1 400 seule — et nos clients ne voient aucune différence.",
     metric: "×7",
     metricLabel: "volume traité",
-    hue: "#D4AF37",
+    hue: "#7C5AF8",
   },
   {
     id: "kofi",

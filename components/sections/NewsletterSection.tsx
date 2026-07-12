@@ -36,12 +36,12 @@ export function NewsletterSection() {
     >
       {/* Background ambient */}
       <div aria-hidden className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 70% 55% at 50% 100%, rgba(212,175,55,0.06) 0%, transparent 65%)" }} />
+        style={{ background: "radial-gradient(ellipse 70% 55% at 50% 100%, rgba(124,90,248,0.06) 0%, transparent 65%)" }} />
 
       {/* Decorative grid */}
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.015]"
         style={{
-          backgroundImage: "linear-gradient(rgba(212,175,55,1) 1px,transparent 1px),linear-gradient(90deg,rgba(212,175,55,1) 1px,transparent 1px)",
+          backgroundImage: "linear-gradient(rgba(124,90,248,1) 1px,transparent 1px),linear-gradient(90deg,rgba(124,90,248,1) 1px,transparent 1px)",
           backgroundSize: "60px 60px",
         }}
       />
@@ -150,13 +150,13 @@ export function NewsletterSection() {
           >
             {/* Gold hairline */}
             <div className="h-px"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent)" }} />
+              style={{ background: "linear-gradient(90deg, transparent, rgba(124,90,248,0.6), transparent)" }} />
 
             <div className="p-7 space-y-6">
               {/* Card header */}
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                  style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.2)" }}>
+                  style={{ background: "rgba(124,90,248,0.1)", border: "1px solid rgba(124,90,248,0.2)" }}>
                   <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} />
                 </div>
                 <div>
@@ -175,7 +175,7 @@ export function NewsletterSection() {
                     className="flex flex-col items-center gap-4 py-6 text-center"
                   >
                     <div className="w-12 h-12 rounded-full flex items-center justify-center"
-                      style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.25)" }}>
+                      style={{ background: "rgba(124,90,248,0.1)", border: "1px solid rgba(124,90,248,0.25)" }}>
                       <CheckCircle2 className="w-5 h-5" style={{ color: "var(--color-gold)" }} />
                     </div>
                     <div>
@@ -233,9 +233,9 @@ export function NewsletterSection() {
                       className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold
                                  transition-all duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
                       style={{
-                        background: "linear-gradient(135deg,#D4AF37,#EDD96A 50%,#A8881A)",
+                        background: "linear-gradient(135deg,#7C5AF8,#A78BFA 50%,#6442E8)",
                         color: "#000",
-                        boxShadow: "0 4px 20px rgba(212,175,55,0.2)",
+                        boxShadow: "0 4px 20px rgba(124,90,248,0.2)",
                       }}
                     >
                       {state === "loading" ? (

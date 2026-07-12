@@ -129,9 +129,9 @@ function MagneticButton({ children, onClick }: { children: React.ReactNode; onCl
       ref={ref}
       style={{
         x, y,
-        background: "linear-gradient(135deg,#D4AF37 0%,#EDD96A 50%,#A8881A 100%)",
+        background: "linear-gradient(135deg,#7C5AF8 0%,#A78BFA 50%,#6442E8 100%)",
         color: "#000",
-        boxShadow: "0 4px 24px rgba(212,175,55,0.28), 0 1px 0 rgba(255,255,255,0.15) inset",
+        boxShadow: "0 4px 24px rgba(124,90,248,0.28), 0 1px 0 rgba(255,255,255,0.15) inset",
       }}
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
@@ -167,7 +167,7 @@ function ChatMockup() {
         style={{
           transformStyle: "preserve-3d",
           perspective: 1400,
-          filter: "drop-shadow(0 48px 70px rgba(0,0,0,0.75)) drop-shadow(0 0 60px rgba(212,175,55,0.08))",
+          filter: "drop-shadow(0 48px 70px rgba(0,0,0,0.75)) drop-shadow(0 0 60px rgba(124,90,248,0.08))",
         }}
       >
         {/* Continuous float */}
@@ -205,7 +205,7 @@ function ChatMockup() {
             >
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.2)" }}
+                style={{ background: "rgba(124,90,248,0.12)", border: "1px solid rgba(124,90,248,0.2)" }}
               >
                 <Bot className="w-4 h-4" style={{ color: "var(--color-gold)" }} />
               </div>
@@ -234,7 +234,7 @@ function ChatMockup() {
                     style={
                       msg.from === "agent"
                         ? { background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)", borderBottomLeftRadius: 4 }
-                        : { background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.2)", color: "var(--text-primary)", borderBottomRightRadius: 4 }
+                        : { background: "rgba(124,90,248,0.12)", border: "1px solid rgba(124,90,248,0.2)", color: "var(--text-primary)", borderBottomRightRadius: 4 }
                     }
                   >
                     {msg.text}
@@ -256,7 +256,7 @@ function ChatMockup() {
               </div>
               <div
                 className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{ background: "rgba(212,175,55,0.15)" }}
+                style={{ background: "rgba(124,90,248,0.15)" }}
               >
                 <ArrowRight className="w-3 h-3" style={{ color: "var(--color-gold)" }} />
               </div>
@@ -273,7 +273,7 @@ function ChatMockup() {
         className="absolute bottom-2 right-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold"
         style={{
           background: "var(--bg-elevated)",
-          border: "1px solid rgba(212,175,55,0.3)",
+          border: "1px solid rgba(124,90,248,0.3)",
           color: "var(--color-gold)",
           boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
         }}
@@ -338,14 +338,14 @@ export function HeroSection() {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 90% 55% at 28% -8%, rgba(212,175,55,0.12) 0%, transparent 65%)" }}
+        style={{ background: "radial-gradient(ellipse 90% 55% at 28% -8%, rgba(124,90,248,0.12) 0%, transparent 65%)" }}
       />
 
       {/* Subtle grid */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.018]"
-        style={{ backgroundImage: "linear-gradient(rgba(212,175,55,1) 1px,transparent 1px),linear-gradient(90deg,rgba(212,175,55,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }}
+        style={{ backgroundImage: "linear-gradient(rgba(124,90,248,1) 1px,transparent 1px),linear-gradient(90deg,rgba(124,90,248,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }}
       />
 
       <div className="relative max-w-6xl mx-auto w-full">
@@ -361,7 +361,7 @@ export function HeroSection() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium"
-                style={{ background: "rgba(212,175,55,0.07)", color: "rgba(212,175,55,0.8)", border: "1px solid rgba(212,175,55,0.15)" }}
+                style={{ background: "rgba(124,90,248,0.07)", color: "rgba(124,90,248,0.8)", border: "1px solid rgba(124,90,248,0.15)" }}
               >
                 <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-gold)" }} />
                 No-Code AI Agents · par Buyticle

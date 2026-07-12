@@ -145,7 +145,7 @@ export default function PoliciesPage() {
     <main className="relative min-h-dvh overflow-hidden">
       {/* Ambient */}
       <div aria-hidden className="pointer-events-none fixed inset-0"
-        style={{ background: "radial-gradient(ellipse 70% 40% at 50% -5%, rgba(212,175,55,0.07) 0%, transparent 60%)" }} />
+        style={{ background: "radial-gradient(ellipse 70% 40% at 50% -5%, rgba(124,90,248,0.07) 0%, transparent 60%)" }} />
 
       {/* Hero */}
       <section className="pt-28 pb-16 px-6 text-center">
@@ -192,7 +192,7 @@ export default function PoliciesPage() {
                 className="flex items-center gap-3 mb-6"
               >
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.15)" }}>
+                  style={{ background: "rgba(124,90,248,0.08)", border: "1px solid rgba(124,90,248,0.15)" }}>
                   <Icon className="w-4 h-4" style={{ color: "var(--color-gold)" }} />
                 </div>
                 <h2 className="font-good-timing text-xl font-bold" style={{ color: "var(--text-primary)" }}>
@@ -214,7 +214,7 @@ export default function PoliciesPage() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           className="rounded-2xl px-6 py-5"
-          style={{ background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.15)" }}
+          style={{ background: "rgba(124,90,248,0.04)", border: "1px solid rgba(124,90,248,0.15)" }}
         >
           <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Des questions ?</p>
           <p className="text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
