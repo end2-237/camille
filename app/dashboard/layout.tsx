@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2,
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu,
 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -18,7 +18,10 @@ const SIDEBAR_W   = 224;
 const SIDEBAR_COL = 56;
 const TOPBAR_H    = 52;
 
-function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile }: {
+  collapsedProp: boolean; onToggle: () => void;
+  isDesktop: boolean; mobileOpen: boolean; onCloseMobile: () => void;
+}) {
   const pathname             = usePathname();
   const router               = useRouter();
   const { user, logout }     = useAuth();
@@ -26,17 +29,33 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // Sur mobile, le drawer est toujours déployé (labels visibles) ; la réduction
+  // ne concerne que le desktop.
+  const collapsed = isDesktop ? collapsedProp : false;
+
+  // Ferme le drawer dès qu'on navigue (mobile)
+  useEffect(() => { if (!isDesktop) onCloseMobile(); /* eslint-disable-next-line */ }, [pathname]);
+
   const displayName = user?.full_name ?? user?.email ?? "Utilisateur";
 
   const statusColor = (s: string) =>
-    s === "active" ? "#34D399" : s === "paused" ? "#FBBF24" : "rgba(255,255,255,0.12)";
+    s === "active" ? "#34D399" : s === "paused" ? "#FBBF24" : "var(--border-strong)";
+
+  const width = collapsed ? SIDEBAR_COL : SIDEBAR_W;
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? SIDEBAR_COL : SIDEBAR_W }}
+      animate={{ width }}
       transition={{ type: "spring", stiffness: 320, damping: 32 }}
-      className="fixed left-0 top-0 bottom-0 flex flex-col z-40 select-none overflow-hidden"
-      style={{ background: "var(--bg-elevated)", borderRight: "1px solid var(--border-subtle)" }}
+      className="fixed left-0 top-0 bottom-0 flex flex-col select-none overflow-hidden"
+      style={{
+        background: "var(--bg-elevated)",
+        borderRight: "1px solid var(--border-subtle)",
+        zIndex: isDesktop ? 40 : 50,
+        transform: isDesktop ? "none" : `translateX(${mobileOpen ? "0" : "-102%"})`,
+        transition: "transform 0.28s cubic-bezier(0.22,1,0.36,1)",
+        boxShadow: !isDesktop && mobileOpen ? "0 24px 60px rgba(25,23,27,0.25)" : "none",
+      }}
     >
       {/* Logo */}
       <div className="flex items-center flex-shrink-0 px-3 gap-2"
@@ -55,16 +74,20 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             )}
           </AnimatePresence>
         </Link>
-        <button onClick={onToggle}
+        <button onClick={isDesktop ? onToggle : onCloseMobile}
           className="ml-auto w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 transition-all duration-150"
           style={{ color: "var(--text-disabled)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-glass)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-subtle)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-disabled)"; }}
-          title={collapsed ? "Agrandir la sidebar" : "Réduire la sidebar"}
+          title={!isDesktop ? "Fermer" : collapsed ? "Agrandir la sidebar" : "Réduire la sidebar"}
         >
-          <motion.div animate={{ rotate: collapsed ? 180 : 0 }} transition={{ duration: 0.25 }}>
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </motion.div>
+          {!isDesktop ? (
+            <ChevronLeft className="w-4 h-4" style={{ transform: "rotate(0deg)" }} />
+          ) : (
+            <motion.div animate={{ rotate: collapsed ? 180 : 0 }} transition={{ duration: 0.25 }}>
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </motion.div>
+          )}
         </button>
       </div>
 
@@ -133,7 +156,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
                   title={collapsed ? agent.identity.name : undefined}
                   className={cn(
                     "flex items-center gap-2 rounded-lg text-xs transition-all duration-150 mb-0.5",
-                    isActive ? "bg-[var(--surface-glass)]" : "hover:bg-[rgba(255,255,255,0.03)]"
+                    isActive ? "bg-[var(--surface-gold)]" : "hover:bg-[var(--bg-subtle)]"
                   )}
                   style={{
                     border: isActive ? "1px solid var(--border-subtle)" : "1px solid transparent",
@@ -197,7 +220,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           </AnimatePresence>
           {!collapsed && (
             <button onClick={logout} title="Se déconnecter"
-              className="p-1.5 rounded-lg transition-colors duration-150 hover:bg-[var(--surface-glass)] flex-shrink-0"
+              className="p-1.5 rounded-lg transition-colors duration-150 hover:bg-[var(--surface-gold)] flex-shrink-0"
               style={{ color: "var(--text-disabled)" }}>
               <LogOut className="w-3 h-3" />
             </button>
@@ -206,7 +229,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         {collapsed && (
           <div className="flex justify-center mt-1.5">
             <button onClick={logout} title="Se déconnecter"
-              className="p-1.5 rounded-lg transition-colors duration-150 hover:bg-[var(--surface-glass)]"
+              className="p-1.5 rounded-lg transition-colors duration-150 hover:bg-[var(--surface-gold)]"
               style={{ color: "var(--text-disabled)" }}>
               <LogOut className="w-3 h-3" />
             </button>
@@ -225,7 +248,7 @@ function NavItem({ href, label, icon, active, collapsed, badge }: {
     <Link href={href} title={collapsed ? label : undefined}
       className={cn(
         "flex items-center gap-2.5 rounded-lg text-xs transition-all duration-150",
-        active ? "bg-[var(--surface-glass)]" : "hover:bg-[rgba(255,255,255,0.03)]"
+        active ? "bg-[var(--surface-gold)]" : "hover:bg-[var(--bg-subtle)]"
       )}
       style={{
         border: active ? "1px solid var(--border-subtle)" : "1px solid transparent",
@@ -256,7 +279,7 @@ function NavItem({ href, label, icon, active, collapsed, badge }: {
   );
 }
 
-function Topbar({ sidebarW }: { sidebarW: number }) {
+function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop: boolean; onBurger: () => void }) {
   const pathname = usePathname();
   const router   = useRouter();
   const { agents } = useAgents();
@@ -307,7 +330,19 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
       className="fixed top-0 right-0 z-30 flex items-center gap-3 px-5"
       style={{ height: TOPBAR_H, background: "var(--bg-elevated)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(16px)" }}
     >
-      <div className="flex items-center gap-1.5 flex-shrink-0 mr-2">
+      {/* Burger — mobile uniquement */}
+      {!isDesktop && (
+        <button
+          onClick={onBurger}
+          aria-label="Ouvrir le menu"
+          className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0 transition-colors"
+          style={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)" }}
+        >
+          <Menu className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
+        </button>
+      )}
+
+      <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0 mr-2">
         <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-disabled)" }}>
           Dashboard
         </span>
@@ -351,12 +386,12 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
               initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.16 }}
               className="absolute top-full mt-2 w-full rounded-xl overflow-hidden"
-              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "0 16px 40px rgba(0,0,0,0.4)" }}
+              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "0 16px 40px rgba(25,23,27,0.12)" }}
             >
               {filtered.length > 0 ? filtered.map((a) => (
                 <button key={a.id}
                   onClick={() => { router.push(`/dashboard/${a.id}`); setSearchOpen(false); setQ(""); }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs transition-colors hover:bg-[var(--surface-glass)]"
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs transition-colors hover:bg-[var(--surface-gold)]"
                   style={{ color: "var(--text-secondary)" }}>
                   <Bot className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--text-disabled)" }} />
                   {a.identity.name}
@@ -383,7 +418,7 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
           <button onClick={() => setNotifOpen((v) => !v)} onBlur={() => setTimeout(() => setNotifOpen(false), 180)}
             className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150"
             style={{ color: "var(--text-disabled)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-glass)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-subtle)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-disabled)"; }}>
             <Bell className="w-4 h-4" />
             <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-gold)" }} />
@@ -394,7 +429,7 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
                 initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.18 }}
                 className="absolute right-0 top-full mt-2 w-72 rounded-xl overflow-hidden"
-                style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "0 16px 40px rgba(0,0,0,0.45)" }}
+                style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "0 16px 40px rgba(25,23,27,0.14)" }}
               >
                 <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
                   <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>Notifications</span>
@@ -404,7 +439,7 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
                   </span>
                 </div>
                 {NOTIFS.map((n, i) => (
-                  <div key={n.id} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-glass)]"
+                  <div key={n.id} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-gold)]"
                     style={{ borderBottom: i < NOTIFS.length - 1 ? "1px solid var(--border-subtle)" : undefined }}>
                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ background: n.dot }} />
                     <div className="min-w-0">
@@ -425,7 +460,7 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
         <button title="Aide"
           className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150"
           style={{ color: "var(--text-disabled)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-glass)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-subtle)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-disabled)"; }}
           onClick={() => window.open("/contact", "_blank")}>
           <HelpCircle className="w-4 h-4" />
@@ -433,7 +468,7 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
         <Link href="/" title="Retour au site"
           className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150"
           style={{ color: "var(--text-disabled)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-glass)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-subtle)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-disabled)"; }}>
           <ExternalLink className="w-3.5 h-3.5" />
         </Link>
@@ -443,15 +478,48 @@ function Topbar({ sidebarW }: { sidebarW: number }) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const sidebarW = collapsed ? SIDEBAR_COL : SIDEBAR_W;
+  const [collapsed, setCollapsed]   = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDesktop, setIsDesktop]   = useState(true);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => { setIsDesktop(mq.matches); if (mq.matches) setMobileOpen(false); };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // Largeur réservée au contenu : sidebar sur desktop, 0 sur mobile (drawer overlay)
+  const contentW = isDesktop ? (collapsed ? SIDEBAR_COL : SIDEBAR_W) : 0;
 
   return (
     <div className="flex min-h-dvh" style={{ background: "var(--bg-base)" }}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
-      <Topbar sidebarW={sidebarW} />
+      <Sidebar
+        collapsedProp={collapsed}
+        onToggle={() => setCollapsed((c) => !c)}
+        isDesktop={isDesktop}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+      />
+
+      {/* Backdrop mobile */}
+      <AnimatePresence>
+        {!isDesktop && mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setMobileOpen(false)}
+            className="fixed inset-0 z-40 lg:hidden"
+            style={{ background: "rgba(25,23,27,0.45)", backdropFilter: "blur(2px)" }}
+          />
+        )}
+      </AnimatePresence>
+
+      <Topbar sidebarW={contentW} isDesktop={isDesktop} onBurger={() => setMobileOpen(true)} />
+
       <motion.div
-        animate={{ marginLeft: sidebarW }}
+        animate={{ marginLeft: contentW }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
         className="flex-1 min-w-0"
         style={{ paddingTop: TOPBAR_H }}
