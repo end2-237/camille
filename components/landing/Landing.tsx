@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  Menu, X, ArrowRight, ArrowUpRight, Check, Plus,
+  ArrowRight, ArrowUpRight, Check, Plus,
   Bot, MessageCircle, Store, UtensilsCrossed, Stethoscope, GraduationCap,
   Home, Car, Plane, Scissors, Pill, Wrench, Shirt, Gem, Coffee, Truck,
   Dumbbell, Sparkles, Layers, Wand2, Languages, Image as ImageIcon,
@@ -83,123 +83,6 @@ function MiniBrowser({ title, children }: { title: string; children: React.React
       </div>
       <div className="p-3">{children}</div>
     </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   1 · Bandeau d'annonce + Navigation
-   ══════════════════════════════════════════════════════════════════════════ */
-
-function AnnouncementBar() {
-  return (
-    <Link
-      href="/company"
-      className="group relative z-40 flex items-center justify-center gap-2.5 px-4 py-2.5 text-center transition-colors"
-      style={{ background: "#16141A" }}
-    >
-      <span
-        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-        style={{ background: "var(--cl-accent)", color: "#fff" }}
-      >
-        Nouveau
-      </span>
-      <span className="text-[13px]" style={{ color: "rgba(255,255,255,0.9)" }}>
-        <span className="font-semibold" style={{ color: "#fff" }}>Camille v3 est là</span>
-        <span className="hidden sm:inline"> — monitoring en direct, sessions ultra-stables et accueils médias enrichis.</span>
-      </span>
-      <span
-        className="inline-flex items-center gap-1 text-[12.5px] font-semibold transition-transform group-hover:translate-x-0.5"
-        style={{ color: "#fff" }}
-      >
-        Découvrir <ArrowRight className="h-3.5 w-3.5" />
-      </span>
-    </Link>
-  );
-}
-
-const NAV_LINKS = [
-  { label: "Fonctionnalités", href: "/#features" },
-  { label: "Comment ça marche", href: "/#how" },
-  { label: "Sécurité", href: "/#security" },
-  { label: "Tarifs", href: "/pricing" },
-  { label: "Entreprise", href: "/company" },
-];
-
-function LandingNav() {
-  const [scrolled, setScrolled] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return (
-    <header
-      className="sticky top-0 z-50 transition-all duration-300"
-      style={{
-        background: scrolled ? "rgba(255,255,255,0.82)" : "rgba(255,255,255,0.6)",
-        backdropFilter: "blur(14px) saturate(1.4)",
-        WebkitBackdropFilter: "blur(14px) saturate(1.4)",
-        borderBottom: "1px solid var(--cl-line)",
-      }}
-    >
-      <div className="cl-container flex h-[64px] items-center justify-between gap-4">
-        <Wordmark />
-
-        <nav className="hidden items-center lg:flex" aria-label="Navigation principale">
-          {NAV_LINKS.map((l) => (
-            <Link key={l.href} href={l.href} className="cl-nav-link">
-              {l.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="hidden items-center gap-2 lg:flex">
-          <Link href="/login" className="cl-nav-link">Se connecter</Link>
-          <Link href="/dashboard" className="cl-btn-black !px-5 !py-2.5 text-sm">
-            Dashboard
-          </Link>
-        </div>
-
-        <button
-          className="flex h-10 w-10 items-center justify-center rounded-full lg:hidden"
-          style={{ border: "1px solid var(--cl-line)" }}
-          onClick={() => setOpen(!open)}
-          aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
-          aria-expanded={open}
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-      </div>
-
-      {open && (
-        <div
-          className="px-6 pb-6 pt-2 lg:hidden"
-          style={{ background: "rgba(251,247,240,0.97)", borderBottom: "1px solid var(--cl-line-soft)" }}
-        >
-          <nav className="flex flex-col gap-1" aria-label="Navigation mobile">
-            {NAV_LINKS.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-[15px] font-medium"
-                style={{ color: "var(--cl-ink)" }}
-              >
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="mt-4 flex gap-3">
-            <Link href="/login" className="cl-btn-outline flex-1 justify-center">Se connecter</Link>
-            <Link href="/dashboard" className="cl-btn-black flex-1 justify-center">Dashboard</Link>
-          </div>
-        </div>
-      )}
-    </header>
   );
 }
 
@@ -1169,8 +1052,6 @@ function LandingFooter() {
 export function Landing() {
   return (
     <div className="cl-landing">
-      <AnnouncementBar />
-      <LandingNav />
       <Hero />
       <LogoStrip />
       <StepsSection />

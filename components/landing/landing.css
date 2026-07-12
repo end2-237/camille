@@ -3,7 +3,27 @@
    Réplique fidèle du design render.com : fond blanc, encre quasi-noire,
    accent violet, lavande, pilules noires, footer noir.
    Scopé .cl-landing, indépendant du ThemeProvider (toujours clair).
+   Les variables --cl-* sont exposées à :root pour que les utilitaires cl-*
+   (nav, boutons, cartes) fonctionnent aussi hors de .cl-landing (ex: Navbar).
    ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --cl-bg:          #FFFFFF;
+  --cl-bg-soft:     #F6F4F1;
+  --cl-card:        #FFFFFF;
+  --cl-ink:         #19171B;
+  --cl-ink-soft:    #5B5660;
+  --cl-ink-faint:   #7C7683;
+  --cl-line:        #E9E6EC;
+  --cl-line-soft:   #F0EEF3;
+  --cl-accent:      #7C5AF8;
+  --cl-accent-deep: #6442E8;
+  --cl-accent-soft: #F0EBFF;
+  --cl-lavender:    #E9E1FF;
+  --cl-black:       #16141A;
+  --cl-green:       #1DAB55;
+  --cl-wa:          #25D366;
+}
 
 .cl-landing {
   --cl-bg:          #FFFFFF;

@@ -14,6 +14,9 @@ import { COMPANY }        from "@/lib/company";
 // Inter chargé localement via @fontsource-variable — zéro requête réseau externe
 import "@fontsource-variable/inter";
 import "./globals.css";
+// Système de design de l'accueil (classes cl-*, variables --cl-*) rendu global
+// pour que le header du site (nav Render) s'applique sur toutes les pages.
+import "@/components/landing/landing.css";
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
