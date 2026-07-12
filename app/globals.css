@@ -225,35 +225,23 @@ body {
    ══════════════════════════════════════════════════════════════════════════ */
 @layer utilities {
 
-  /* ── Glass ───────────────────────────────────────────────────────────── */
+  /* ── Cartes — style Render exact (blanc net, bord fin, pas de glassmorphism) ── */
   .glass {
-    background: var(--surface-glass);
-    backdrop-filter: blur(16px) saturate(1.6);
-    -webkit-backdrop-filter: blur(16px) saturate(1.6);
-    border: 1px solid var(--border-subtle);
-    box-shadow: var(--shadow-glass);
-  }
-
-  /* Light mode : glass blanc semi-opaque lisible */
-  [data-theme="light"] .glass,
-  .light .glass {
-    background: rgba(255, 255, 255, 0.78);
-    border-color: rgba(0, 0, 0, 0.07);
-    box-shadow: 0 1px 0 #fff inset, 0 2px 12px rgba(0,0,0,0.06);
+    background: #FFFFFF;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 1px 2px rgba(25, 23, 27, 0.04);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .glass-gold {
-    background: var(--surface-gold);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--border-gold);
-  }
-
-  /* Light mode */
-  [data-theme="light"] .glass-gold,
-  .light .glass-gold {
-    background: rgba(109,74,239, 0.07);
-    border-color: rgba(109,74,239, 0.28);
+    background: #FFFFFF;
+    border: 1px solid rgba(124, 90, 248, 0.28);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 1px 2px rgba(25, 23, 27, 0.04);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   /* ── Text ────────────────────────────────────────────────────────────── */
@@ -261,11 +249,10 @@ body {
   .text-secondary { color: var(--text-secondary) !important; }
   .text-tertiary  { color: var(--text-tertiary)  !important; }
 
+  /* Accent titre — violet plein comme l'accueil (pas de dégradé tape-à-l'œil) */
   .text-gold-gradient {
-    background: linear-gradient(135deg, #7C5AF8 0%, #A78BFA 50%, #6442E8 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #6442E8;
+    -webkit-text-fill-color: currentColor;
   }
 
   /* Light : gold gradient plus foncé pour lisibilité */
@@ -326,25 +313,18 @@ body {
    ══════════════════════════════════════════════════════════════════════════ */
 @layer components {
 
-  /* ── Button gold ─────────────────────────────────────────────────────── */
+  /* ── Bouton principal — style Render exact : noir plein, carré, net ──── */
   .btn-gold {
-    @apply relative inline-flex items-center justify-center gap-1.5
-           px-4 py-2 rounded-lg font-semibold text-xs overflow-hidden
-           transition-all duration-200
-           hover:brightness-110 hover:scale-[1.015]
-           active:scale-[0.985]
-           focus-visible:ring-2 focus-visible:ring-gold/60;
-    background: linear-gradient(135deg, #7C5AF8 0%, #A78BFA 48%, #6442E8 100%);
-    color: #000;
-    box-shadow: 0 0 0 1px rgba(124,90,248,0.22), 0 2px 12px rgba(124,90,248,0.12);
+    @apply relative inline-flex items-center justify-center gap-2
+           px-5 py-2.5 rounded-lg font-medium text-sm
+           transition-all duration-150
+           active:scale-[0.985];
+    background: #16141A;
+    color: #FFFFFF;
+    letter-spacing: -0.012em;
+    box-shadow: none;
   }
-
-  [data-theme="light"] .btn-gold,
-  .light .btn-gold {
-    background: linear-gradient(135deg, #6D4AEF 0%, #7C5AF8 50%, #5333C4 100%);
-    color: #fff;
-    box-shadow: 0 0 0 1px rgba(109,74,239,0.30), 0 2px 12px rgba(109,74,239,0.15);
-  }
+  .btn-gold:hover { background: #2E2A35; }
 
   /* ── Button ghost ────────────────────────────────────────────────────── */
   .btn-ghost {
@@ -361,12 +341,12 @@ body {
     border-color: var(--border-strong);
   }
 
-  /* ── Input ───────────────────────────────────────────────────────────── */
+  /* ── Input — style Render : fond blanc, bord net ─────────────────────── */
   .input-midnight {
-    @apply w-full px-3 py-2 rounded-lg text-sm
-           transition-all duration-200
+    @apply w-full px-3 py-2.5 rounded-lg text-sm
+           transition-all duration-150
            focus:outline-none;
-    background: var(--bg-muted);
+    background: #FFFFFF;
     border: 1px solid var(--border-default);
     color: var(--text-primary);
   }
@@ -402,16 +382,25 @@ body {
     color: var(--text-primary);
   }
 
-  /* ── Headings marketing (hero, landing) ─────────────────────────────── */
+  /* ── Titres — grotesque Inter serrée, EXACTEMENT comme l'accueil ─────── */
   .heading-display {
-    @apply text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.12];
-    /* Pas de font-family forcée ici : chaque mot choisit Cube ou Good Timing */
+    @apply text-3xl md:text-4xl lg:text-5xl;
+    font-family: "Inter Variable", "Inter", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 550;
+    letter-spacing: -0.035em;
+    line-height: 1.05;
     color: var(--text-primary);
   }
 
-  /* Classes polices branding — NE PAS utiliser dans le dashboard */
-  .font-cube        { font-family: var(--font-cube);        }
-  .font-good-timing { font-family: var(--font-good-timing); }
+  /* Les titres de pages qui utilisaient Cube / Good Timing adoptent désormais
+     la même grotesque que l'accueil (le wordmark de marque garde sa police via
+     un style inline var(--font-good-timing), non affecté par ces classes). */
+  .font-cube,
+  .font-good-timing {
+    font-family: "Inter Variable", "Inter", "Helvetica Neue", Arial, sans-serif !important;
+    font-weight: 550;
+    letter-spacing: -0.035em;
+  }
 
   /* ── Stepper ─────────────────────────────────────────────────────────── */
   .step-connector {
@@ -422,11 +411,12 @@ body {
     background: rgba(124,90,248, 0.35);
   }
 
-  /* ── Card ────────────────────────────────────────────────────────────── */
+  /* ── Card — blanc net Render ─────────────────────────────────────────── */
   .card {
-    background: var(--bg-elevated);
+    background: #FFFFFF;
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 1px 2px rgba(25, 23, 27, 0.04);
   }
 }
 
