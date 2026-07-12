@@ -51,12 +51,12 @@
   --font-mono:     "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace;
 
   /* Radius — compact SaaS */
-  --radius-xs:  3px;
+  --radius-xs:  4px;
   --radius-sm:  6px;
-  --radius-md:  10px;
-  --radius-lg:  14px;
-  --radius-xl:  18px;
-  --radius-2xl: 24px;
+  --radius-md:  8px;
+  --radius-lg:  10px;
+  --radius-xl:  12px;
+  --radius-2xl: 16px;
 
   /* Z-index */
   --z-base:    0;
@@ -134,24 +134,24 @@
   --color-gold-dark:   #5333C4;
   --color-gold-subtle: rgba(109,74,239, 0.10);
 
-  /* Backgrounds — sable chaud structuré */
-  --bg-base:        #F5F4EF;
-  --bg-subtle:      #EEECE7;
-  --bg-muted:       #E5E3DC;
+  /* Backgrounds — thème Render (blanc + gris doux), aligné sur l'accueil */
+  --bg-base:        #FFFFFF;
+  --bg-subtle:      #F6F4F1;
+  --bg-muted:       #F0EEF3;
   --bg-elevated:    #FFFFFF;
-  --bg-overlay:     #FAF9F6;
+  --bg-overlay:     #FFFFFF;
 
-  /* Texte — quasi-noir chaud */
-  --text-primary:   #111010;
-  --text-secondary: rgba(17, 16, 16, 0.64);
-  --text-tertiary:  rgba(17, 16, 16, 0.40);
-  --text-disabled:  rgba(17, 16, 16, 0.24);
+  /* Texte — encre Render */
+  --text-primary:   #19171B;
+  --text-secondary: rgba(25, 23, 27, 0.62);
+  --text-tertiary:  rgba(25, 23, 27, 0.44);
+  --text-disabled:  rgba(25, 23, 27, 0.28);
 
-  /* Borders — subtils sur fond clair */
-  --border-default: rgba(0, 0, 0, 0.10);
-  --border-subtle:  rgba(0, 0, 0, 0.06);
-  --border-strong:  rgba(0, 0, 0, 0.18);
-  --border-gold:    rgba(109,74,239, 0.32);
+  /* Borders — fins et nets (Render) */
+  --border-default: rgba(25, 23, 27, 0.10);
+  --border-subtle:  rgba(25, 23, 27, 0.055);
+  --border-strong:  rgba(25, 23, 27, 0.18);
+  --border-gold:    rgba(124, 90, 248, 0.32);
 
   /* Surfaces — semi-opaques pour vrai effet carte */
   --surface-glass:       rgba(255, 255, 255, 0.82);
@@ -159,11 +159,11 @@
   --surface-gold:        rgba(109,74,239, 0.08);
   --surface-gold-hover:  rgba(109,74,239, 0.15);
 
-  /* Shadows — légères et chaudes */
-  --shadow-glass: 0 1px 0 rgba(255,255,255,1.00) inset,
-                  0 2px 12px rgba(0, 0, 0, 0.06);
-  --shadow-gold:  0 0 0 1px rgba(109,74,239, 0.24),
-                  0 4px 16px rgba(109,74,239, 0.10);
+  /* Shadows — légères et nettes (Render) */
+  --shadow-glass: 0 1px 2px rgba(25, 23, 27, 0.04),
+                  0 8px 30px rgba(25, 23, 27, 0.06);
+  --shadow-gold:  0 0 0 1px rgba(124, 90, 248, 0.22),
+                  0 6px 20px rgba(124, 90, 248, 0.10);
 
   /* Ambient glow — discret */
   --ambient-glow: radial-gradient(

@@ -74,7 +74,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // suppressHydrationWarning évite le flash SSR/CSR du ThemeProvider
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="fr" data-theme="light" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <ThemeProvider>
           {/* Ambient glow — adapté par le thème */}

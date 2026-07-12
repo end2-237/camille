@@ -24,8 +24,8 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "dark",
-  resolvedTheme: "dark",
+  theme: "light",
+  resolvedTheme: "light",
   setTheme: () => {},
 });
 
@@ -34,8 +34,8 @@ export const useTheme = () => useContext(ThemeContext);
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("dark");
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
+  const [theme, setThemeState] = useState<Theme>("light");
+  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("light");
 
   const resolve = useCallback((t: Theme): "dark" | "light" => {
     if (t !== "system") return t;
@@ -54,17 +54,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    const stored = (localStorage.getItem("camille-theme") as Theme) || "dark";
-    setThemeState(stored);
-    apply(stored);
-
-    const mq = window.matchMedia("(prefers-color-scheme: light)");
-    const handler = () => {
-      const current = (localStorage.getItem("camille-theme") as Theme) || "dark";
-      if (current === "system") apply("system");
-    };
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    // Thème Render : light mode partout. On migre toute ancienne préférence
+    // "dark"/"system" stockée vers "light" pour rester cohérent avec l'accueil.
+    localStorage.setItem("camille-theme", "light");
+    setThemeState("light");
+    apply("light");
   }, [apply]);
 
   const setTheme = useCallback(
