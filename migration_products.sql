@@ -19,11 +19,15 @@ CREATE TABLE IF NOT EXISTS camille.products (
   min_order   INTEGER NOT NULL DEFAULT 1,
   rating      NUMERIC(2,1) DEFAULT NULL,     -- note optionnelle (0.0–5.0)
   image_url   TEXT DEFAULT NULL,
+  product_url TEXT DEFAULT NULL,           -- lien d'achat externe (optionnel)
   active      BOOLEAN NOT NULL DEFAULT true,
   sort_order  INTEGER NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Pour les bases où la table existe déjà (ajout idempotent) :
+ALTER TABLE camille.products ADD COLUMN IF NOT EXISTS product_url TEXT DEFAULT NULL;
 
 CREATE INDEX IF NOT EXISTS products_agent_idx  ON camille.products (agent_id);
 CREATE INDEX IF NOT EXISTS products_active_idx ON camille.products (agent_id, active);

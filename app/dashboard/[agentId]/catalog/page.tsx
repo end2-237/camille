@@ -58,6 +58,7 @@ export default function CatalogPage() {
       stock: editing.stock === "" || editing.stock == null ? null : Number(editing.stock),
       min_order: editing.min_order ?? 1,
       image_url: editing.image_url ?? null,
+      product_url: (editing.product_url ?? "").trim() || null,
       active: editing.active ?? true,
       tags: (editing.tagsStr ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     };
@@ -276,6 +277,9 @@ export default function CatalogPage() {
                     />
                   </div>
                 </div>
+              </Field>
+              <Field label="Lien du produit (page d'achat — optionnel)">
+                <input className="cl-input" value={editing.product_url ?? ""} onChange={(e) => setEditing({ ...editing, product_url: e.target.value })} placeholder="https://votre-site.com/produit — vide = simple présentation" />
               </Field>
               <Field label="Tags (séparés par des virgules)">
                 <input className="cl-input" value={editing.tagsStr ?? ""} onChange={(e) => setEditing({ ...editing, tagsStr: e.target.value })} placeholder="Apple, Électronique, Display" />

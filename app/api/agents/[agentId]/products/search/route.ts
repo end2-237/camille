@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       // Recherche plein-texte + fallback ILIKE pour la tolérance
       const res = await query(
         `SELECT id, name, description, price, price_max, currency, category, tags,
-                stock, image_url
+                stock, image_url, product_url
          FROM camille.products
          WHERE agent_id = $1 AND active = true
            AND (
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     } else {
       const res = await query(
         `SELECT id, name, description, price, price_max, currency, category, tags,
-                stock, image_url
+                stock, image_url, product_url
          FROM camille.products
          WHERE agent_id = $1 AND active = true
          ORDER BY sort_order ASC, created_at DESC

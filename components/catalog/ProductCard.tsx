@@ -16,6 +16,7 @@ export interface Product {
   min_order?: number | null;
   rating?: number | string | null;
   image_url?: string | null;
+  product_url?: string | null;
   active?: boolean;
 }
 

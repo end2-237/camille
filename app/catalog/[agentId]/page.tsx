@@ -71,17 +71,19 @@ export default function PublicCatalogPage() {
               <ProductCard
                 key={p.id}
                 product={p}
-                footer={
-                  shop?.website_url ? (
+                footer={(() => {
+                  // Lien d'achat du produit s'il existe, sinon le site de la boutique.
+                  const link = p.product_url || shop?.website_url;
+                  return link ? (
                     <a
-                      href={shop.website_url} target="_blank" rel="noopener noreferrer"
+                      href={link} target="_blank" rel="noopener noreferrer"
                       className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] font-semibold text-white"
                       style={{ background: "#16141A" }}
                     >
                       Commander
                     </a>
-                  ) : undefined
-                }
+                  ) : undefined;
+                })()}
               />
             ))}
           </div>

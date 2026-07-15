@@ -43,8 +43,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const r = await query(
     `INSERT INTO camille.products
        (agent_id, name, description, price, price_max, currency, category, tags,
-        stock, min_order, rating, image_url, active, sort_order)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        stock, min_order, rating, image_url, product_url, active, sort_order)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      RETURNING *`,
     [
       agentId,
@@ -59,6 +59,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       b.min_order ?? 1,
       b.rating ?? null,
       b.image_url ?? null,
+      b.product_url ?? null,
       b.active ?? true,
       b.sort_order ?? 0,
     ]

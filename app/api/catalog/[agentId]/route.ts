@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     }
     const prodRes = await query(
       `SELECT id, name, description, price, price_max, currency, category, tags,
-              stock, min_order, rating, image_url
+              stock, min_order, rating, image_url, product_url
        FROM camille.products
        WHERE agent_id = $1 AND active = true
        ORDER BY sort_order ASC, created_at DESC`,
