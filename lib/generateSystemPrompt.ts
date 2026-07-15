@@ -260,14 +260,27 @@ export function generateSystemPrompt(
   model: AgentModel = "claude-3-5-sonnet-20241022",
   opts: { level?: number } & N1Options = {}
 ): SystemPromptConfig {
-  // Niveau 1 → prompt de support verrouillé (anti-invention + redirection)
-  if ((opts.level ?? 1) === 1) {
-    const n1 = buildN1Prompt(data, opts);
+  // Niveau 1 → support verrouillé · Niveau 2 → support + catalogue (RAG)
+  const lvl = opts.level ?? 1;
+  if (lvl === 1 || lvl === 2) {
+    let prompt = buildN1Prompt(data, opts);
+    if (lvl === 2) {
+      const site = (data.website_url || "").trim();
+      prompt += `
+
+## CATALOGUE (Niveau 2)
+Des produits pertinents te sont fournis à l'exécution dans un bloc « PRODUITS DISPONIBLES » (nom, prix, catégorie, stock, photo).
+- Tu peux présenter ces produits, donner leur **prix et disponibilité UNIQUEMENT depuis ce bloc** — jamais de mémoire, jamais d'invention.
+- Si le client demande un produit ABSENT du bloc fourni, dis simplement que tu ne le vois pas dans le catalogue${site ? ` et renvoie vers ${site}` : ""}.
+- Tu peux envoyer la photo d'un produit quand c'est pertinent (via son image).
+- Tu NE prends PAS de commande et NE lances AUCUN paiement (ce sera le Niveau 3) : pour finaliser un achat, oriente vers ${site || "le site de la boutique"}.
+- Reste concis : présente 1 à 3 produits à la fois, propose d'en voir d'autres.`;
+    }
     return {
-      compiled_prompt: n1.trim(),
+      compiled_prompt: prompt.trim(),
       generated_at: new Date().toISOString(),
       target_model: model,
-      estimated_tokens: estimateTokens(n1),
+      estimated_tokens: estimateTokens(prompt),
       version: 1,
     };
   }
