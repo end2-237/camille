@@ -11,6 +11,21 @@ export const PLANS = {
 
 export type PlanId = keyof typeof PLANS;
 
+// ── Niveau d'automatisation débloqué par plan (abonnement → N1/N2/N3) ─────────
+//   free/starter → N1 (support) · pro → N2 (catalogue) · enterprise → N3 (closing)
+//   Modifiez ce mapping pour ajuster l'offre commerciale.
+export const PLAN_MAX_LEVEL: Record<string, number> = {
+  free:       1,
+  starter:    1,
+  pro:        2,
+  enterprise: 3,
+};
+
+/** Niveau max autorisé pour un plan (défaut N1). */
+export function getMaxLevel(plan: string): number {
+  return PLAN_MAX_LEVEL[plan] ?? 1;
+}
+
 /** Plans that can be purchased directly (excludes free and enterprise). */
 export const UPGRADEABLE_PLANS: PlanId[] = ["starter", "pro"];
 

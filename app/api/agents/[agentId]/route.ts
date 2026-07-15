@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { getMaxLevel } from "@/lib/plans";
 import { getUserFromRequest } from "@/lib/auth-server";
 import type {
   Agent, AgentStatus, AgentModel, BrandTone, SupportedLanguage,
@@ -92,7 +93,19 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     if (result.rows.length === 0) {
       return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
     }
-    return NextResponse.json({ agent: rowToAgent(result.rows[0]) });
+    const row = result.rows[0];
+    return NextResponse.json({
+      agent: {
+        ...rowToAgent(row),
+        // Config N1/N2 exposée pour l'écran de réglages
+        level: row.level ?? 1,
+        out_of_scope_behavior: row.out_of_scope_behavior ?? "site",
+        welcome_enabled: row.welcome_enabled !== false,
+        welcome_message: row.welcome_message ?? null,
+        latitude: row.latitude != null ? Number(row.latitude) : null,
+        longitude: row.longitude != null ? Number(row.longitude) : null,
+      },
+    });
   } catch (err) {
     console.error("[GET /api/agents/:id]", err);
     const msg = err instanceof Error ? err.message : String(err);
@@ -108,6 +121,23 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     const { agentId } = await params;
     const updates = await req.json();
     const flat: Record<string, unknown> = {};
+
+    // ── Gating : le niveau ne peut pas dépasser ce que le plan autorise ──
+    if (updates.level !== undefined) {
+      const wanted = Number(updates.level);
+      const planRow = await query(
+        "SELECT plan FROM camille.agents WHERE id = $1 AND user_id = $2",
+        [agentId, user.id]
+      );
+      const plan = planRow.rows[0]?.plan ?? "free";
+      const max = getMaxLevel(plan);
+      if (wanted > max) {
+        return NextResponse.json(
+          { error: `Le niveau ${wanted} nécessite un plan supérieur (votre plan « ${plan} » autorise jusqu'au niveau ${max}).`, code: "LEVEL_LOCKED", maxLevel: max, plan },
+          { status: 403 }
+        );
+      }
+    }
 
     // Flat scalar fields
     if (updates.status !== undefined)       flat.status = updates.status;

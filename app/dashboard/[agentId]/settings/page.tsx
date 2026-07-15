@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Save, RefreshCw, Bot, ShoppingBag, CreditCard, MapPin, MessageSquare } from "lucide-react";
+import { Save, RefreshCw, Bot, ShoppingBag, CreditCard, MapPin, MessageSquare, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
+import { getMaxLevel } from "@/lib/plans";
 
 interface Cfg {
   level: number;
+  plan: string;
   out_of_scope_behavior: "site" | "human";
   welcome_enabled: boolean;
   welcome_message: string | null;
@@ -37,6 +39,7 @@ export default function AgentSettingsPage() {
       const ag = d.agent ?? d;
       setCfg({
         level: ag.level ?? 1,
+        plan: ag.plan ?? "free",
         out_of_scope_behavior: ag.out_of_scope_behavior ?? "site",
         welcome_enabled: ag.welcome_enabled !== false,
         welcome_message: ag.welcome_message ?? "",
@@ -68,9 +71,9 @@ export default function AgentSettingsPage() {
           business_context: { website_url: (cfg.website_url ?? "").trim() },
         }),
       });
-      if (!r.ok) throw new Error();
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || "Échec"); }
       toast.success("Configuration enregistrée");
-    } catch { toast.error("Échec de l'enregistrement"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Échec de l'enregistrement"); }
     finally { setSaving(false); }
   }
 
@@ -105,16 +108,25 @@ export default function AgentSettingsPage() {
         <div className="grid gap-2.5 sm:grid-cols-3">
           {LEVELS.map((l) => {
             const active = cfg.level === l.v;
+            const maxLevel = getMaxLevel(cfg.plan);
+            const locked = l.v > maxLevel;
             return (
               <button
                 key={l.v}
-                onClick={() => setCfg({ ...cfg, level: l.v })}
-                className="flex flex-col items-start gap-1.5 rounded-xl p-3.5 text-left transition-all"
+                disabled={locked}
+                onClick={() => !locked && setCfg({ ...cfg, level: l.v })}
+                className="relative flex flex-col items-start gap-1.5 rounded-xl p-3.5 text-left transition-all disabled:cursor-not-allowed"
                 style={{
                   border: `1.5px solid ${active ? "var(--color-gold)" : "var(--border-default)"}`,
                   background: active ? "var(--surface-gold)" : "var(--bg-elevated)",
+                  opacity: locked ? 0.55 : 1,
                 }}
               >
+                {locked && (
+                  <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 text-[9px] font-bold uppercase" style={{ color: "var(--text-disabled)" }}>
+                    <Lock className="h-3 w-3" /> Plan requis
+                  </span>
+                )}
                 <l.icon className="h-4 w-4" style={{ color: active ? "var(--color-gold)" : "var(--text-tertiary)" }} />
                 <span className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{l.label}</span>
                 <span className="text-[11px] leading-snug" style={{ color: "var(--text-tertiary)" }}>{l.desc}</span>
@@ -122,6 +134,10 @@ export default function AgentSettingsPage() {
             );
           })}
         </div>
+        <p className="mt-2 text-[11px]" style={{ color: "var(--text-disabled)" }}>
+          Plan actuel : <b style={{ color: "var(--text-secondary)" }}>{cfg.plan}</b> — débloque jusqu&apos;au niveau {getMaxLevel(cfg.plan)}.
+          {getMaxLevel(cfg.plan) < 3 && <> Passez à un plan supérieur pour les niveaux avancés.</>}
+        </p>
       </Section>
 
       {/* Accueil */}
