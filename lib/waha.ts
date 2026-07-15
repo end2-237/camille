@@ -8,6 +8,25 @@ function coreHeaders() {
   return { "Content-Type": "application/json", "X-Api-Key": CORE_API_KEY };
 }
 
+/**
+ * Auto-configure le webhook n8n d'une session côté Camille Core.
+ * URL = webhook propre à l'agent, sinon le template N1 global (env).
+ * Idempotent, silencieux en cas d'échec (ne bloque pas la connexion).
+ */
+export async function wahaSetWebhook(sessionName: string, url?: string | null) {
+  const target = (url && url.trim()) || process.env.N8N_N1_WEBHOOK_URL || "";
+  if (!target) return; // rien à configurer
+  try {
+    await fetch(`${CORE_URL}/api/config/webhooks`, {
+      method: "POST",
+      headers: coreHeaders(),
+      body: JSON.stringify({ session: sessionName, url: target }),
+    });
+  } catch (e) {
+    console.error("[waha] setWebhook error:", e);
+  }
+}
+
 // Crée ET démarre une session (Camille Core fait les deux en un seul appel)
 export async function wahaCreateSession(sessionName: string) {
   const res = await fetch(`${CORE_URL}/api/sessions/start`, {

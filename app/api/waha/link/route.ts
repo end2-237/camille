@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { wahaSetWebhook } from "@/lib/waha";
 
 export async function POST(req: NextRequest) {
   const user = await getUserFromRequest(req);
@@ -34,6 +35,13 @@ export async function POST(req: NextRequest) {
            updated_at = NOW()`,
     [sessionName, agentId, user.id]
   );
+
+  // Auto-config du webhook n8n pour cette session (webhook agent ou template N1 global)
+  const wh = await query(
+    "SELECT n8n_webhook_url FROM camille.agents WHERE id = $1",
+    [agentId]
+  );
+  await wahaSetWebhook(sessionName, wh.rows[0]?.n8n_webhook_url ?? null);
 
   return NextResponse.json({ success: true, session_name: sessionName, agent_id: agentId });
 }

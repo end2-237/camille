@@ -70,6 +70,8 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "products_services", "pricing_info", "business_hours", "policies",
   "faq", "forbidden_topics", "capabilities", "target_model", "compiled_prompt", "status",
   "google_calendar_email",
+  // ── Config Niveau 1 ──
+  "level", "out_of_scope_behavior", "welcome_enabled", "welcome_message", "n8n_webhook_url",
 ]);
 
 type RouteContext = { params: Promise<{ agentId: string }> };

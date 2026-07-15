@@ -21,6 +21,11 @@ const AGENT_COLS = `
   a.whatsapp_number,
   a.capabilities,
   a.status,
+  a.website_url,
+  a.level,
+  a.out_of_scope_behavior,
+  a.welcome_enabled,
+  a.welcome_message,
   (a.owner_password_hash IS NOT NULL) AS has_owner_password
 `;
 
@@ -82,6 +87,12 @@ export async function GET(req: NextRequest) {
         whatsapp_number:    row.whatsapp_number,
         capabilities:        parseJ(row.capabilities) ?? {},
         status:              row.status,
+        website_url:         row.website_url ?? null,
+        // ── Config Niveau 1 ──
+        level:                 row.level ?? 1,
+        out_of_scope_behavior: row.out_of_scope_behavior ?? "site",
+        welcome_enabled:       row.welcome_enabled !== false,
+        welcome_message:       row.welcome_message ?? null,
         has_owner_password:  row.has_owner_password === true,
       },
     });
