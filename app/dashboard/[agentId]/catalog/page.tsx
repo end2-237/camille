@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search, Upload, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ProductCard, type Product } from "@/components/catalog/ProductCard";
+import { authHeaders } from "@/lib/auth-client";
 
 type Draft = Omit<Partial<Product>, "price" | "price_max" | "stock" | "min_order"> & {
   price?: string | number | null;
@@ -31,7 +32,7 @@ export default function CatalogPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`/api/agents/${agentId}/products`, { credentials: "include" });
+      const r = await fetch(`/api/agents/${agentId}/products`, { headers: { ...authHeaders() } });
       const d = await r.json();
       setProducts(d.products ?? []);
     } catch { toast.error("Erreur de chargement du catalogue"); }
@@ -66,8 +67,7 @@ export default function CatalogPage() {
         : `/api/agents/${agentId}/products`;
       const r = await fetch(url, {
         method: editing.id ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(payload),
       });
       if (!r.ok) throw new Error();
@@ -83,7 +83,7 @@ export default function CatalogPage() {
     try {
       const fd = new FormData();
       fd.append("file", f);
-      const r = await fetch(`/api/agents/${agentId}/products/upload`, { method: "POST", credentials: "include", body: fd });
+      const r = await fetch(`/api/agents/${agentId}/products/upload`, { method: "POST", headers: { ...authHeaders() }, body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Upload échoué");
       setEditing((e) => (e ? { ...e, image_url: d.url } : e));
@@ -95,7 +95,7 @@ export default function CatalogPage() {
   async function remove(p: Product) {
     if (!confirm(`Supprimer « ${p.name} » ?`)) return;
     try {
-      await fetch(`/api/agents/${agentId}/products/${p.id}`, { method: "DELETE", credentials: "include" });
+      await fetch(`/api/agents/${agentId}/products/${p.id}`, { method: "DELETE", headers: { ...authHeaders() } });
       toast.success("Produit supprimé");
       setProducts((prev) => prev.filter((x) => x.id !== p.id));
     } catch { toast.error("Échec de la suppression"); }
