@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package,
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings,
 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -138,9 +138,14 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
         {(() => {
           const activeAgentId = pathname.match(/\/dashboard\/([0-9a-fA-F-]{8,})/)?.[1] || agents[0]?.id;
           return activeAgentId ? (
-            <NavItem href={`/dashboard/${activeAgentId}/catalog`} label="Catalogue"
-              icon={<Package className="w-3.5 h-3.5" />}
-              active={pathname.endsWith("/catalog")} collapsed={collapsed} />
+            <>
+              <NavItem href={`/dashboard/${activeAgentId}/catalog`} label="Catalogue"
+                icon={<Package className="w-3.5 h-3.5" />}
+                active={pathname.endsWith("/catalog")} collapsed={collapsed} />
+              <NavItem href={`/dashboard/${activeAgentId}/settings`} label="Config"
+                icon={<Settings className="w-3.5 h-3.5" />}
+                active={pathname.endsWith("/settings")} collapsed={collapsed} />
+            </>
           ) : null;
         })()}
 
