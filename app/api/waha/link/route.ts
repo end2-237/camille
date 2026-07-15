@@ -36,12 +36,16 @@ export async function POST(req: NextRequest) {
     [sessionName, agentId, user.id]
   );
 
-  // Auto-config du webhook n8n pour cette session (webhook agent ou template N1 global)
+  // Auto-config du webhook n8n selon le NIVEAU de l'agent (ou son webhook propre)
   const wh = await query(
-    "SELECT n8n_webhook_url FROM camille.agents WHERE id = $1",
+    "SELECT n8n_webhook_url, level FROM camille.agents WHERE id = $1",
     [agentId]
   );
-  await wahaSetWebhook(sessionName, wh.rows[0]?.n8n_webhook_url ?? null);
+  await wahaSetWebhook(
+    sessionName,
+    wh.rows[0]?.n8n_webhook_url ?? null,
+    wh.rows[0]?.level ?? 1
+  );
 
   return NextResponse.json({ success: true, session_name: sessionName, agent_id: agentId });
 }

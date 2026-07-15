@@ -10,11 +10,15 @@ function coreHeaders() {
 
 /**
  * Auto-configure le webhook n8n d'une session côté Camille Core.
- * URL = webhook propre à l'agent, sinon le template N1 global (env).
- * Idempotent, silencieux en cas d'échec (ne bloque pas la connexion).
+ * URL = webhook propre à l'agent, sinon le template global du NIVEAU de l'agent
+ * (N8N_N1/N2/N3_WEBHOOK_URL). Idempotent, silencieux en cas d'échec.
  */
-export async function wahaSetWebhook(sessionName: string, url?: string | null) {
-  const target = (url && url.trim()) || process.env.N8N_N1_WEBHOOK_URL || "";
+export async function wahaSetWebhook(sessionName: string, url?: string | null, level: number = 1) {
+  const levelDefault =
+    level === 3 ? process.env.N8N_N3_WEBHOOK_URL :
+    level === 2 ? process.env.N8N_N2_WEBHOOK_URL :
+                  process.env.N8N_N1_WEBHOOK_URL;
+  const target = (url && url.trim()) || levelDefault || process.env.N8N_N1_WEBHOOK_URL || "";
   if (!target) return; // rien à configurer
   try {
     await fetch(`${CORE_URL}/api/config/webhooks`, {
