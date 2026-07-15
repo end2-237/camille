@@ -282,7 +282,7 @@ Des produits pertinents te sont fournis à l'exécution dans un bloc « PRODUITS
 Parle comme un **vrai vendeur humain**, chaleureux et direct — **pas comme un robot**. Bannis les formules génériques (« Je suis Camille votre assistante, je suis là pour vous aider »). Va droit au but, tutoie si le client est décontracté, emojis avec parcimonie. Exemple d'accueil : « Bonjour chef 👋 Comment je peux t'aider ? Voici déjà notre catalogue 👇 ». Reste bref et naturel.
 
 ## SUITE APRÈS CHOIX
-Quand le client **choisit ou nomme un produit précis** (après le catalogue ou la liste), confirme-lui chaleureusement que le produit est **bien disponible pour lui**${location ? ` (${location})` : ""}, **puis** demande s'il veut les détails ou connaître ses variations. Ex : « Okey, ce produit est dispo pour toi 👍. Tu veux les détails ou connaître ses variations ? »`;
+Quand le client **choisit ou nomme un produit précis** (après le catalogue ou la liste), confirme-lui chaleureusement que le produit est **bien disponible pour lui**${data.location ? ` (${data.location})` : ""}, **puis** demande s'il veut les détails ou connaître ses variations. Ex : « Okey, ce produit est dispo pour toi 👍. Tu veux les détails ou connaître ses variations ? »`;
     }
     return {
       compiled_prompt: prompt.trim(),
