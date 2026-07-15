@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search, Upload, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ProductCard, type Product } from "@/components/catalog/ProductCard";
 
@@ -24,6 +24,7 @@ export default function CatalogPage() {
   const [editing, setEditing]   = useState<Draft | null>(null);
   const [saving, setSaving]     = useState(false);
   const [copied, setCopied]     = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const publicLink = typeof window !== "undefined" ? `${window.location.origin}/catalog/${agentId}` : "";
 
@@ -75,6 +76,20 @@ export default function CatalogPage() {
       load();
     } catch { toast.error("Échec de l'enregistrement"); }
     finally { setSaving(false); }
+  }
+
+  async function uploadImage(f: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await fetch(`/api/agents/${agentId}/products/upload`, { method: "POST", credentials: "include", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Upload échoué");
+      setEditing((e) => (e ? { ...e, image_url: d.url } : e));
+      toast.success("Image téléversée");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Upload échoué"); }
+    finally { setUploading(false); }
   }
 
   async function remove(p: Product) {
@@ -218,8 +233,49 @@ export default function CatalogPage() {
                 <Field label="Stock (vide = non suivi)"><input className="cl-input" type="number" value={editing.stock ?? ""} onChange={(e) => setEditing({ ...editing, stock: e.target.value })} placeholder="12" /></Field>
                 <Field label="Commande min."><input className="cl-input" type="number" value={editing.min_order ?? 1} onChange={(e) => setEditing({ ...editing, min_order: Number(e.target.value) })} /></Field>
               </div>
-              <Field label="URL de l'image">
-                <input className="cl-input" value={editing.image_url ?? ""} onChange={(e) => setEditing({ ...editing, image_url: e.target.value })} placeholder="https://…/produit.jpg" />
+              <Field label="Image du produit">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg"
+                    style={{ border: "1px solid var(--cl-line)", background: "var(--cl-bg-soft)" }}
+                  >
+                    {editing.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={editing.image_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5" style={{ color: "var(--cl-ink-faint)" }} />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[12.5px] font-medium"
+                      style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)" }}
+                    >
+                      <Upload className="h-4 w-4" />
+                      {uploading ? "Téléversement…" : "Téléverser une image"}
+                      <input
+                        type="file" accept="image/*" className="hidden" disabled={uploading}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.currentTarget.value = ""; }}
+                      />
+                    </label>
+                    {editing.image_url && (
+                      <button
+                        type="button"
+                        onClick={() => setEditing({ ...editing, image_url: "" })}
+                        className="ml-2 text-[12px] underline"
+                        style={{ color: "var(--cl-ink-faint)" }}
+                      >
+                        Retirer
+                      </button>
+                    )}
+                    <input
+                      className="cl-input mt-2"
+                      value={editing.image_url ?? ""}
+                      onChange={(e) => setEditing({ ...editing, image_url: e.target.value })}
+                      placeholder="…ou coller une URL d'image"
+                    />
+                  </div>
+                </div>
               </Field>
               <Field label="Tags (séparés par des virgules)">
                 <input className="cl-input" value={editing.tagsStr ?? ""} onChange={(e) => setEditing({ ...editing, tagsStr: e.target.value })} placeholder="Apple, Électronique, Display" />
