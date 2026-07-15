@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getMaxLevel } from "@/lib/plans";
+import { wahaSetWebhook } from "@/lib/waha";
 import { getUserFromRequest } from "@/lib/auth-server";
 import type {
   Agent, AgentStatus, AgentModel, BrandTone, SupportedLanguage,
@@ -220,6 +221,27 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     if (result.rows.length === 0) {
       return NextResponse.json({ error: "Agent introuvable ou accès refusé" }, { status: 404 });
     }
+
+    // ── Auto-config du webhook si le niveau ou le webhook perso a changé ──
+    //   → chaque session de l'agent pointe vers le bon workflow (N1/N2/N3),
+    //     ou vers le webhook personnalisé (clients « sur devis »). Zéro manuel.
+    if (updates.level !== undefined || updates.n8n_webhook_url !== undefined) {
+      try {
+        const agentRow = result.rows[0];
+        const lvl = Number(agentRow.level ?? 1);
+        const customUrl = agentRow.n8n_webhook_url ?? null;
+        const sess = await query(
+          "SELECT session_name FROM camille.whatsapp_sessions WHERE agent_id = $1",
+          [agentId]
+        );
+        await Promise.all(
+          sess.rows.map((s: { session_name: string }) => wahaSetWebhook(s.session_name, customUrl, lvl))
+        );
+      } catch (e) {
+        console.error("[PATCH] auto-webhook:", e);
+      }
+    }
+
     return NextResponse.json({ agent: rowToAgent(result.rows[0]) });
   } catch (err) {
     console.error("[PATCH /api/agents/:id] FULL ERROR:", err);
