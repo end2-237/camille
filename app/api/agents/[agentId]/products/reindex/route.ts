@@ -48,19 +48,29 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const textMap: Record<string, number[]> = {};
   const imageMap: Record<string, number[]> = {};
   let textIndexed = 0, imageIndexed = 0;
+  let stage = "embeddings";
 
-  for (const p of prods) {
-    if (doText) {
-      const emb = await embedText(productText({ ...p, tags: p.tags }));
-      if (emb) { textMap[p.id] = emb; textIndexed++; }
+  try {
+    for (const p of prods) {
+      if (doText) {
+        const emb = await embedText(productText({ ...p, tags: p.tags }));
+        if (emb) { textMap[p.id] = emb; textIndexed++; }
+      }
+      if (doImage && p.image_url) {
+        const iemb = await embedImage(p.image_url);
+        if (iemb) { imageMap[p.id] = iemb; imageIndexed++; }
+      }
     }
-    if (doImage && p.image_url) {
-      const iemb = await embedImage(p.image_url);
-      if (iemb) { imageMap[p.id] = iemb; imageIndexed++; }
-    }
+
+    stage = "write";
+    await saveAgentIndex(agentId, textMap, imageMap);
+  } catch (err) {
+    // renvoie la cause exacte (droit d'écriture du volume, chargement CLIP, réseau…)
+    return NextResponse.json(
+      { error: `Échec reindex (${stage}) : ${String(err)}`, text_indexed: textIndexed, image_indexed: imageIndexed },
+      { status: 500 }
+    );
   }
-
-  await saveAgentIndex(agentId, textMap, imageMap);
 
   return NextResponse.json({
     success: true,
