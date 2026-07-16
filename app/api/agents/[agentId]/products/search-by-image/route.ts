@@ -9,8 +9,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { embedImage } from "@/lib/imageEmbeddings";
-import { searchImage } from "@/lib/vectorStore";
+import { embedImage, imageEmbeddingsEnabled } from "@/lib/imageEmbeddings";
+import { searchImage, indexStats } from "@/lib/vectorStore";
 import { describeImage } from "@/lib/embeddings";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
@@ -29,14 +29,14 @@ async function fetchByIds(agentId: string, ids: string[]) {
   return ids.map((id) => byId.get(id)).filter(Boolean);
 }
 
-/** (1) CLIP + magasin de vecteurs intégré. */
+/** (1) CLIP + magasin de vecteurs intégré. Renvoie {rows} ou {fail} diagnostique. */
 async function clipSearch(agentId: string, imageUrl: string, limit: number) {
   const emb = await embedImage(imageUrl);
-  if (!emb) return null;
+  if (!emb) return { fail: "clip_query_failed" as const };
   const ids = await searchImage(agentId, emb, limit);
-  if (!ids.length) return null;
+  if (!ids.length) return { fail: "index_empty" as const };
   const rows = await fetchByIds(agentId, ids);
-  return rows.length ? rows : null;
+  return { rows };
 }
 
 /** (2) OpenAI Vision : décrit l'image → recherche plein-texte sur les mots-clés. */
@@ -56,12 +56,23 @@ async function visionSearch(agentId: string, imageUrl: string, limit: number) {
 
 async function run(agentId: string, imageUrl: string, limit: number) {
   const clip = await clipSearch(agentId, imageUrl, limit);
-  if (clip) return { mode: "clip", products: clip };
+  if ("rows" in clip && clip.rows && clip.rows.length) return { mode: "clip", products: clip.rows };
+
+  // diagnostic précis quand CLIP ne donne rien
+  const stats = await indexStats(agentId);
+  const clipFail = "fail" in clip ? clip.fail : null;
 
   const vis = await visionSearch(agentId, imageUrl, limit);
   if (vis) return { mode: "vision", keywords: vis.keywords, products: vis.rows };
 
-  return { error: "Recherche par image indisponible (index vide et OPENAI_API_KEY manquante).", products: [] as unknown[] };
+  return {
+    error:
+      clipFail === "clip_query_failed"
+        ? "Le service CLIP n'a pas pu vectoriser l'image de la requête (URL injoignable depuis le VPS, ou CLIP_SERVICE_URL absent/KO)."
+        : "Aucun vecteur image pour cet agent côté recherche (index non partagé : volume /app/data/vectors non monté, ou reindex sur un autre conteneur).",
+    diagnostic: { clipFail, indexImageCount: stats.image, clipEnabled: imageEmbeddingsEnabled() },
+    products: [] as unknown[],
+  };
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {

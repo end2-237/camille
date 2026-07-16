@@ -108,3 +108,9 @@ export async function hasImageIndex(agentId: string): Promise<boolean> {
 export function vectorStoreDir(): string {
   return DIR;
 }
+
+/** Nombre de vecteurs indexés pour un agent (diagnostic). */
+export async function indexStats(agentId: string): Promise<{ text: number; image: number }> {
+  const l = await load(agentId);
+  return { text: l.text.ids.length, image: l.image.ids.length };
+}
