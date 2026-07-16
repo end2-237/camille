@@ -39,3 +39,7 @@ yarn-error.log*
 # casse le cache-mount Nixpacks au build : "not a directory")
 *.tsbuildinfo
 tsconfig.tsbuildinfo
+
+# artefact parasite (cache npm chemin Windows)
+D:\\npm-cache/
+"D:\npm-cache/"
