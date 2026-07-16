@@ -68,7 +68,10 @@ export async function saveAgentIndex(
   cache.set(agentId, { prepared: { text: prepare(text), image: prepare(image) } });
 }
 
-function topK(prep: Prepared, q: number[], limit: number): string[] {
+/** Score de similarité cosinus par produit (score ∈ [-1,1], ~1 = quasi identique). */
+export type Scored = { id: string; score: number };
+
+function topKScored(prep: Prepared, q: number[], limit: number): Scored[] {
   let qn = 0;
   for (let i = 0; i < q.length; i++) qn += q[i] * q[i];
   qn = Math.sqrt(qn) || 1;
@@ -77,22 +80,28 @@ function topK(prep: Prepared, q: number[], limit: number): string[] {
     const n = Math.min(v.length, q.length);
     let dot = 0;
     for (let k = 0; k < n; k++) dot += v[k] * q[k];
-    return { id, s: dot / (prep.norms[i] * qn) };
+    return { id, score: dot / (prep.norms[i] * qn) };
   });
-  scored.sort((a, b) => b.s - a.s);
-  return scored.slice(0, limit).map((x) => x.id);
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit);
 }
 
 /** Recherche sémantique texte : renvoie les product_id ordonnés par similarité. */
 export async function searchText(agentId: string, q: number[], limit: number): Promise<string[]> {
   const l = await load(agentId);
-  return l.text.ids.length ? topK(l.text, q, limit) : [];
+  return l.text.ids.length ? topKScored(l.text, q, limit).map((x) => x.id) : [];
 }
 
 /** Recherche visuelle : renvoie les product_id ordonnés par similarité. */
 export async function searchImage(agentId: string, q: number[], limit: number): Promise<string[]> {
   const l = await load(agentId);
-  return l.image.ids.length ? topK(l.image, q, limit) : [];
+  return l.image.ids.length ? topKScored(l.image, q, limit).map((x) => x.id) : [];
+}
+
+/** Recherche visuelle AVEC scores (pour appliquer un seuil de similarité). */
+export async function searchImageScored(agentId: string, q: number[], limit: number): Promise<Scored[]> {
+  const l = await load(agentId);
+  return l.image.ids.length ? topKScored(l.image, q, limit) : [];
 }
 
 /** true si l'agent a un index texte. */

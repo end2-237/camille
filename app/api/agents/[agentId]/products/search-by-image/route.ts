@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { embedImage, imageEmbeddingsEnabled } from "@/lib/imageEmbeddings";
-import { searchImage, indexStats } from "@/lib/vectorStore";
+import { searchImageScored, indexStats } from "@/lib/vectorStore";
 import { describeImage } from "@/lib/embeddings";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
@@ -29,14 +29,17 @@ async function fetchByIds(agentId: string, ids: string[]) {
   return ids.map((id) => byId.get(id)).filter(Boolean);
 }
 
-/** (1) CLIP + magasin de vecteurs intégré. Renvoie {rows} ou {fail} diagnostique. */
+/** (1) CLIP + magasin de vecteurs intégré. Renvoie {rows} (avec score) ou {fail}. */
 async function clipSearch(agentId: string, imageUrl: string, limit: number) {
   const emb = await embedImage(imageUrl);
   if (!emb) return { fail: "clip_query_failed" as const };
-  const ids = await searchImage(agentId, emb, limit);
-  if (!ids.length) return { fail: "index_empty" as const };
-  const rows = await fetchByIds(agentId, ids);
-  return { rows };
+  const scored = await searchImageScored(agentId, emb, limit);
+  if (!scored.length) return { fail: "index_empty" as const };
+  const rows = await fetchByIds(agentId, scored.map((s) => s.id));
+  // attache le score de similarité (arrondi) à chaque produit
+  const scoreById = new Map(scored.map((s) => [s.id, s.score]));
+  const withScore = rows.map((r) => ({ ...r, score: Math.round((scoreById.get(String(r.id)) ?? 0) * 1000) / 1000 }));
+  return { rows: withScore };
 }
 
 /** (2) OpenAI Vision : décrit l'image → recherche plein-texte sur les mots-clés. */
