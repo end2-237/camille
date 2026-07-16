@@ -15,7 +15,7 @@ import { describeImage } from "@/lib/embeddings";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url, variants`;
+const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url, variants, images`;
 
 /** Récupère les produits par ids (lecture seule) en conservant l'ordre de similarité. */
 async function fetchByIds(agentId: string, ids: string[]) {
