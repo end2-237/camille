@@ -3,8 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
-  // CLIP (recherche visuelle) : onnxruntime-node est un binaire natif, à ne pas bundler.
-  serverExternalPackages: ["@xenova/transformers"],
   images: {
     remotePatterns: [
       {
