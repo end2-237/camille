@@ -10,6 +10,7 @@ type RouteContext = { params: Promise<{ agentId: string; productId: string }> };
 const FIELDS = new Set([
   "name", "description", "price", "price_max", "currency", "category",
   "tags", "stock", "min_order", "rating", "image_url", "product_url", "active", "sort_order",
+  "variants", "images",
 ]);
 
 async function assertOwner(req: NextRequest, agentId: string) {
@@ -34,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
   const set = entries.map(([k], i) => `"${k}" = $${i + 3}`).join(", ");
   const vals = entries.map(([k, v]) =>
-    k === "tags" ? JSON.stringify(Array.isArray(v) ? v : []) : v
+    ["tags", "variants", "images"].includes(k) ? JSON.stringify(Array.isArray(v) ? v : []) : v
   );
 
   const r = await query(

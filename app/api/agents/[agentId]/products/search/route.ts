@@ -8,7 +8,7 @@ import { embedText, toVectorLiteral } from "@/lib/embeddings";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url`;
+const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url, variants`;
 
 /** Recherche sémantique (pgvector). Renvoie null si indisponible (→ repli mots-clés). */
 async function semanticSearch(agentId: string, q: string, limit: number) {
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       // Recherche plein-texte + fallback ILIKE pour la tolérance
       const res = await query(
         `SELECT id, name, description, price, price_max, currency, category, tags,
-                stock, image_url, product_url
+                stock, image_url, product_url, variants
          FROM camille.products
          WHERE agent_id = $1 AND active = true
            AND (
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     } else {
       const res = await query(
         `SELECT id, name, description, price, price_max, currency, category, tags,
-                stock, image_url, product_url
+                stock, image_url, product_url, variants
          FROM camille.products
          WHERE agent_id = $1 AND active = true
          ORDER BY sort_order ASC, created_at DESC

@@ -61,6 +61,9 @@ export default function CatalogPage() {
       product_url: (editing.product_url ?? "").trim() || null,
       active: editing.active ?? true,
       tags: (editing.tagsStr ?? "").split(",").map((t) => t.trim()).filter(Boolean),
+      variants: (editing.variants ?? [])
+        .map((v) => ({ name: (v.name ?? "").trim(), options: (v.options ?? []).map((o) => o.trim()).filter(Boolean) }))
+        .filter((v) => v.name && v.options.length),
     };
     try {
       const url = editing.id
@@ -281,6 +284,44 @@ export default function CatalogPage() {
               <Field label="Lien du produit (page d'achat — optionnel)">
                 <input className="cl-input" value={editing.product_url ?? ""} onChange={(e) => setEditing({ ...editing, product_url: e.target.value })} placeholder="https://votre-site.com/produit — vide = simple présentation" />
               </Field>
+              {/* Variantes */}
+              <Field label="Variations (couleur, taille, capacité…)">
+                <div className="space-y-2">
+                  {(editing.variants ?? []).map((v, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        className="cl-input" style={{ maxWidth: 130 }}
+                        value={v.name ?? ""} placeholder="Couleur"
+                        onChange={(e) => {
+                          const vs = [...(editing.variants ?? [])];
+                          vs[i] = { ...vs[i], name: e.target.value };
+                          setEditing({ ...editing, variants: vs });
+                        }}
+                      />
+                      <input
+                        className="cl-input flex-1"
+                        value={(v.options ?? []).join(", ")} placeholder="Noir, Blanc, Rouge"
+                        onChange={(e) => {
+                          const vs = [...(editing.variants ?? [])];
+                          vs[i] = { ...vs[i], options: e.target.value.split(",").map((o) => o.replace(/^\s+|\s+$/g, "")) };
+                          setEditing({ ...editing, variants: vs });
+                        }}
+                      />
+                      <button type="button" onClick={() => setEditing({ ...editing, variants: (editing.variants ?? []).filter((_, j) => j !== i) })}
+                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg" style={{ border: "1px solid var(--cl-line)", color: "#C2504B" }} aria-label="Retirer">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button"
+                    onClick={() => setEditing({ ...editing, variants: [...(editing.variants ?? []), { name: "", options: [] }] })}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium"
+                    style={{ border: "1px dashed var(--cl-line)", color: "var(--cl-ink-soft)" }}>
+                    <Plus className="h-3.5 w-3.5" /> Ajouter une variation
+                  </button>
+                </div>
+              </Field>
+
               <Field label="Tags (séparés par des virgules)">
                 <input className="cl-input" value={editing.tagsStr ?? ""} onChange={(e) => setEditing({ ...editing, tagsStr: e.target.value })} placeholder="Apple, Électronique, Display" />
               </Field>

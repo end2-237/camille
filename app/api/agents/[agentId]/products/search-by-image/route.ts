@@ -9,7 +9,7 @@ import { describeImage, embedText, toVectorLiteral } from "@/lib/embeddings";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url`;
+const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url, variants`;
 
 async function run(agentId: string, imageUrl: string, limit: number) {
   const desc = await describeImage(imageUrl);

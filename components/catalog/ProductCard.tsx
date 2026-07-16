@@ -17,6 +17,7 @@ export interface Product {
   rating?: number | string | null;
   image_url?: string | null;
   product_url?: string | null;
+  variants?: { name: string; options: string[] }[];
   active?: boolean;
 }
 
@@ -89,6 +90,20 @@ export function ProductCard({ product, footer }: { product: Product; footer?: Re
             </p>
           </div>
         </div>
+
+        {/* Variantes */}
+        {Array.isArray(product.variants) && product.variants.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {product.variants.slice(0, 3).map((v) => (
+              <div key={v.name} className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10.5px] font-medium" style={{ color: "var(--cl-ink-faint)" }}>{v.name} :</span>
+                {(v.options || []).slice(0, 6).map((o) => (
+                  <span key={o} className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink-soft)" }}>{o}</span>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Tags */}
         {tags.length > 0 && (
