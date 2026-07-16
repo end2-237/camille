@@ -1,22 +1,43 @@
 // GET/POST /api/agents/[agentId]/products/search-by-image
-//   body/query: { imageUrl }  → décrit l'image puis cherche les produits similaires.
+//   body/query: { imageUrl }  → trouve les produits visuellement proches.
 // Publique (appelée par n8n quand le client envoie une photo).
-// Approche : vision → mots-clés → recherche sémantique/plein-texte.
+//
+// Technique (nouvelle) : embedding CLIP local de l'image → similarité pgvector
+// dans Supabase sur products.image_embedding (aucune API OpenAI).
+// Replis en cascade : (1) CLIP+pgvector, (2) OpenAI Vision→mots-clés, (3) plein-texte.
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { embedImage } from "@/lib/imageEmbeddings";
 import { describeImage, embedText, toVectorLiteral } from "@/lib/embeddings";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
 const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url, variants`;
 
-async function run(agentId: string, imageUrl: string, limit: number) {
-  const desc = await describeImage(imageUrl);
-  if (!desc) {
-    return { error: "Recherche par image indisponible (OPENAI_API_KEY manquante).", products: [] as unknown[] };
+/** (1) CLIP : embedding visuel de l'image entrante → pgvector sur image_embedding. */
+async function clipSearch(agentId: string, imageUrl: string, limit: number) {
+  const emb = await embedImage(imageUrl);
+  if (!emb) return null;
+  try {
+    const res = await query(
+      `SELECT ${COLS}, (image_embedding <=> $2::vector) AS dist
+       FROM camille.products
+       WHERE agent_id = $1 AND active = true AND image_embedding IS NOT NULL
+       ORDER BY image_embedding <=> $2::vector
+       LIMIT $3`,
+      [agentId, toVectorLiteral(emb), limit]
+    );
+    return res.rows.length ? res.rows : null;
+  } catch {
+    return null; // colonne image_embedding absente / pgvector non installé
   }
-  // 1) sémantique
+}
+
+/** (2) OpenAI Vision : décrit l'image → embedding texte → pgvector sur embedding. */
+async function visionSearch(agentId: string, imageUrl: string, limit: number) {
+  const desc = await describeImage(imageUrl);
+  if (!desc) return null;
   const emb = await embedText(desc);
   if (emb) {
     try {
@@ -26,10 +47,10 @@ async function run(agentId: string, imageUrl: string, limit: number) {
          ORDER BY embedding <=> $2::vector LIMIT $3`,
         [agentId, toVectorLiteral(emb), limit]
       );
-      if (res.rows.length) return { keywords: desc, mode: "semantic", products: res.rows };
-    } catch { /* pas de pgvector → repli */ }
+      if (res.rows.length) return { keywords: desc, rows: res.rows };
+    } catch { /* repli */ }
   }
-  // 2) repli plein-texte sur les mots-clés
+  // plein-texte sur les mots-clés
   const res = await query(
     `SELECT ${COLS} FROM camille.products
      WHERE agent_id = $1 AND active = true
@@ -38,7 +59,17 @@ async function run(agentId: string, imageUrl: string, limit: number) {
      ORDER BY sort_order ASC LIMIT $3`,
     [agentId, desc, limit]
   );
-  return { keywords: desc, mode: "keyword", products: res.rows };
+  return { keywords: desc, rows: res.rows };
+}
+
+async function run(agentId: string, imageUrl: string, limit: number) {
+  const clip = await clipSearch(agentId, imageUrl, limit);
+  if (clip) return { mode: "clip", products: clip };
+
+  const vis = await visionSearch(agentId, imageUrl, limit);
+  if (vis) return { mode: "vision", keywords: vis.keywords, products: vis.rows };
+
+  return { error: "Recherche par image indisponible (CLIP non chargé et OPENAI_API_KEY manquante).", products: [] as unknown[] };
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
