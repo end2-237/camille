@@ -63,7 +63,12 @@ export default function CatalogPage() {
       active: editing.active ?? true,
       tags: (editing.tagsStr ?? "").split(",").map((t) => t.trim()).filter(Boolean),
       variants: (editing.variants ?? [])
-        .map((v) => ({ name: (v.name ?? "").trim(), options: (v.options ?? []).map((o) => o.trim()).filter(Boolean) }))
+        .map((v) => ({
+          name: (v.name ?? "").trim(),
+          options: (v.options ?? [])
+            .map((o) => (typeof o === "string" ? { value: o.trim(), image: null } : { value: (o.value ?? "").trim(), image: o.image || null }))
+            .filter((o) => o.value),
+        }))
         .filter((v) => v.name && v.options.length),
     };
     try {
@@ -81,6 +86,28 @@ export default function CatalogPage() {
       load();
     } catch { toast.error("Échec de l'enregistrement"); }
     finally { setSaving(false); }
+  }
+
+  // Upload d'une image liée à une option de variation
+  async function uploadVariantImage(f: File, gi: number, oi: number) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await fetch(`/api/agents/${agentId}/products/upload`, { method: "POST", headers: { ...authHeaders() }, body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Upload échoué");
+      setEditing((e) => {
+        if (!e) return e;
+        const vs = [...(e.variants ?? [])];
+        const opts = [...((vs[gi]?.options ?? []) as { value: string; image?: string | null }[])];
+        opts[oi] = { ...(opts[oi] as { value: string }), image: d.url };
+        vs[gi] = { ...vs[gi], options: opts };
+        return { ...e, variants: vs };
+      });
+      toast.success("Image de variation ajoutée");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Upload échoué"); }
+    finally { setUploading(false); }
   }
 
   async function uploadImage(f: File, extra = false) {
@@ -181,7 +208,14 @@ export default function CatalogPage() {
               footer={
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setEditing({ ...p, tagsStr: (p.tags ?? []).join(", ") })}
+                    onClick={() => setEditing({
+                      ...p,
+                      tagsStr: (p.tags ?? []).join(", "),
+                      variants: (p.variants ?? []).map((v) => ({
+                        name: v.name,
+                        options: (v.options ?? []).map((o) => (typeof o === "string" ? { value: o, image: null } : { value: o.value, image: o.image ?? null })),
+                      })),
+                    })}
                     className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] font-semibold text-white"
                     style={{ background: "#16141A" }}
                   >
@@ -311,34 +345,52 @@ export default function CatalogPage() {
               </Field>
 
               {/* Variantes */}
-              <Field label="Variations (couleur, taille, capacité…)">
-                <div className="space-y-2">
-                  {(editing.variants ?? []).map((v, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        className="cl-input" style={{ maxWidth: 130 }}
-                        value={v.name ?? ""} placeholder="Couleur"
-                        onChange={(e) => {
-                          const vs = [...(editing.variants ?? [])];
-                          vs[i] = { ...vs[i], name: e.target.value };
-                          setEditing({ ...editing, variants: vs });
-                        }}
-                      />
-                      <input
-                        className="cl-input flex-1"
-                        value={(v.options ?? []).join(", ")} placeholder="Noir, Blanc, Rouge"
-                        onChange={(e) => {
-                          const vs = [...(editing.variants ?? [])];
-                          vs[i] = { ...vs[i], options: e.target.value.split(",").map((o) => o.replace(/^\s+|\s+$/g, "")) };
-                          setEditing({ ...editing, variants: vs });
-                        }}
-                      />
-                      <button type="button" onClick={() => setEditing({ ...editing, variants: (editing.variants ?? []).filter((_, j) => j !== i) })}
-                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg" style={{ border: "1px solid var(--cl-line)", color: "#C2504B" }} aria-label="Retirer">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
+              <Field label="Variations (couleur, taille…) — image liée par option">
+                <div className="space-y-3">
+                  {(editing.variants ?? []).map((v, gi) => {
+                    const opts = (v.options ?? []) as { value: string; image?: string | null }[];
+                    const setGroup = (patch: Partial<{ name: string; options: { value: string; image?: string | null }[] }>) => {
+                      const vs = [...(editing.variants ?? [])];
+                      vs[gi] = { ...vs[gi], ...patch };
+                      setEditing({ ...editing, variants: vs });
+                    };
+                    return (
+                      <div key={gi} className="rounded-lg p-2.5" style={{ border: "1px solid var(--cl-line)" }}>
+                        <div className="flex items-center gap-2">
+                          <input className="cl-input" style={{ maxWidth: 160 }} value={v.name ?? ""} placeholder="Nom (Couleur, Taille…)"
+                            onChange={(e) => setGroup({ name: e.target.value })} />
+                          <button type="button" onClick={() => setEditing({ ...editing, variants: (editing.variants ?? []).filter((_, j) => j !== gi) })}
+                            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ border: "1px solid var(--cl-line)", color: "#C2504B" }} aria-label="Retirer">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="mt-2 space-y-1.5">
+                          {opts.map((o, oi) => (
+                            <div key={oi} className="flex items-center gap-2">
+                              <label className="flex h-9 w-9 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg" style={{ border: "1px solid var(--cl-line)", background: "var(--cl-bg-soft)" }}>
+                                {o.image
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  ? <img src={o.image} alt="" className="h-full w-full object-cover" />
+                                  : <ImageIcon className="h-3.5 w-3.5" style={{ color: "var(--cl-ink-faint)" }} />}
+                                <input type="file" accept="image/*" className="hidden" disabled={uploading}
+                                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadVariantImage(f, gi, oi); e.currentTarget.value = ""; }} />
+                              </label>
+                              <input className="cl-input flex-1" value={o.value ?? ""} placeholder="Ex : Noir"
+                                onChange={(e) => { const os = [...opts]; os[oi] = { ...os[oi], value: e.target.value }; setGroup({ options: os }); }} />
+                              <button type="button" onClick={() => setGroup({ options: opts.filter((_, j) => j !== oi) })}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: "var(--cl-ink-faint)" }} aria-label="Retirer option">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setGroup({ options: [...opts, { value: "", image: null }] })}
+                            className="inline-flex items-center gap-1 text-[11.5px] font-medium" style={{ color: "var(--cl-accent-deep)" }}>
+                            <Plus className="h-3 w-3" /> Ajouter une option
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                   <button type="button"
                     onClick={() => setEditing({ ...editing, variants: [...(editing.variants ?? []), { name: "", options: [] }] })}
                     className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium"

@@ -18,9 +18,14 @@ export interface Product {
   image_url?: string | null;
   images?: string[];
   product_url?: string | null;
-  variants?: { name: string; options: string[] }[];
+  variants?: { name: string; options: VariantOption[] }[];
   active?: boolean;
 }
+
+// Une option de variation : texte simple OU { valeur + image liée }
+export type VariantOption = string | { value: string; image?: string | null };
+export const optValue = (o: VariantOption) => (typeof o === "string" ? o : o.value);
+export const optImage = (o: VariantOption) => (typeof o === "string" ? null : o.image ?? null);
 
 function fmtPrice(p: Product): string {
   const cur = p.currency || "XAF";
@@ -103,9 +108,18 @@ export function ProductCard({ product, footer }: { product: Product; footer?: Re
             {product.variants.slice(0, 3).map((v) => (
               <div key={v.name} className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[10.5px] font-medium" style={{ color: "var(--cl-ink-faint)" }}>{v.name} :</span>
-                {(v.options || []).slice(0, 6).map((o) => (
-                  <span key={o} className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink-soft)" }}>{o}</span>
-                ))}
+                {(v.options || []).slice(0, 6).map((o, i) => {
+                  const val = optValue(o); const img = optImage(o);
+                  return (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-2 text-[10px] font-medium" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink-soft)" }}>
+                      {img && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={img} alt="" className="h-4 w-4 rounded-full object-cover" />
+                      )}
+                      {val}
+                    </span>
+                  );
+                })}
               </div>
             ))}
           </div>
