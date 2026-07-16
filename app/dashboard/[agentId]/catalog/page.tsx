@@ -58,6 +58,7 @@ export default function CatalogPage() {
       stock: editing.stock === "" || editing.stock == null ? null : Number(editing.stock),
       min_order: editing.min_order ?? 1,
       image_url: editing.image_url ?? null,
+      images: (editing.images ?? []).filter(Boolean),
       product_url: (editing.product_url ?? "").trim() || null,
       active: editing.active ?? true,
       tags: (editing.tagsStr ?? "").split(",").map((t) => t.trim()).filter(Boolean),
@@ -82,7 +83,7 @@ export default function CatalogPage() {
     finally { setSaving(false); }
   }
 
-  async function uploadImage(f: File) {
+  async function uploadImage(f: File, extra = false) {
     setUploading(true);
     try {
       const fd = new FormData();
@@ -90,7 +91,7 @@ export default function CatalogPage() {
       const r = await fetch(`/api/agents/${agentId}/products/upload`, { method: "POST", headers: { ...authHeaders() }, body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Upload échoué");
-      setEditing((e) => (e ? { ...e, image_url: d.url } : e));
+      setEditing((e) => e ? (extra ? { ...e, images: [...(e.images ?? []), d.url] } : { ...e, image_url: d.url }) : e);
       toast.success("Image téléversée");
     } catch (err) { toast.error(err instanceof Error ? err.message : "Upload échoué"); }
     finally { setUploading(false); }
@@ -284,6 +285,31 @@ export default function CatalogPage() {
               <Field label="Lien du produit (page d'achat — optionnel)">
                 <input className="cl-input" value={editing.product_url ?? ""} onChange={(e) => setEditing({ ...editing, product_url: e.target.value })} placeholder="https://votre-site.com/produit — vide = simple présentation" />
               </Field>
+              {/* Images supplémentaires */}
+              <Field label="Images supplémentaires (galerie)">
+                <div className="flex flex-wrap items-center gap-2">
+                  {(editing.images ?? []).map((url, i) => (
+                    <div key={i} className="relative h-14 w-14 overflow-hidden rounded-lg" style={{ border: "1px solid var(--cl-line)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                      <button type="button"
+                        onClick={() => setEditing({ ...editing, images: (editing.images ?? []).filter((_, j) => j !== i) })}
+                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-white" style={{ background: "rgba(25,23,27,0.7)" }} aria-label="Retirer">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-lg" style={{ border: "1px dashed var(--cl-line)", color: "var(--cl-ink-faint)" }}>
+                    {uploading ? <span className="text-[9px]">…</span> : <Plus className="h-4 w-4" />}
+                    <input type="file" accept="image/*" className="hidden" disabled={uploading}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, true); e.currentTarget.value = ""; }} />
+                  </label>
+                </div>
+                <p className="mt-1.5 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
+                  Photos additionnelles (angles, détails) — envoyées en album sur demande.
+                </p>
+              </Field>
+
               {/* Variantes */}
               <Field label="Variations (couleur, taille, capacité…)">
                 <div className="space-y-2">

@@ -16,6 +16,7 @@ export interface Product {
   min_order?: number | null;
   rating?: number | string | null;
   image_url?: string | null;
+  images?: string[];
   product_url?: string | null;
   variants?: { name: string; options: string[] }[];
   active?: boolean;
@@ -39,9 +40,14 @@ export function ProductCard({ product, footer }: { product: Product; footer?: Re
     >
       {/* Image */}
       <div
-        className="flex items-center justify-center"
+        className="relative flex items-center justify-center"
         style={{ background: "var(--cl-bg-soft)", aspectRatio: "16 / 11" }}
       >
+        {Array.isArray(product.images) && product.images.length > 0 && (
+          <span className="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: "rgba(25,23,27,0.6)" }}>
+            +{product.images.length} 📷
+          </span>
+        )}
         {product.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={product.image_url} alt={product.name} className="h-full w-full object-contain p-3" />
