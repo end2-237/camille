@@ -12,12 +12,11 @@ import { saveAgentIndex } from "@/lib/vectorStore";
 const ADMIN_KEY = process.env.ADMIN_REINDEX_KEY || "";
 
 export async function POST(req: NextRequest) {
-  if (!ADMIN_KEY) {
-    return NextResponse.json({ error: "ADMIN_REINDEX_KEY non configurée sur le serveur." }, { status: 500 });
-  }
-  if (req.headers.get("x-admin-key") !== ADMIN_KEY) {
+  // Si ADMIN_REINDEX_KEY est défini → on l'exige. Sinon endpoint ouvert (à sécuriser plus tard).
+  if (ADMIN_KEY && req.headers.get("x-admin-key") !== ADMIN_KEY) {
     return NextResponse.json({ error: "Clé admin invalide." }, { status: 403 });
   }
+  const warning = ADMIN_KEY ? undefined : "ADMIN_REINDEX_KEY non définie — endpoint OUVERT. Pense à la définir.";
 
   const doText = embeddingsEnabled();
   const doImage = imageEmbeddingsEnabled();
@@ -67,5 +66,5 @@ export async function POST(req: NextRequest) {
     { agents: 0, text: 0, image: 0 }
   );
 
-  return NextResponse.json({ success: true, engines: { text: doText, image: doImage }, totals, results });
+  return NextResponse.json({ success: true, warning, engines: { text: doText, image: doImage }, totals, results });
 }
