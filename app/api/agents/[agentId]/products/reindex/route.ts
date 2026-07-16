@@ -1,15 +1,16 @@
 // POST /api/agents/[agentId]/products/reindex
-// (Re)calcule les embeddings des produits actifs :
-//   - embedding TEXTE (recherche sémantique)  → OpenAI, colonne `embedding` vector(1536)
-//   - embedding IMAGE (recherche visuelle CLIP) → local, colonne `image_embedding` vector(512)
-// Chaque volet s'exécute s'il est disponible ; l'un peut marcher sans l'autre.
-// Nécessite migration_catalog_v2 (+ pgvector).
+// Calcule les embeddings des produits actifs et les écrit dans le magasin de
+// vecteurs intégré (fichier sur volume persistant) — AUCUNE écriture dans Postgres.
+//   - embedding TEXTE  → OpenAI (si OPENAI_API_KEY) — recherche sémantique
+//   - embedding IMAGE  → CLIP local (si @xenova/transformers) — recherche visuelle
+// Chaque volet s'exécute s'il est disponible.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
-import { embedText, toVectorLiteral, embeddingsEnabled, productText } from "@/lib/embeddings";
+import { embedText, embeddingsEnabled, productText } from "@/lib/embeddings";
 import { embedImage, imageEmbeddingsEnabled } from "@/lib/imageEmbeddings";
+import { saveAgentIndex } from "@/lib/vectorStore";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
@@ -44,61 +45,28 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Table produits indisponible." }, { status: 500 });
   }
 
-  let textIndexed = 0, imageIndexed = 0, failed = 0;
-  for (const p of prods) {
-    let touched = false;
+  const textMap: Record<string, number[]> = {};
+  const imageMap: Record<string, number[]> = {};
+  let textIndexed = 0, imageIndexed = 0;
 
-    // 1) embedding texte
+  for (const p of prods) {
     if (doText) {
       const emb = await embedText(productText({ ...p, tags: p.tags }));
-      if (emb) {
-        try {
-          await query(
-            "UPDATE camille.products SET embedding = $1::vector WHERE id = $2 AND agent_id = $3",
-            [toVectorLiteral(emb), p.id, agentId]
-          );
-          textIndexed++; touched = true;
-        } catch {
-          return NextResponse.json(
-            { error: "Colonne embedding absente — appliquez migration_catalog_v2.sql (+ pgvector).", indexed: textIndexed },
-            { status: 400 }
-          );
-        }
-      }
+      if (emb) { textMap[p.id] = emb; textIndexed++; }
     }
-
-    // 2) embedding image (CLIP)
     if (doImage && p.image_url) {
       const iemb = await embedImage(p.image_url);
-      if (iemb) {
-        try {
-          await query(
-            "UPDATE camille.products SET image_embedding = $1::vector WHERE id = $2 AND agent_id = $3",
-            [toVectorLiteral(iemb), p.id, agentId]
-          );
-          imageIndexed++; touched = true;
-        } catch {
-          return NextResponse.json(
-            { error: "Colonne image_embedding absente — appliquez migration_catalog_v2.sql (+ pgvector).", indexed: textIndexed },
-            { status: 400 }
-          );
-        }
-      }
-    }
-
-    if (touched) {
-      await query("UPDATE camille.products SET needs_reindex = false WHERE id = $1 AND agent_id = $2", [p.id, agentId]);
-    } else {
-      failed++;
+      if (iemb) { imageMap[p.id] = iemb; imageIndexed++; }
     }
   }
+
+  await saveAgentIndex(agentId, textMap, imageMap);
 
   return NextResponse.json({
     success: true,
     total: prods.length,
     text_indexed: textIndexed,
     image_indexed: imageIndexed,
-    failed,
     engines: { text: doText, image: doImage },
   });
 }

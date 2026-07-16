@@ -2,55 +2,47 @@
 //   body/query: { imageUrl }  → trouve les produits visuellement proches.
 // Publique (appelée par n8n quand le client envoie une photo).
 //
-// Technique (nouvelle) : embedding CLIP local de l'image → similarité pgvector
-// dans Supabase sur products.image_embedding (aucune API OpenAI).
-// Replis en cascade : (1) CLIP+pgvector, (2) OpenAI Vision→mots-clés, (3) plein-texte.
+// Technique : embedding CLIP local de l'image entrante → similarité dans le
+// magasin de vecteurs intégré (fichier, Option A) → on récupère les produits
+// correspondants dans Postgres (LECTURE seule, aucune modification de schéma).
+// Replis : (1) CLIP + magasin, (2) OpenAI Vision → mots-clés, (3) plein-texte.
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { embedImage } from "@/lib/imageEmbeddings";
-import { describeImage, embedText, toVectorLiteral } from "@/lib/embeddings";
+import { searchImage } from "@/lib/vectorStore";
+import { describeImage } from "@/lib/embeddings";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
 const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url, variants`;
 
-/** (1) CLIP : embedding visuel de l'image entrante → pgvector sur image_embedding. */
+/** Récupère les produits par ids (lecture seule) en conservant l'ordre de similarité. */
+async function fetchByIds(agentId: string, ids: string[]) {
+  if (!ids.length) return [];
+  const res = await query(
+    `SELECT ${COLS} FROM camille.products
+     WHERE agent_id = $1 AND active = true AND id = ANY($2::uuid[])`,
+    [agentId, ids]
+  );
+  const byId = new Map(res.rows.map((r) => [String(r.id), r]));
+  return ids.map((id) => byId.get(id)).filter(Boolean);
+}
+
+/** (1) CLIP + magasin de vecteurs intégré. */
 async function clipSearch(agentId: string, imageUrl: string, limit: number) {
   const emb = await embedImage(imageUrl);
   if (!emb) return null;
-  try {
-    const res = await query(
-      `SELECT ${COLS}, (image_embedding <=> $2::vector) AS dist
-       FROM camille.products
-       WHERE agent_id = $1 AND active = true AND image_embedding IS NOT NULL
-       ORDER BY image_embedding <=> $2::vector
-       LIMIT $3`,
-      [agentId, toVectorLiteral(emb), limit]
-    );
-    return res.rows.length ? res.rows : null;
-  } catch {
-    return null; // colonne image_embedding absente / pgvector non installé
-  }
+  const ids = await searchImage(agentId, emb, limit);
+  if (!ids.length) return null;
+  const rows = await fetchByIds(agentId, ids);
+  return rows.length ? rows : null;
 }
 
-/** (2) OpenAI Vision : décrit l'image → embedding texte → pgvector sur embedding. */
+/** (2) OpenAI Vision : décrit l'image → recherche plein-texte sur les mots-clés. */
 async function visionSearch(agentId: string, imageUrl: string, limit: number) {
   const desc = await describeImage(imageUrl);
   if (!desc) return null;
-  const emb = await embedText(desc);
-  if (emb) {
-    try {
-      const res = await query(
-        `SELECT ${COLS} FROM camille.products
-         WHERE agent_id = $1 AND active = true AND embedding IS NOT NULL
-         ORDER BY embedding <=> $2::vector LIMIT $3`,
-        [agentId, toVectorLiteral(emb), limit]
-      );
-      if (res.rows.length) return { keywords: desc, rows: res.rows };
-    } catch { /* repli */ }
-  }
-  // plein-texte sur les mots-clés
   const res = await query(
     `SELECT ${COLS} FROM camille.products
      WHERE agent_id = $1 AND active = true
@@ -69,7 +61,7 @@ async function run(agentId: string, imageUrl: string, limit: number) {
   const vis = await visionSearch(agentId, imageUrl, limit);
   if (vis) return { mode: "vision", keywords: vis.keywords, products: vis.rows };
 
-  return { error: "Recherche par image indisponible (CLIP non chargé et OPENAI_API_KEY manquante).", products: [] as unknown[] };
+  return { error: "Recherche par image indisponible (index vide et OPENAI_API_KEY manquante).", products: [] as unknown[] };
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {

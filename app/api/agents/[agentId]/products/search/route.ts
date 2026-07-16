@@ -4,29 +4,28 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { embedText, toVectorLiteral } from "@/lib/embeddings";
+import { embedText } from "@/lib/embeddings";
+import { searchText } from "@/lib/vectorStore";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
 const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url, variants`;
 
-/** Recherche sémantique (pgvector). Renvoie null si indisponible (→ repli mots-clés). */
+/** Recherche sémantique via le magasin de vecteurs intégré (fichier).
+ *  Renvoie null si indisponible (pas d'index ou pas d'OPENAI_API_KEY) → repli mots-clés. */
 async function semanticSearch(agentId: string, q: string, limit: number) {
   const emb = await embedText(q);
   if (!emb) return null;
-  try {
-    const res = await query(
-      `SELECT ${COLS}, (embedding <=> $2::vector) AS dist
-       FROM camille.products
-       WHERE agent_id = $1 AND active = true AND embedding IS NOT NULL
-       ORDER BY embedding <=> $2::vector
-       LIMIT $3`,
-      [agentId, toVectorLiteral(emb), limit]
-    );
-    return res.rows.length ? res.rows : null;
-  } catch {
-    return null; // colonne embedding absente / pgvector non installé
-  }
+  const ids = await searchText(agentId, emb, limit);
+  if (!ids.length) return null;
+  const res = await query(
+    `SELECT ${COLS} FROM camille.products
+     WHERE agent_id = $1 AND active = true AND id = ANY($2::uuid[])`,
+    [agentId, ids]
+  );
+  const byId = new Map(res.rows.map((r) => [String(r.id), r]));
+  const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+  return ordered.length ? ordered : null;
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
