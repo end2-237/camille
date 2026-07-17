@@ -1,0 +1,9 @@
+{
+  "name": "camille-catalogue-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serveur MCP exposant le catalogue Camille / marketplace comme outils.",
+  "type": "commonjs",
+  "bin": { "camille-catalogue-mcp": "server.js" },
+  "scripts": { "start": "node server.js", "test": "node test_mcp.js" }
+}
