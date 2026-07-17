@@ -14,41 +14,56 @@ export function ofsEnabled(): boolean {
   return !!OFS_ANON;
 }
 
+/** true si le mode LIVE OFS est activé pour ce déploiement (env OFS_LIVE=1 + clé anon). */
+export function ofsLiveEnabled(): boolean {
+  return process.env.OFS_LIVE === "1" && !!OFS_ANON;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export type OfsProduct = {
-  name: string; description: string | null; price: number | null; price_max: number | null;
+  id: string; name: string; description: string | null; price: number | null; price_max: number | null;
   currency: string; category: string | null; tags: string[]; stock: number | null;
   image_url: string | null; images: string[]; product_url: string | null;
   variants: { name: string; options: { value: string; image?: string | null }[] }[];
 };
 
-function mapColors(colors: any): OfsProduct["variants"] {
-  if (!colors) return [];
-  let arr: any[] = [];
-  if (Array.isArray(colors)) arr = colors;
-  else if (typeof colors === "string") { try { const p = JSON.parse(colors); arr = Array.isArray(p) ? p : []; } catch { arr = colors.split(",").map((s) => s.trim()); } }
-  const options = arr.map((c) => (typeof c === "string" ? { value: c } : { value: c.name || c.value || c.color || "", image: c.image || c.img || null }))
-    .filter((o) => o.value);
-  return options.length ? [{ name: "Couleur", options }] : [];
+function toArr(v: any): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map((x) => (typeof x === "string" ? x : x?.name || x?.value || "")).filter(Boolean);
+  if (typeof v === "string") { try { const p = JSON.parse(v); return Array.isArray(p) ? toArr(p) : []; } catch { return v.split(",").map((s) => s.trim()).filter(Boolean); } }
+  return [];
+}
+function stripHtml(s: any): string | null {
+  if (!s) return null;
+  return String(s).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim().slice(0, 400) || null;
+}
+function mapVariants(p: any): OfsProduct["variants"] {
+  const out: OfsProduct["variants"] = [];
+  const colors = toArr(p.colors);
+  const sizes = toArr(p.sizes);
+  if (colors.length) out.push({ name: "Couleur", options: colors.map((c) => ({ value: c })) });
+  if (sizes.length) out.push({ name: "Taille", options: sizes.map((s) => ({ value: s })) });
+  return out;
 }
 
 function mapProduct(p: any): OfsProduct {
   const imgs = Array.isArray(p.images) ? p.images.filter(Boolean) : [];
   const onSale = p.is_on_sale && p.now != null;
   return {
+    id: String(p.id),
     name: p.name || "Produit",
-    description: p.description ?? null,
+    description: stripHtml(p.description),
     price: onSale ? Number(p.now) : (p.price != null ? Number(p.price) : null),
     price_max: onSale && p.price != null ? Number(p.price) : null,
     currency: "XAF",
-    category: p.category || p.type || null,
-    tags: ["ofs", "ofs:" + p.id].concat(p.brand ? [String(p.brand)] : []),
-    stock: p.quantity != null ? Number(p.quantity) : null,
+    category: p.type || p.subcategory || null,
+    tags: ["ofs", "ofs:" + p.id].concat(p.subcategory ? [String(p.subcategory)] : []).concat(p.brand ? [String(p.brand)] : []),
+    stock: p.stock_qty != null ? Number(p.stock_qty) : null,
     image_url: p.img || imgs[0] || null,
     images: imgs,
     product_url: `https://www.onefreestyle.store/product/${p.id}`,
-    variants: mapColors(p.colors),
+    variants: mapVariants(p),
   };
 }
 
@@ -98,7 +113,7 @@ export async function searchOfs(q: string, limit = 12, opts?: { vendorId?: strin
   let sel = sb.from("products").select("*").limit(Math.min(limit, 50));
   if (opts?.vendorId) sel = sel.eq("vendor_id", opts.vendorId);
   if (opts?.cjOnly) sel = sel.is("vendor_id", null);
-  if (q && q.trim()) sel = sel.or(`name.ilike.%${q}%,description.ilike.%${q}%,type.ilike.%${q}%,category.ilike.%${q}%`);
+  if (q && q.trim()) { const s = q.replace(/[%,()]/g, " ").trim(); sel = sel.or(`name.ilike.%${s}%,type.ilike.%${s}%,subcategory.ilike.%${s}%,cj_category_name.ilike.%${s}%`); }
   const r = await sel;
   if (r.error) throw new Error("Recherche OFS : " + r.error.message);
   return (r.data || []).map(mapProduct);

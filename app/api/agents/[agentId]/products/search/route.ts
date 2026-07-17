@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { embedText } from "@/lib/embeddings";
 import { searchText } from "@/lib/vectorStore";
+import { ofsLiveEnabled, searchOfs } from "@/lib/ofs";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
@@ -34,6 +35,15 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 8, 20);
 
   try {
+    // 0) mode LIVE OFS : le catalogue vient de la marketplace en direct (pas de la DB Camille)
+    if (ofsLiveEnabled()) {
+      try {
+        const rows = await searchOfs(q, limit, { cjOnly: true });
+        return NextResponse.json({ query: q, mode: "ofs-live", count: rows.length, products: rows });
+      } catch (e) {
+        console.error("[ofs-live]", e); // en cas d'échec OFS → on retombe sur la DB locale
+      }
+    }
     // 1) recherche sémantique si disponible
     if (q) {
       const sem = await semanticSearch(agentId, q, limit);
