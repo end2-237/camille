@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings,
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug,
 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -145,6 +145,9 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
               <NavItem href={`/dashboard/${activeAgentId}/settings`} label="Config"
                 icon={<Settings className="w-3.5 h-3.5" />}
                 active={pathname.endsWith("/settings")} collapsed={collapsed} />
+              <NavItem href={`/dashboard/${activeAgentId}/integrations`} label="Intégrations"
+                icon={<Plug className="w-3.5 h-3.5" />}
+                active={pathname.endsWith("/integrations")} collapsed={collapsed} />
             </>
           ) : null;
         })()}
