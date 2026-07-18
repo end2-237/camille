@@ -115,9 +115,23 @@ export async function importOfs(email: string, password: string, mode: OfsMode, 
 }
 
 const STOP = new Set(["je", "veux", "un", "une", "des", "les", "le", "la", "du", "de", "pour", "moi", "montre", "stp", "cherche", "avec", "mon", "ma", "mes", "ce", "cette", "quel", "quelle", "est", "ai", "tu", "vous", "sur", "svp", "please", "the", "and", "matos", "truc", "chose", "avoir", "besoin"]);
+// FR -> EN : les produits OFS/CJ sont nommés en anglais ; on élargit la requête.
+const SYN: Record<string, string[]> = {
+  casque: ["headphones", "headset"], casques: ["headphones", "headset"], ecouteur: ["earphones", "earbuds"], ecouteurs: ["earphones", "earbuds"],
+  micro: ["microphone", "mic"], microphone: ["microphone", "mic"], enceinte: ["speaker"], enceintes: ["speaker"],
+  montre: ["watch"], montres: ["watch"], sac: ["bag", "backpack"], sacs: ["bag", "backpack"], souris: ["mouse"], clavier: ["keyboard"], claviers: ["keyboard"],
+  robe: ["dress"], robes: ["dress"], chaussure: ["shoes", "sneakers"], chaussures: ["shoes", "sneakers"], basket: ["sneakers"], baskets: ["sneakers"],
+  bijou: ["jewelry"], bijoux: ["jewelry"], collier: ["necklace"], colliers: ["necklace"], bracelet: ["bracelet"], bague: ["ring"],
+  mug: ["mug", "cup"], tasse: ["cup", "mug"], bureau: ["desk"], perruque: ["wig"], perruques: ["wig"], cheveux: ["hair", "wig"],
+  camera: ["camera"], appareil: ["camera"], ordinateur: ["computer", "laptop"], telephone: ["phone"], montre_connectee: ["smart watch"],
+  lampe: ["light", "lamp"], sport: ["sport"], jouet: ["toy"], jouets: ["toy"], cuisine: ["kitchen"], maison: ["home"],
+};
 function tokens(q: string): string[] {
-  return String(q || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ")
+  const base = String(q || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ")
     .split(/\s+/).filter((w) => w.length >= 3 && !STOP.has(w)).slice(0, 6);
+  const out: string[] = [];
+  base.forEach((w) => { out.push(w); (SYN[w] || []).forEach((s) => out.push(s)); });
+  return Array.from(new Set(out)).slice(0, 12);
 }
 
 /** Recherche LIVE dans OFS (lecture publique). Tokenisée + classée par pertinence :
