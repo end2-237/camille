@@ -35,13 +35,23 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 8, 20);
 
   try {
-    // 0) mode LIVE OFS : le catalogue vient de la marketplace en direct (pas de la DB Camille)
-    if (ofsLiveEnabled()) {
+    // 0) source du catalogue : réglage PAR AGENT (catalog_source / ofs_vendor_id),
+    //    avec repli sur le flag global OFS_LIVE. "ofs_shop" = boutique du marchand,
+    //    "ofs_cj" = catalogue plateforme CJ, sinon la DB Camille.
+    let src = ofsLiveEnabled() ? "ofs_cj" : "camille";
+    let ofsVendorId: string | null = null;
+    try {
+      const cfg = await query("SELECT catalog_source, ofs_vendor_id FROM camille.agents WHERE id = $1", [agentId]);
+      if (cfg.rows.length && cfg.rows[0].catalog_source) { src = cfg.rows[0].catalog_source; ofsVendorId = cfg.rows[0].ofs_vendor_id || null; }
+    } catch { /* colonnes absentes → on garde le repli global */ }
+
+    if (src === "ofs_cj" || src === "ofs_shop") {
       try {
-        const rows = await searchOfs(q, limit, { cjOnly: true });
-        return NextResponse.json({ query: q, mode: "ofs-live", count: rows.length, products: rows });
+        const opts = src === "ofs_shop" && ofsVendorId ? { vendorId: ofsVendorId } : { cjOnly: true };
+        const rows = await searchOfs(q, limit, opts);
+        return NextResponse.json({ query: q, mode: src === "ofs_shop" ? "ofs-shop" : "ofs-live", count: rows.length, products: rows });
       } catch (e) {
-        console.error("[ofs-live]", e); // en cas d'échec OFS → on retombe sur la DB locale
+        console.error("[ofs]", e); // échec OFS → repli DB locale
       }
     }
     // 1) recherche sémantique si disponible

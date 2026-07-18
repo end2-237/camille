@@ -40,8 +40,24 @@ export default function IntegrationsPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"shop" | "cj" | "all">("shop");
+  const [conn, setConn] = useState<"live" | "import">("live");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function bindOfs() {
+    setBusy(true); setMsg(null);
+    const source = mode === "cj" ? "ofs_cj" : "ofs_shop";
+    try {
+      const r = await fetch(`/api/agents/${agentId}/integrations/ofs-bind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ email, password, source }),
+      });
+      const d = await r.json();
+      if (!r.ok) setMsg({ ok: false, text: d.error || "Échec de la connexion." });
+      else setMsg({ ok: true, text: `✅ Connecté en LIVE${d.vendor ? " — boutique " + d.vendor.shop_name : " (catalogue plateforme CJ)"}. Ton bot répond maintenant en direct depuis OFS.` });
+    } catch (e) { setMsg({ ok: false, text: String(e) }); } finally { setBusy(false); }
+  }
 
   async function importOfs() {
     setBusy(true); setMsg(null);

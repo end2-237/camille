@@ -74,6 +74,15 @@ async function client(email: string, password: string): Promise<{ sb: SupabaseCl
   return { sb, userId: data.user.id };
 }
 
+/** Connexion légère : renvoie le compte, son statut super-admin et sa boutique (sans produits). */
+export async function connectOfs(email: string, password: string): Promise<{ userId: string; isSuperAdmin: boolean; vendor: any | null }> {
+  if (!OFS_ANON) throw new Error("OFS_SUPABASE_ANON_KEY manquante côté serveur.");
+  const { sb, userId } = await client(email, password);
+  const prof = await sb.from("profiles").select("is_super_admin").eq("id", userId).maybeSingle();
+  const vend = await sb.from("vendors").select("id, shop_name").eq("user_id", userId).maybeSingle();
+  return { userId, isSuperAdmin: !!prof.data?.is_super_admin, vendor: vend.data || null };
+}
+
 export type OfsMode = "shop" | "cj" | "all";
 
 /** Importe le catalogue OFS.
@@ -105,16 +114,47 @@ export async function importOfs(email: string, password: string, mode: OfsMode, 
   return { products: (prodRes.data || []).map(mapProduct), isSuperAdmin, vendor };
 }
 
-/** Recherche LIVE dans OFS (lecture publique, sans login) — pour brancher le gros
- *  catalogue CJ en direct (MCP / RAG) sans tout importer. */
+const STOP = new Set(["je", "veux", "un", "une", "des", "les", "le", "la", "du", "de", "pour", "moi", "montre", "stp", "cherche", "avec", "mon", "ma", "mes", "ce", "cette", "quel", "quelle", "est", "ai", "tu", "vous", "sur", "svp", "please", "the", "and", "matos", "truc", "chose", "avoir", "besoin"]);
+function tokens(q: string): string[] {
+  return String(q || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/).filter((w) => w.length >= 3 && !STOP.has(w)).slice(0, 6);
+}
+
+/** Recherche LIVE dans OFS (lecture publique). Tokenisée + classée par pertinence :
+ *  chaque mot significatif est cherché dans name/subcategory/type/cj_category_name,
+ *  puis on classe par nombre de mots présents dans le nom/la catégorie. */
 export async function searchOfs(q: string, limit = 12, opts?: { vendorId?: string; cjOnly?: boolean }): Promise<OfsProduct[]> {
   if (!OFS_ANON) throw new Error("OFS_SUPABASE_ANON_KEY manquante.");
   const sb = createClient(OFS_URL, OFS_ANON, { auth: { persistSession: false } });
-  let sel = sb.from("products").select("*").limit(Math.min(limit, 50));
-  if (opts?.vendorId) sel = sel.eq("vendor_id", opts.vendorId);
-  if (opts?.cjOnly) sel = sel.is("vendor_id", null);
-  if (q && q.trim()) { const s = q.replace(/[%,()]/g, " ").trim(); sel = sel.or(`name.ilike.%${s}%,type.ilike.%${s}%,subcategory.ilike.%${s}%,cj_category_name.ilike.%${s}%`); }
-  const r = await sel;
+  const words = tokens(q);
+  const fetchN = words.length ? Math.min(limit * 5, 60) : Math.min(limit, 30);
+
+  function base() {
+    let s = sb.from("products").select("*").limit(fetchN);
+    if (opts?.vendorId) s = s.eq("vendor_id", opts.vendorId);
+    if (opts?.cjOnly) s = s.is("vendor_id", null);
+    return s;
+  }
+
+  if (!words.length) {
+    const r = await base();
+    if (r.error) throw new Error("Recherche OFS : " + r.error.message);
+    return (r.data || []).map(mapProduct).slice(0, limit);
+  }
+
+  // OR sur chaque mot × plusieurs champs
+  const ors = words.flatMap((w) => [`name.ilike.%${w}%`, `subcategory.ilike.%${w}%`, `type.ilike.%${w}%`, `cj_category_name.ilike.%${w}%`]).join(",");
+  const r = await base().or(ors);
   if (r.error) throw new Error("Recherche OFS : " + r.error.message);
-  return (r.data || []).map(mapProduct);
+  const rows = (r.data || []);
+  // classement : nombre de mots présents (nom compte double)
+  const scored = rows.map((p: any) => {
+    const name = String(p.name || "").toLowerCase();
+    const cat = (String(p.type || "") + " " + String(p.subcategory || "") + " " + String(p.cj_category_name || "")).toLowerCase();
+    let s = 0;
+    words.forEach((w) => { if (name.includes(w)) s += 2; else if (cat.includes(w)) s += 1; });
+    return { p, s };
+  });
+  scored.sort((a, b) => b.s - a.s);
+  return scored.slice(0, limit).map((x) => mapProduct(x.p));
 }
