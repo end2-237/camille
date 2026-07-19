@@ -34,6 +34,14 @@ function dateRange(days: number): { from: string; to: string } {
   };
 }
 
+// Exécute une requête en tolérant les dérives de schéma (colonne/table absente) :
+// renvoie des lignes vides au lieu de faire planter toute la page de stats.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function safe(sql: string, params: unknown[]): Promise<{ rows: any[] }> {
+  try { return (await safe(sql, params)) as any; }
+  catch (e) { console.error("[stats] requête ignorée:", (e as Error).message); return { rows: [] }; }
+}
+
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -48,7 +56,7 @@ export async function GET(req: NextRequest) {
     const { from, to } = dateRange(days);
 
     // ── 1. Fetch agents belonging to user ─────────────────────────────────────
-    const agentsRes = await query(
+    const agentsRes = await safe(
       `SELECT id, plan, status, capabilities, identity, business_context, created_at
        FROM camille.agents
        WHERE user_id = $1
@@ -74,7 +82,7 @@ export async function GET(req: NextRequest) {
     const agentIdsParam = agentIds.map((_, i) => `$${i + 1}`).join(",");
 
     // ── 2. Daily analytics series ─────────────────────────────────────────────
-    const analyticsRes = await query(
+    const analyticsRes = await safe(
       `SELECT
          date,
          SUM(messages_handled)                            AS messages,
@@ -92,7 +100,7 @@ export async function GET(req: NextRequest) {
 
     // ── 3. Monthly token usage ─────────────────────────────────────────────────
     const monthsBack = Math.max(6, Math.ceil(days / 30));
-    const tokenHistRes = await query(
+    const tokenHistRes = await safe(
       `SELECT
          period,
          SUM(total_tokens)      AS total_tokens,
@@ -108,7 +116,7 @@ export async function GET(req: NextRequest) {
 
     // ── 4. Current month token usage + plan limits ────────────────────────────
     const nowPeriod = currentPeriod();
-    const tokenNowRes = await query(
+    const tokenNowRes = await safe(
       `SELECT agent_id, total_tokens
        FROM camille.token_usage
        WHERE agent_id = ANY($1::uuid[]) AND period = $2`,
@@ -118,7 +126,7 @@ export async function GET(req: NextRequest) {
     tokenNowRes.rows.forEach((r) => { tokenByAgent[r.agent_id] = Number(r.total_tokens); });
 
     // ── 5. Per-agent analytics aggregates ─────────────────────────────────────
-    const perAgentRes = await query(
+    const perAgentRes = await safe(
       `SELECT
          agent_id,
          SUM(messages_handled)                           AS total_messages,
@@ -137,7 +145,7 @@ export async function GET(req: NextRequest) {
     perAgentRes.rows.forEach((r) => { perAgentMap[r.agent_id] = r; });
 
     // ── 6. Unique contacts & conversation stats ───────────────────────────────
-    const convStatsRes = await query(
+    const convStatsRes = await safe(
       `SELECT
          COUNT(DISTINCT contact_phone)             AS unique_contacts,
          COUNT(*)                                  AS total_messages,
@@ -155,7 +163,7 @@ export async function GET(req: NextRequest) {
     );
 
     // ── 7. Hourly distribution of conversations ───────────────────────────────
-    const hourlyRes = await query(
+    const hourlyRes = await safe(
       `SELECT
          EXTRACT(HOUR FROM created_at)::INT AS hour,
          COUNT(*)                           AS count
@@ -182,7 +190,7 @@ export async function GET(req: NextRequest) {
     }));
 
     // ── 8. Day-of-week distribution ───────────────────────────────────────────
-    const dowRes = await query(
+    const dowRes = await safe(
       `SELECT
          EXTRACT(DOW FROM created_at)::INT AS dow,
          COUNT(*)                          AS count
@@ -209,7 +217,7 @@ export async function GET(req: NextRequest) {
     }));
 
     // ── 9. Conversation length distribution (avg messages per contact) ─────────
-    const convLenRes = await query(
+    const convLenRes = await safe(
       `SELECT
          contact_phone,
          COUNT(*) FILTER (WHERE role = 'user') AS user_msgs
