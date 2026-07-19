@@ -35,15 +35,21 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 8, 20);
 
   try {
-    // 0) source du catalogue : réglage PAR AGENT (catalog_source / ofs_vendor_id),
-    //    avec repli sur le flag global OFS_LIVE. "ofs_shop" = boutique du marchand,
-    //    "ofs_cj" = catalogue plateforme CJ, sinon la DB Camille.
-    let src = ofsLiveEnabled() ? "ofs_cj" : "camille";
+    // 0) source du catalogue PAR AGENT (multi-tenant sûr) : défaut = catalogue Camille
+    //    de l'agent (jamais OFS par défaut, sinon fuite entre comptes). OFS uniquement si :
+    //    - la colonne catalog_source de l'agent le dit ('ofs_cj' / 'ofs_shop'), OU
+    //    - l'agent est l'agent OFS désigné par OFS_LIVE_AGENT_ID (repli avant migration).
+    const OFS_LIVE_AGENT = process.env.OFS_LIVE_AGENT_ID || "";
+    let src = "camille";
     let ofsVendorId: string | null = null;
     try {
       const cfg = await query("SELECT catalog_source, ofs_vendor_id FROM camille.agents WHERE id = $1", [agentId]);
       if (cfg.rows.length && cfg.rows[0].catalog_source) { src = cfg.rows[0].catalog_source; ofsVendorId = cfg.rows[0].ofs_vendor_id || null; }
-    } catch { /* colonnes absentes → on garde le repli global */ }
+      else if (ofsLiveEnabled() && OFS_LIVE_AGENT && OFS_LIVE_AGENT === agentId) src = "ofs_cj";
+    } catch {
+      // colonnes absentes → OFS uniquement pour l'agent désigné (pas de fuite globale)
+      if (ofsLiveEnabled() && OFS_LIVE_AGENT && OFS_LIVE_AGENT === agentId) src = "ofs_cj";
+    }
 
     if (src === "ofs_cj" || src === "ofs_shop") {
       try {
