@@ -37,15 +37,14 @@ export async function GET(req: NextRequest) {
       `SELECT
          COALESCE(prompt_tokens, 0)     AS prompt_tokens,
          COALESCE(completion_tokens, 0) AS completion_tokens,
-         COALESCE(total_tokens, 0)      AS total_tokens,
-         last_updated
+         COALESCE(total_tokens, 0)      AS total_tokens
        FROM camille.token_usage
        WHERE agent_id = $1 AND period = $2`,
       [agentId, period]
     );
 
     const row = usageRes.rows[0] ?? {
-      prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, last_updated: null,
+      prompt_tokens: 0, completion_tokens: 0, total_tokens: 0,
     };
 
     const used      = Number(row.total_tokens);
@@ -74,7 +73,6 @@ export async function GET(req: NextRequest) {
         total_tokens:      used,
         remaining,
         percent,
-        last_updated:      row.last_updated,
       },
       history: histRes.rows.map((r) => ({
         period:       r.period,

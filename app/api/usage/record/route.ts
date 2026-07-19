@@ -47,14 +47,13 @@ export async function POST(req: NextRequest) {
     // Upsert : crée l'entrée si inexistante, sinon additionne les tokens
     await query(
       `INSERT INTO camille.token_usage
-         (agent_id, period, prompt_tokens, completion_tokens, total_tokens, last_updated)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+         (agent_id, period, prompt_tokens, completion_tokens, total_tokens)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (agent_id, period)
        DO UPDATE SET
          prompt_tokens     = camille.token_usage.prompt_tokens     + EXCLUDED.prompt_tokens,
          completion_tokens = camille.token_usage.completion_tokens + EXCLUDED.completion_tokens,
-         total_tokens      = camille.token_usage.total_tokens      + EXCLUDED.total_tokens,
-         last_updated      = NOW()`,
+         total_tokens      = camille.token_usage.total_tokens      + EXCLUDED.total_tokens`,
       [agentId, period, pt, ct, tt]
     );
 
