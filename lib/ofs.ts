@@ -108,10 +108,11 @@ export async function searchOfsClip(
   });
   if (error) throw new Error("RPC OFS match_products_clip : " + error.message);
   const min = opts?.minScore ?? 0;
+  // le RPC renvoie des lignes { product: jsonb, similarity: float }
   return (data || [])
-    .filter((p: any) => (p.similarity ?? 0) >= min)
+    .filter((r: any) => (r.similarity ?? 0) >= min)
     .slice(0, limit)
-    .map((p: any) => ({ ...mapProduct(p), score: Math.round((p.similarity ?? 0) * 1000) / 1000 }));
+    .map((r: any) => ({ ...mapProduct(r.product || {}), score: Math.round((r.similarity ?? 0) * 1000) / 1000 }));
 }
 
 export type OfsMode = "shop" | "cj" | "all";

@@ -21,31 +21,24 @@ create index if not exists products_clip_embedding_idx
 --   q         : vecteur CLIP 512 de la requête (image ou texte)
 --   k         : nombre de résultats
 --   only_cj   : true = seulement produits plateforme/dropshipping (vendor_id null, >99%)
---   vend      : uuid d'un vendeur précis (boutique) ou null
--- Renvoie les produits + un score de similarité (1 = identique).
+--   vend      : id d'un vendeur précis (boutique), en texte, ou null
+-- Renvoie CHAQUE produit en jsonb complet (robuste : aucune colonne à énumérer,
+-- donc indépendant du schéma exact d'OFS) + un score de similarité (1 = identique).
 create or replace function public.match_products_clip(
   q        vector(512),
   k        int     default 8,
   only_cj  boolean default false,
-  vend     uuid    default null
+  vend     text    default null
 )
-returns table (
-  id uuid, name text, description text, price numeric, "now" numeric,
-  is_on_sale boolean, type text, subcategory text, cj_category_name text,
-  brand text, colors jsonb, sizes jsonb, stock_qty int, img text, images jsonb,
-  vendor_id uuid, similarity float
-)
+returns table (product jsonb, similarity float)
 language sql stable as $$
   select
-    p.id, p.name, p.description, p.price, p."now",
-    p.is_on_sale, p.type, p.subcategory, p.cj_category_name,
-    p.brand, to_jsonb(p.colors), to_jsonb(p.sizes), p.stock_qty, p.img, to_jsonb(p.images),
-    p.vendor_id,
-    1 - (p.clip_embedding <=> q) as similarity
+    to_jsonb(p) - 'clip_embedding' as product,   -- on retire le gros vecteur du payload
+    1 - (p.clip_embedding <=> q)   as similarity
   from public.products p
   where p.clip_embedding is not null
     and (not only_cj or p.vendor_id is null)
-    and (vend is null or p.vendor_id = vend)
+    and (vend is null or p.vendor_id::text = vend)
   order by p.clip_embedding <=> q
   limit k;
 $$;
