@@ -76,6 +76,8 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "level", "out_of_scope_behavior", "welcome_enabled", "welcome_message", "n8n_webhook_url",
   // ── Géo (sendLocation) ──
   "latitude", "longitude",
+  // ── Médias de prospection (flyers, galeries, fiches services) ──
+  "media",
 ]);
 
 type RouteContext = { params: Promise<{ agentId: string }> };
@@ -105,6 +107,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         welcome_message: row.welcome_message ?? null,
         latitude: row.latitude != null ? Number(row.latitude) : null,
         longitude: row.longitude != null ? Number(row.longitude) : null,
+        media: Array.isArray(row.media) ? row.media : (row.media ? JSON.parse(row.media) : []),
       },
     });
   } catch (err) {

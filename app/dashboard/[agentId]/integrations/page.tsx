@@ -4,10 +4,13 @@
 // - Montre TOUTES les plateformes (OFS actif, Shopify/WooCommerce bientôt, MCP dispo).
 // - Pour OFS : connexion compte → import boutique / catalogue plateforme (CJ) / tout.
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { authHeaders } from "@/lib/auth-client";
+import { sectorProfile, type SectorMode } from "@/lib/sectorProfiles";
 import { Store, ShoppingBag, Boxes, Plug, Check, Clock, Sparkles } from "lucide-react";
+
+type MediaItem = { kind: string; url: string; caption?: string };
 
 type Platform = {
   key: string; name: string; desc: string; status: "active" | "soon" | "beta";
@@ -50,6 +53,46 @@ export default function IntegrationsPage() {
   const [vecBusy, setVecBusy] = useState(false);
   const [vecLog, setVecLog] = useState<string>("");
   const [vecTotal, setVecTotal] = useState(0);
+
+  // ── Secteur & médias de prospection ──
+  const [sector, setSector] = useState<string>("");
+  const [bizName, setBizName] = useState<string>("");
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaMsg, setMediaMsg] = useState<string>("");
+  const profile = sectorProfile(sector);
+
+  const loadAgent = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/agents/${agentId}`, { headers: { ...authHeaders() } });
+      if (!r.ok) return;
+      const d = await r.json();
+      const a = d.agent || {};
+      setSector(a.business_context?.sector || a.sector || "");
+      setBizName(a.business_context?.business_name || a.name || "");
+      setMedia(Array.isArray(a.media) ? a.media : []);
+    } catch { /* ignore */ }
+  }, [agentId]);
+  useEffect(() => { loadAgent(); }, [loadAgent]);
+
+  function addMedia(kind: string) { setMedia((m) => [...m, { kind, url: "", caption: "" }]); }
+  function updMedia(i: number, patch: Partial<MediaItem>) { setMedia((m) => m.map((x, k) => (k === i ? { ...x, ...patch } : x))); }
+  function delMedia(i: number) { setMedia((m) => m.filter((_, k) => k !== i)); }
+
+  async function saveMedia() {
+    setMediaBusy(true); setMediaMsg("");
+    try {
+      const clean = media.filter((x) => x.url.trim());
+      const r = await fetch(`/api/agents/${agentId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ media: clean }),
+      });
+      setMediaMsg(r.ok ? "✅ Médias enregistrés." : "❌ Échec de l'enregistrement.");
+      if (r.ok) setMedia(clean);
+    } catch (e) { setMediaMsg("❌ " + String(e)); } finally { setMediaBusy(false); }
+  }
+
+  const MODE_LABEL: Record<SectorMode, string> = { catalogue: "Catalogue produits", services: "Prestations de services", media: "Prospection par médias" };
 
   async function runVec(onlyNew: boolean) {
     setVecBusy(true); setVecLog(onlyNew ? "Vectorisation des nouveautés…\n" : "Backfill complet du catalogue OFS…\n");
@@ -187,6 +230,76 @@ export default function IntegrationsPage() {
           </p>
         </div>
       )}
+
+      {/* ── Secteur & comportement (cran 2 : auto selon le secteur) ── */}
+      <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
+        <div className="mb-2 flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#0e9d63" }}>🧭</span>
+          <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Secteur & comportement</h2>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-[12px]">
+          <span className="rounded-full px-2.5 py-1 font-medium" style={{ background: "var(--cl-bg-soft)", color: "var(--cl-ink)" }}>{profile.label}</span>
+          <span className="rounded-full px-2.5 py-1" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink-soft)" }}>Mode : {MODE_LABEL[profile.mode]}</span>
+          {profile.auto
+            ? <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold" style={{ background: "rgba(14,157,99,.1)", color: "#0b7a4b" }}><Check className="h-3 w-3" /> Comportement auto activé</span>
+            : <span className="rounded-full px-2.5 py-1" style={{ background: "rgba(199,125,10,.1)", color: "#a56b0a" }}>Réglages recommandés</span>}
+        </div>
+        <p className="mt-2 text-[12px]" style={{ color: "var(--cl-ink-soft)" }}>
+          Message d'accueil actuel : <span style={{ color: "var(--cl-ink)" }}>« {profile.welcome.replace(/\{b\}/g, bizName || "votre boutique")} »</span>
+        </p>
+        <p className="mt-1 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
+          Le secteur se règle dans les paramètres de l'agent. {profile.auto ? "Ce secteur est validé : le bot fonctionne sans réglage supplémentaire." : "Configure tes médias ci-dessous pour enrichir la prospection."}
+        </p>
+      </div>
+
+      {/* ── Médias de prospection (cran 3 : flyers, galeries, fiches services) ── */}
+      <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
+        <div className="mb-1 flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#2563eb" }}>📎</span>
+          <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Médias de prospection WhatsApp</h2>
+        </div>
+        <p className="text-[12px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>
+          {profile.mode === "catalogue"
+            ? "Ajoute des flyers/promos ; ton catalogue produits reste la source principale."
+            : "Ton activité repose sur des prestations : ajoute ici flyers, galerie de réalisations et fiches de services que le bot enverra."}
+          {" "}Colle l'URL d'une image (hébergée) + une légende.
+        </p>
+
+        <div className="mt-3 space-y-4">
+          {profile.media.map((mk) => {
+            const items = media.map((x, i) => ({ x, i })).filter(({ x }) => x.kind === mk.key);
+            return (
+              <div key={mk.key}>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <div>
+                    <span className="text-[12.5px] font-semibold" style={{ color: "var(--cl-ink)" }}>{mk.label}</span>
+                    <span className="ml-2 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>{mk.hint}</span>
+                  </div>
+                  <button onClick={() => addMedia(mk.key)} className="rounded-lg px-2.5 py-1 text-[11.5px] font-semibold" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)" }}>+ Ajouter</button>
+                </div>
+                {items.length === 0 && <div className="text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>Aucun élément.</div>}
+                <div className="space-y-2">
+                  {items.map(({ x, i }) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                      <input value={x.url} onChange={(e) => updMedia(i, { url: e.target.value })} placeholder="https://…/image.jpg" className="min-w-[180px] flex-1 rounded-lg px-2.5 py-1.5 text-[12px]" style={{ border: "1px solid var(--cl-line)" }} />
+                      <input value={x.caption || ""} onChange={(e) => updMedia(i, { caption: e.target.value })} placeholder="Légende (optionnel)" className="min-w-[120px] flex-1 rounded-lg px-2.5 py-1.5 text-[12px]" style={{ border: "1px solid var(--cl-line)" }} />
+                      {mk.multiple === false && items.length > 1 && <span className="text-[10px]" style={{ color: "#c0392b" }}>1 seul autorisé</span>}
+                      <button onClick={() => delMedia(i)} className="rounded-lg px-2 py-1 text-[11px]" style={{ border: "1px solid var(--cl-line)", color: "#c0392b" }}>Suppr.</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex items-center gap-3">
+          <button onClick={saveMedia} disabled={mediaBusy} className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#2563eb" }}>
+            {mediaBusy ? "Enregistrement…" : "Enregistrer les médias"}
+          </button>
+          {mediaMsg && <span className="text-[12px]" style={{ color: mediaMsg.startsWith("✅") ? "#0b7a4b" : "#c0392b" }}>{mediaMsg}</span>}
+        </div>
+      </div>
 
       {isOfsOwner && (
         <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>

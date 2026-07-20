@@ -30,6 +30,7 @@ const AGENT_COLS = `
   a.out_of_scope_behavior,
   a.welcome_enabled,
   a.welcome_message,
+  COALESCE(to_jsonb(a)->'media', '[]'::jsonb) AS media,
   (a.owner_password_hash IS NOT NULL) AS has_owner_password
 `;
 
@@ -104,6 +105,7 @@ export async function GET(req: NextRequest) {
         welcome_resolved:      resolveWelcome(row.sector, row.business_name, row.welcome_message),
         sector_mode:           sectorProfile(row.sector).mode,   // catalogue | services | media
         sector_auto:           sectorProfile(row.sector).auto,
+        media:                 Array.isArray(row.media) ? row.media : (row.media ? JSON.parse(row.media) : []),
         has_owner_password:  row.has_owner_password === true,
       },
     });
