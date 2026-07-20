@@ -83,6 +83,37 @@ export async function connectOfs(email: string, password: string): Promise<{ use
   return { userId, isSuperAdmin: !!prof.data?.is_super_admin, vendor: vend.data || null };
 }
 
+/** true si la recherche vectorielle OFS (pgvector) est activable côté serveur. */
+export function ofsClipEnabled(): boolean {
+  return !!OFS_ANON;
+}
+
+/** Recherche vectorielle à l'échelle du catalogue OFS via le RPC pgvector
+ *  match_products_clip. `emb` est un vecteur CLIP 512 (issu d'une IMAGE ou d'un TEXTE).
+ *  Renvoie les produits mappés, ordonnés par similarité décroissante.
+ *  minScore filtre le bruit (ex. 0.20). Renvoie [] si le RPC/index n'est pas prêt. */
+export async function searchOfsClip(
+  emb: number[],
+  limit = 8,
+  opts?: { vendorId?: string; cjOnly?: boolean; minScore?: number }
+): Promise<OfsProduct[]> {
+  if (!OFS_ANON) throw new Error("OFS_SUPABASE_ANON_KEY manquante.");
+  if (!Array.isArray(emb) || !emb.length) return [];
+  const sb = createClient(OFS_URL, OFS_ANON, { auth: { persistSession: false } });
+  const { data, error } = await sb.rpc("match_products_clip", {
+    q: emb,
+    k: Math.min(limit, 20),
+    only_cj: !!opts?.cjOnly,
+    vend: opts?.vendorId || null,
+  });
+  if (error) throw new Error("RPC OFS match_products_clip : " + error.message);
+  const min = opts?.minScore ?? 0;
+  return (data || [])
+    .filter((p: any) => (p.similarity ?? 0) >= min)
+    .slice(0, limit)
+    .map((p: any) => ({ ...mapProduct(p), score: Math.round((p.similarity ?? 0) * 1000) / 1000 }));
+}
+
 export type OfsMode = "shop" | "cj" | "all";
 
 /** Importe le catalogue OFS.

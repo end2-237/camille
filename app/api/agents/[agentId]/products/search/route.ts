@@ -6,7 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { embedText } from "@/lib/embeddings";
 import { searchText } from "@/lib/vectorStore";
-import { ofsLiveEnabled, searchOfs } from "@/lib/ofs";
+import { ofsLiveEnabled, searchOfs, searchOfsClip, ofsClipEnabled } from "@/lib/ofs";
+import { embedTextClip } from "@/lib/imageEmbeddings";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
@@ -54,8 +55,23 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     if (src === "ofs_cj" || src === "ofs_shop") {
       try {
         const opts = src === "ofs_shop" && ofsVendorId ? { vendorId: ofsVendorId } : { cjOnly: true };
-        const rows = await searchOfs(q, limit, opts);
-        return NextResponse.json({ query: q, mode: src === "ofs_shop" ? "ofs-shop" : "ofs-live", count: rows.length, products: rows });
+        const kw = await searchOfs(q, limit, opts);
+
+        // Sémantique CLIP (même colonne pgvector que les images) : capte les requêtes
+        // que les mots-clés ratent (synonymes, formulations). On fusionne : mots-clés
+        // d'abord (précision), puis sémantique en complément, dédupliqué par id.
+        if (q && ofsClipEnabled() && kw.length < limit) {
+          try {
+            const temb = await embedTextClip(q);
+            if (temb) {
+              const sem = await searchOfsClip(temb, limit, { ...opts, minScore: 0.2 });
+              const seen = new Set(kw.map((p) => p.id));
+              const merged = kw.concat(sem.filter((p) => !seen.has(p.id))).slice(0, limit);
+              return NextResponse.json({ query: q, mode: src === "ofs_shop" ? "ofs-shop" : "ofs-live", count: merged.length, products: merged });
+            }
+          } catch (e) { console.error("[ofs semantic]", e); /* pgvector pas prêt → mots-clés seuls */ }
+        }
+        return NextResponse.json({ query: q, mode: src === "ofs_shop" ? "ofs-shop" : "ofs-live", count: kw.length, products: kw });
       } catch (e) {
         console.error("[ofs]", e); // échec OFS → repli DB locale
       }

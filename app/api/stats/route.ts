@@ -38,7 +38,7 @@ function dateRange(days: number): { from: string; to: string } {
 // renvoie des lignes vides au lieu de faire planter toute la page de stats.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 async function safe(sql: string, params: unknown[]): Promise<{ rows: any[] }> {
-  try { return (await safe(sql, params)) as any; }
+  try { return (await query(sql, params)) as any; }
   catch (e) { console.error("[stats] requête ignorée:", (e as Error).message); return { rows: [] }; }
 }
 

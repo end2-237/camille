@@ -12,8 +12,22 @@ import { query } from "@/lib/db";
 import { embedImage, imageEmbeddingsEnabled } from "@/lib/imageEmbeddings";
 import { searchImageScored, indexStats } from "@/lib/vectorStore";
 import { describeImage } from "@/lib/embeddings";
+import { ofsClipEnabled, searchOfsClip, ofsLiveEnabled } from "@/lib/ofs";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
+
+/** Source du catalogue de l'agent (identique à /products/search) : 'camille' | 'ofs_cj' | 'ofs_shop'. */
+async function resolveSource(agentId: string): Promise<{ src: string; vendorId: string | null }> {
+  const OFS_LIVE_AGENT = process.env.OFS_LIVE_AGENT_ID || "";
+  try {
+    const cfg = await query("SELECT catalog_source, ofs_vendor_id FROM camille.agents WHERE id = $1", [agentId]);
+    if (cfg.rows.length && cfg.rows[0].catalog_source) {
+      return { src: cfg.rows[0].catalog_source, vendorId: cfg.rows[0].ofs_vendor_id || null };
+    }
+  } catch { /* colonnes absentes → repli ci-dessous */ }
+  if (ofsLiveEnabled() && OFS_LIVE_AGENT && OFS_LIVE_AGENT === agentId) return { src: "ofs_cj", vendorId: null };
+  return { src: "camille", vendorId: null };
+}
 
 const COLS = `id, name, description, price, price_max, currency, category, tags, stock, image_url, product_url, variants, images`;
 
@@ -58,6 +72,23 @@ async function visionSearch(agentId: string, imageUrl: string, limit: number) {
 }
 
 async function run(agentId: string, imageUrl: string, limit: number) {
+  // 0) Catalogue OFS (grand catalogue) : recherche vectorielle pgvector côté Supabase OFS.
+  //    C'est la voie qui scale à 100k+ produits — l'index fichier local ne couvre que
+  //    le catalogue importé de l'agent, jamais l'OFS live.
+  const { src, vendorId } = await resolveSource(agentId);
+  if ((src === "ofs_cj" || src === "ofs_shop") && ofsClipEnabled()) {
+    const emb = await embedImage(imageUrl);
+    if (emb) {
+      try {
+        const opts = src === "ofs_shop" && vendorId ? { vendorId } : { cjOnly: true };
+        const rows = await searchOfsClip(emb, limit, { ...opts, minScore: 0.18 });
+        if (rows.length) return { mode: "ofs-clip", products: rows };
+      } catch (e) {
+        console.error("[search-by-image ofs]", e); // index pgvector pas encore prêt → replis ci-dessous
+      }
+    }
+  }
+
   const clip = await clipSearch(agentId, imageUrl, limit);
   if ("rows" in clip && clip.rows && clip.rows.length) return { mode: "clip", products: clip.rows };
 
