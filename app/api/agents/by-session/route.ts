@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { resolveWelcome, sectorProfile } from "@/lib/sectorProfiles";
 
 const AGENT_COLS = `
   a.id,
@@ -99,6 +100,10 @@ export async function GET(req: NextRequest) {
         out_of_scope_behavior: row.out_of_scope_behavior ?? "site",
         welcome_enabled:       row.welcome_enabled !== false,
         welcome_message:       row.welcome_message ?? null,
+        // welcome effectif (perso sinon défaut du secteur) + profil secteur pour le N2
+        welcome_resolved:      resolveWelcome(row.sector, row.business_name, row.welcome_message),
+        sector_mode:           sectorProfile(row.sector).mode,   // catalogue | services | media
+        sector_auto:           sectorProfile(row.sector).auto,
         has_owner_password:  row.has_owner_password === true,
       },
     });
