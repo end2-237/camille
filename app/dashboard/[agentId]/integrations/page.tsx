@@ -44,6 +44,31 @@ export default function IntegrationsPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Auto-vectorisation OFS : visible UNIQUEMENT pour l'agent OFS désigné.
+  const OFS_LIVE_AGENT = process.env.NEXT_PUBLIC_OFS_LIVE_AGENT_ID || "c2c7126b-6964-4248-befe-ce4ff7931a0a";
+  const isOfsOwner = agentId === OFS_LIVE_AGENT;
+  const [vecBusy, setVecBusy] = useState(false);
+  const [vecLog, setVecLog] = useState<string>("");
+  const [vecTotal, setVecTotal] = useState(0);
+
+  async function runVec(onlyNew: boolean) {
+    setVecBusy(true); setVecLog(onlyNew ? "Vectorisation des nouveautés…\n" : "Backfill complet du catalogue OFS…\n");
+    let after = "", total = 0, guard = 0;
+    try {
+      for (;;) {
+        const qs = onlyNew ? `only_new=1&limit=200` : `limit=200&after=${encodeURIComponent(after)}`;
+        const r = await fetch(`/api/admin/backfill-ofs-clip?${qs}`, { method: "POST", headers: { ...authHeaders() } });
+        const d = await r.json();
+        if (!r.ok) { setVecLog((s) => s + `❌ ${d.error || "erreur"}\n`); break; }
+        total += d.indexed || 0; setVecTotal((t) => t + (d.indexed || 0));
+        setVecLog((s) => s + `lot: +${d.indexed} indexés · ${d.already} déjà · ${d.noImage} sans image · ${d.failed} échecs\n`);
+        after = d.nextAfter || after;
+        if (onlyNew ? (d.indexed === 0 && d.scanned < 200) : d.done) { setVecLog((s) => s + `✅ Terminé — ${total} nouveaux vecteurs.\n`); break; }
+        if (++guard > 2000) { setVecLog((s) => s + `⏹️ Arrêt de sécurité.\n`); break; }
+      }
+    } catch (e) { setVecLog((s) => s + `❌ ${String(e)}\n`); } finally { setVecBusy(false); }
+  }
+
   async function bindOfs() {
     setBusy(true); setMsg(null);
     const source = mode === "cj" ? "ofs_cj" : "ofs_shop";
@@ -159,6 +184,34 @@ export default function IntegrationsPage() {
           )}
           <p className="mt-3 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
             🔒 Tes identifiants OFS servent uniquement à lire ton catalogue (connexion directe à OFS) et ne sont pas stockés.
+          </p>
+        </div>
+      )}
+
+      {isOfsOwner && (
+        <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#6d28d9" }}>🖼️</span>
+            <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Recherche par image — vectorisation OFS</h2>
+          </div>
+          <p className="text-[12px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>
+            Indexe les images du catalogue OFS (CLIP) pour la recherche visuelle. « Nouveautés » ne traite que les produits
+            pas encore indexés — rapide, à relancer après un ajout. « Tout réindexer » repart de zéro.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={() => runVec(true)} disabled={vecBusy} className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#6d28d9" }}>
+              {vecBusy ? "En cours…" : "Vectoriser les nouveautés"}
+            </button>
+            <button onClick={() => runVec(false)} disabled={vecBusy} className="rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)" }}>
+              Tout réindexer
+            </button>
+            {vecTotal > 0 && <span className="self-center text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>{vecTotal} vecteurs créés</span>}
+          </div>
+          {vecLog && (
+            <pre className="mt-3 max-h-52 overflow-auto rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "var(--cl-bg-soft)", color: "var(--cl-ink-soft)", whiteSpace: "pre-wrap" }}>{vecLog}</pre>
+          )}
+          <p className="mt-2 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
+            Requiert <code>OFS_SUPABASE_SERVICE_KEY</code> et <code>CLIP_SERVICE_URL</code> côté serveur. Idéalement, planifie « nouveautés » toutes les 15 min.
           </p>
         </div>
       )}
