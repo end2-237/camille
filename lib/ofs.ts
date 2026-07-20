@@ -169,16 +169,21 @@ function tokens(q: string): string[] {
 /** Recherche LIVE dans OFS (lecture publique). Tokenisée + classée par pertinence :
  *  chaque mot significatif est cherché dans name/subcategory/type/cj_category_name,
  *  puis on classe par nombre de mots présents dans le nom/la catégorie. */
-export async function searchOfs(q: string, limit = 12, opts?: { vendorId?: string; cjOnly?: boolean }): Promise<OfsProduct[]> {
+export async function searchOfs(q: string, limit = 12, opts?: { vendorId?: string; cjOnly?: boolean; offset?: number }): Promise<OfsProduct[]> {
   if (!OFS_ANON) throw new Error("OFS_SUPABASE_ANON_KEY manquante.");
   const sb = createClient(OFS_URL, OFS_ANON, { auth: { persistSession: false } });
   const words = tokens(q);
+  const off = Math.max(0, Number(opts?.offset) || 0);
+  // sans mots-clés (parcours), on pagine directement ; avec mots-clés on sur-échantillonne puis on classe.
   const fetchN = words.length ? Math.min(limit * 5, 60) : Math.min(limit, 30);
 
   function base() {
-    let s = sb.from("products").select("*").limit(fetchN);
+    let s = sb.from("products").select("*");
     if (opts?.vendorId) s = s.eq("vendor_id", opts.vendorId);
     if (opts?.cjOnly) s = s.is("vendor_id", null);
+    // parcours (pas de mots-clés) → fenêtre paginée ; recherche → on prend une large fenêtre depuis l'offset
+    if (words.length) s = s.range(off, off + fetchN - 1);
+    else s = s.order("id", { ascending: true }).range(off, off + fetchN - 1);
     return s;
   }
 

@@ -33,7 +33,8 @@ async function semanticSearch(agentId: string, q: string, limit: number) {
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
-  const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 8, 20);
+  const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 8, 40);
+  const offset = Math.max(0, Number(req.nextUrl.searchParams.get("offset")) || 0);
 
   try {
     // 0) source du catalogue PAR AGENT (multi-tenant sûr) : défaut = catalogue Camille
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
     if (src === "ofs_cj" || src === "ofs_shop") {
       try {
-        const opts = src === "ofs_shop" && ofsVendorId ? { vendorId: ofsVendorId } : { cjOnly: true };
+        const opts = src === "ofs_shop" && ofsVendorId ? { vendorId: ofsVendorId, offset } : { cjOnly: true, offset };
         const kw = await searchOfs(q, limit, opts);
 
         // Sémantique CLIP (même colonne pgvector que les images) : capte les requêtes
