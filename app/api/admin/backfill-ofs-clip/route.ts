@@ -25,10 +25,14 @@ export async function POST(req: NextRequest) {
 
   const after = req.nextUrl.searchParams.get("after") || "";
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 100, 300);
+  // Mode CRON : ne prend QUE les produits sans embedding (nouveaux). Pas de curseur :
+  // chaque appel vide un lot de nouveautés → idéal pour un cron périodique.
+  const onlyNew = ["1", "true", "yes"].includes((req.nextUrl.searchParams.get("only_new") || "").toLowerCase());
   const sb = createClient(URL, KEY, { auth: { persistSession: false } });
 
   let sel = sb.from("products").select("id, img, images, clip_embedding").order("id", { ascending: true }).limit(limit);
-  if (after) sel = sel.gt("id", after);
+  if (onlyNew) sel = sel.is("clip_embedding", null);
+  else if (after) sel = sel.gt("id", after);
   const { data, error } = await sel;
   if (error) return NextResponse.json({ error: "lecture OFS : " + error.message }, { status: 500 });
 
