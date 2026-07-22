@@ -7,6 +7,9 @@
     "userInterfaceStyle": "light",
     "backgroundColor": "#ECECEC",
     "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      ["./plugins/withSplashColor", { "color": "#ECECEC" }]
+    ],
     "android": {
       "package": "com.camille.mobile",
       "versionCode": 1
