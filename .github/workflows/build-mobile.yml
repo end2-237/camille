@@ -36,8 +36,13 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Align Expo native module versions (SDK 51)
+        run: npx expo install --fix
+        env:
+          CI: "1"
+
       - name: Expo prebuild (generate android/)
-        run: npx expo prebuild --platform android --no-install
+        run: npx expo prebuild --platform android --clean
         env:
           CI: "1"
 
