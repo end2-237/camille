@@ -1,0 +1,63 @@
+name: Build Camille Mobile (APK)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - claude/zealous-ramanujan-wgSVV
+    paths:
+      - "mobile/**"
+      - ".github/workflows/build-mobile.yml"
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java (Temurin 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Expo prebuild (generate android/)
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: "1"
+
+      - name: Gradle build (assembleRelease)
+        working-directory: mobile/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Locate APK
+        id: apk
+        run: |
+          APK=$(find . -path '*/apk/release/*.apk' | head -n1)
+          echo "Found APK: $APK"
+          echo "path=mobile/$APK" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: camille-mobile-apk
+          path: mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30

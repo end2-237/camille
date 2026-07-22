@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Camille",
+    "slug": "camille-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#ECECEC",
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.camille.mobile",
+      "versionCode": 1
+    },
+    "extra": {
+      "apiBaseUrl": "https://camille.vps.buyticle.com"
+    }
+  }
+}

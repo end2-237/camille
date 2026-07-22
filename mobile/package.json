@@ -1,0 +1,20 @@
+{
+  "name": "camille-mobile",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android"
+  },
+  "dependencies": {
+    "expo": "~51.0.28",
+    "expo-constants": "~16.0.2",
+    "expo-status-bar": "~1.12.1",
+    "react": "18.2.0",
+    "react-native": "0.74.5",
+    "react-native-svg": "15.2.0",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@expo/vector-icons": "^14.0.2"
+  },
+  "private": true
+}
