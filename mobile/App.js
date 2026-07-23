@@ -5,6 +5,7 @@ import { C } from "./src/theme";
 import { Header, BottomNav, ScreenTitle } from "./src/components/ui";
 import Splash from "./src/screens/Splash";
 import Onboarding from "./src/screens/Onboarding";
+import Login from "./src/screens/Login";
 import Dashboard from "./src/screens/Dashboard";
 import Agents from "./src/screens/Agents";
 import Conversations from "./src/screens/Conversations";
@@ -81,6 +82,7 @@ export default function App() {
 
   if (booting) return <Splash />;
   if (onboard) return <Onboarding onDone={finishOnboarding} />;
+  if (!user) return <Login onDone={onAuthChange} />;
 
   const common = { stats, query, refreshing, onRefresh };
   let Body;
