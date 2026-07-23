@@ -19,6 +19,15 @@ const tile = (emoji, style) =>
 const spark = (style, c = INK) =>
   `<div style="position:absolute;${style};color:${c};font-size:22px;opacity:.5">✦</div>`;
 
+// Monogramme pro : bulle de discussion en "C" (arc épais ouvert) + point accent + spark.
+const mark = (size, stroke = LIME) => `
+<svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="30" fill="none" stroke="${stroke}" stroke-width="15"
+    stroke-linecap="round" stroke-dasharray="132 56" transform="rotate(38 50 50)"/>
+  <circle cx="63.5" cy="73" r="8.6" fill="${stroke}"/>
+  <path d="M78 20 l3.2 7.6 L88 30.8 l-6.8 3.2 L78 41 l-3.2-7 L68 30.8 l6.8-3.2 Z" fill="${stroke}" opacity=".9"/>
+</svg>`;
+
 // Scène 1 — vendeur IA
 const ob1 = `
 <div style="position:relative;width:100%;height:100%;background:
@@ -27,9 +36,9 @@ const ob1 = `
       width:230px;height:150px;border-radius:38px;background:${LIME};
       display:flex;flex-direction:column;align-items:center;justify-content:center;
       box-shadow:0 20px 40px rgba(0,0,0,.12)">
-    <div style="font-size:66px;line-height:1">🤖</div>
-    <div style="margin-top:6px;background:${INK};color:#fff;font-weight:700;font-size:15px;
-        padding:7px 14px;border-radius:999px;font-family:Inter,Arial">Camille · IA</div>
+    <div style="width:66px;height:66px">${mark("100%", INK)}</div>
+    <div style="margin-top:8px;background:${INK};color:#fff;font-weight:700;font-size:15px;
+        padding:7px 16px;border-radius:999px;font-family:Inter,Arial">Camille</div>
   </div>
   ${tile("💬", "top:36px;left:60px")}
   ${tile("🛍️", "top:20px;right:70px")}
@@ -91,15 +100,6 @@ const ob3 = `
   ${spark("top:70px;left:80px", INK)}
   ${spark("bottom:70px;right:80px", INK)}
 </div>`;
-
-// Monogramme pro : bulle de discussion en "C" (arc épais ouvert) + point accent + spark.
-const mark = (size, stroke = LIME) => `
-<svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="50" cy="50" r="30" fill="none" stroke="${stroke}" stroke-width="15"
-    stroke-linecap="round" stroke-dasharray="132 56" transform="rotate(38 50 50)"/>
-  <circle cx="63.5" cy="73" r="8.6" fill="${stroke}"/>
-  <path d="M78 20 l3.2 7.6 L88 30.8 l-6.8 3.2 L78 41 l-3.2-7 L68 30.8 l6.8-3.2 Z" fill="${stroke}" opacity=".9"/>
-</svg>`;
 
 const icon = `
 <div style="width:100%;height:100%;background:

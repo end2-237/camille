@@ -46,6 +46,11 @@ export const getAgents = () => req("/api/agents");
 
 export const getMe = () => req("/api/auth/me");
 
+export const getAgent = (id) => req(`/api/agents/${id}`);
+
+export const patchAgent = (id, body) =>
+  req(`/api/agents/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
 export async function logout() {
   try { await req("/api/auth/logout", { method: "POST" }); } catch {}
   await setToken(null);

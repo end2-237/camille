@@ -84,10 +84,17 @@ export default function App() {
   if (onboard) return <Onboarding onDone={finishOnboarding} />;
   if (!user) return <Login onDone={onAuthChange} />;
 
+  const onAgentChanged = (agentId, patch) => {
+    setStats((prev) => {
+      if (!prev?.agents) return prev;
+      return { ...prev, agents: prev.agents.map((a) => (a.agent_id === agentId ? { ...a, ...patch } : a)) };
+    });
+  };
+
   const common = { stats, query, refreshing, onRefresh };
   let Body;
-  if (tab === "dash") Body = <Dashboard {...common} />;
-  else if (tab === "agents") Body = <Agents {...common} />;
+  if (tab === "dash") Body = <Dashboard {...common} user={user} />;
+  else if (tab === "agents") Body = <Agents {...common} onAgentChanged={onAgentChanged} />;
   else if (tab === "convos") Body = <Conversations {...common} />;
   else if (tab === "analytics") Body = <Analytics {...common} />;
   else Body = <Profile user={user} setUser={setUser} onAuthChange={onAuthChange} />;
