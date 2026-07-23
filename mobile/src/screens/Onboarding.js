@@ -93,11 +93,10 @@ export default function Onboarding({ onDone }) {
       <View style={{ paddingHorizontal: 26, paddingBottom: 40 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
           <View style={{ flexDirection: "row", gap: 7 }}>
-            {SLIDES.map((_, i) => {
-              const w = scrollX.interpolate({ inputRange: [(i - 1) * width, i * width, (i + 1) * width], outputRange: [7, 22, 7], extrapolate: "clamp" });
-              const o = scrollX.interpolate({ inputRange: [(i - 1) * width, i * width, (i + 1) * width], outputRange: [0.2, 1, 0.2], extrapolate: "clamp" });
-              return <Animated.View key={i} style={{ height: 7, borderRadius: 4, width: w, backgroundColor: C.ink, opacity: o }} />;
-            })}
+            {SLIDES.map((_, i) => (
+              <View key={i} style={{ height: 7, borderRadius: 4, width: i === idx ? 22 : 7,
+                backgroundColor: C.ink, opacity: i === idx ? 1 : 0.2 }} />
+            ))}
           </View>
           {!last ? (
             <TouchableOpacity onPress={onDone} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
