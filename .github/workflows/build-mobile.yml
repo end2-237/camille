@@ -41,6 +41,15 @@ jobs:
         env:
           CI: "1"
 
+      - name: Ensure splash color resource (garantie anti-AAPT)
+        run: |
+          F=android/app/src/main/res/values/colors.xml
+          if [ -f "$F" ] && ! grep -q "splashscreen_background" "$F"; then
+            sed -i 's|</resources>|  <color name="splashscreen_background">#ECECEC</color>\n</resources>|' "$F"
+            echo "Injected splashscreen_background into colors.xml"
+          fi
+          grep -n "splashscreen_background" "$F" || echo "WARN: color still missing"
+
       - name: Gradle build (assembleRelease)
         working-directory: mobile/android
         run: |
