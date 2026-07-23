@@ -1,35 +1,55 @@
 import React from "react";
-import { View, Text, TextInput, TouchableOpacity, Image } from "react-native";
+import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S, F } from "../theme";
+import { C, R, S } from "../theme";
 
-export function Header({ onSearch }) {
+const TITLES = {
+  dash: "Tableau de bord",
+  agents: "Agents",
+  convos: "Conversations",
+  analytics: "Analytics",
+  profile: "Profil",
+};
+
+export function Header({ query, setQuery, onProfile, initials }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: S.md, paddingTop: 8, gap: 10 }}>
-      <TouchableOpacity style={circle()}>
-        <Ionicons name="notifications-outline" size={18} color={C.ink} />
-      </TouchableOpacity>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: C.ink, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: C.lime, fontWeight: "900", fontSize: 13 }}>C</Text>
+        <View style={{ width: 24, height: 24, borderRadius: 7, backgroundColor: C.ink, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: C.lime, fontWeight: "900", fontSize: 14 }}>C</Text>
         </View>
         <Text style={{ fontWeight: "800", fontSize: 17, color: C.ink, letterSpacing: -0.3 }}>Camille</Text>
       </View>
       <View style={{ flex: 1 }} />
-      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.white, borderRadius: R.pill, paddingHorizontal: 12, height: 38, flex: 1, maxWidth: 150 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.white, borderRadius: R.pill, paddingHorizontal: 12, height: 38, flex: 1, maxWidth: 160 }}>
         <Ionicons name="search" size={15} color={C.sub} />
-        <TextInput placeholder="Rechercher…" placeholderTextColor={C.sub} onChangeText={onSearch}
-          style={{ marginLeft: 6, flex: 1, fontSize: 13, color: C.ink }} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Rechercher…"
+          placeholderTextColor={C.sub}
+          style={{ marginLeft: 6, flex: 1, fontSize: 13, color: C.ink }}
+        />
+        {query ? (
+          <TouchableOpacity onPress={() => setQuery("")}>
+            <Ionicons name="close-circle" size={15} color={C.sub} />
+          </TouchableOpacity>
+        ) : null}
       </View>
-      <View style={{ width: 38, height: 38, borderRadius: R.pill, backgroundColor: "#C9B79C", alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name="person" size={18} color={C.white} />
-      </View>
+      <TouchableOpacity onPress={onProfile}
+        style={{ width: 38, height: 38, borderRadius: R.pill, backgroundColor: C.ink, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: C.lime, fontWeight: "800", fontSize: 13 }}>{initials || "👤"}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
-function circle() {
-  return { width: 38, height: 38, borderRadius: R.pill, backgroundColor: C.white, alignItems: "center", justifyContent: "center" };
+export function ScreenTitle({ tab }) {
+  return (
+    <Text style={{ paddingHorizontal: S.md, marginTop: 10, fontSize: 22, fontWeight: "800", color: C.ink, letterSpacing: -0.4 }}>
+      {TITLES[tab] || ""}
+    </Text>
+  );
 }
 
 export function Card({ children, style, dark = true }) {
@@ -40,23 +60,13 @@ export function Card({ children, style, dark = true }) {
   );
 }
 
-export function Pill({ label, active, onPress }) {
-  return (
-    <TouchableOpacity onPress={onPress}
-      style={{ paddingHorizontal: 14, height: 34, borderRadius: R.pill, alignItems: "center", justifyContent: "center",
-        backgroundColor: active ? C.ink : "transparent" }}>
-      <Text style={{ fontSize: 13, fontWeight: "600", color: active ? C.white : C.sub }}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 export function BottomNav({ tab, setTab }) {
   const items = [
     { key: "dash", icon: "grid" },
     { key: "agents", icon: "cube-outline" },
     { key: "convos", icon: "chatbubble-outline" },
-    { key: "billing", icon: "card-outline" },
-    { key: "stats", icon: "stats-chart" },
+    { key: "analytics", icon: "stats-chart" },
+    { key: "profile", icon: "person-outline" },
   ];
   return (
     <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center", paddingBottom: 22 }}>
@@ -64,7 +74,7 @@ export function BottomNav({ tab, setTab }) {
         {items.map((it) => {
           const on = tab === it.key;
           return (
-            <TouchableOpacity key={it.key} onPress={() => setTab(it.key)}
+            <TouchableOpacity key={it.key} onPress={() => setTab(it.key)} activeOpacity={0.7}
               style={{ width: 52, height: 44, borderRadius: R.pill, alignItems: "center", justifyContent: "center",
                 backgroundColor: on ? C.lime : "transparent" }}>
               <Ionicons name={it.icon} size={20} color={on ? C.ink : "rgba(255,255,255,0.6)"} />
@@ -84,4 +94,8 @@ export function StatMini({ label, value, sub, dark }) {
       {sub ? <Text style={{ fontSize: 10, color: C.green, marginTop: 2 }}>{sub}</Text> : null}
     </View>
   );
+}
+
+export function EmptyHint({ text }) {
+  return <Text style={{ color: C.sub, textAlign: "center", marginTop: 24, fontSize: 13 }}>{text}</Text>;
 }

@@ -21,7 +21,7 @@ export default function Dashboard({ stats, refreshing, onRefresh }) {
   const gaugeMax = Math.max(gaugeVal * 1.25, 100);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 130 }} showsVerticalScrollIndicator={false}
+    <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
       {/* Fulfillment / Performance des agents */}
       <Card style={{ marginBottom: S.md }}>

@@ -17,8 +17,8 @@ export const C = {
   chipDark: "#1E1E22",
 };
 
-export const R = { sm: 12, md: 18, lg: 24, xl: 30, pill: 999 };
-export const S = { xs: 6, sm: 10, md: 16, lg: 22, xl: 28 };
+export const R = { sm: 12, md: 16, lg: 22, xl: 28, pill: 999 };
+export const S = { xs: 5, sm: 9, md: 14, lg: 18, xl: 24 };
 
 export const F = {
   h1: { fontSize: 30, fontWeight: "800", color: C.ink, letterSpacing: -0.5 },

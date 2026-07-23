@@ -44,5 +44,13 @@ export const getStats = (period = "30d") =>
 
 export const getAgents = () => req("/api/agents");
 
-export const getConversations = (agentId) =>
-  req(`/api/conversations${agentId ? `?agentId=${agentId}` : ""}`);
+export const getMe = () => req("/api/auth/me");
+
+export async function logout() {
+  try { await req("/api/auth/logout", { method: "POST" }); } catch {}
+  await setToken(null);
+}
+
+export function isLoggedIn() {
+  return !!TOKEN;
+}

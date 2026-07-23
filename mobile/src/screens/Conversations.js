@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
-import { Pill } from "../components/ui";
 
 const TABS = [
   { key: "active", label: "En cours" },
@@ -11,13 +10,15 @@ const TABS = [
 ];
 
 // Ecran "Orders" -> suivi des conversations / leads traités par les agents.
-export default function Conversations({ stats }) {
+export default function Conversations({ stats, query }) {
   const [tab, setTab] = useState("active");
   const agents = stats?.agents || [];
   const ov = stats?.overview || {};
 
   // Construit des "cartes de suivi" à partir des agents (ou démo).
-  const base = agents.length ? agents : DEMO;
+  const q = (query || "").trim().toLowerCase();
+  const src = agents.length ? agents : DEMO;
+  const base = q ? src.filter((a) => `${a.name || ""} ${a.sector || ""} ${a.business_name || ""}`.toLowerCase().includes(q)) : src;
   const total = ov.total_messages || 264;
 
   const counts = {
@@ -28,7 +29,7 @@ export default function Conversations({ stats }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 130 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text style={{ fontSize: 24, fontWeight: "800", color: C.ink, letterSpacing: -0.5 }}>Conversations</Text>
@@ -60,6 +61,11 @@ export default function Conversations({ stats }) {
         {base.map((a, i) => (
           <ConvCard key={a.agent_id || i} idx={i} agent={a} tab={tab} />
         ))}
+        {!base.length && (
+          <Text style={{ color: C.sub, textAlign: "center", marginTop: 24, fontSize: 13 }}>
+            Aucune conversation ne correspond.
+          </Text>
+        )}
       </ScrollView>
     </View>
   );
