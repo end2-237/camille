@@ -97,7 +97,7 @@ export default function App() {
   else if (tab === "agents") Body = <Agents {...common} onAgentChanged={onAgentChanged} />;
   else if (tab === "convos") Body = <Conversations {...common} />;
   else if (tab === "analytics") Body = <Analytics {...common} />;
-  else Body = <Profile user={user} setUser={setUser} onAuthChange={onAuthChange} />;
+  else Body = <Profile user={user} setUser={setUser} onAuthChange={onAuthChange} agents={stats?.agents || []} />;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>

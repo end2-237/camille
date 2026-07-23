@@ -59,3 +59,24 @@ export async function logout() {
 export function isLoggedIn() {
   return !!TOKEN;
 }
+
+// ── WhatsApp / Camille Core (WAHA) ──────────────────────────────────────────
+export const wahaStatus = (agentId) => req(`/api/waha/status?agentId=${agentId}`);
+export const wahaConnect = (agentId) => req(`/api/waha/connect`, { method: "POST", body: JSON.stringify({ agentId }) });
+export const wahaDisconnect = (agentId) => req(`/api/waha/disconnect`, { method: "POST", body: JSON.stringify({ agentId }) });
+export const wahaPairingCode = (agentId, phoneNumber) => req(`/api/waha/phone`, { method: "POST", body: JSON.stringify({ agentId, phoneNumber }) });
+// Source (uri + headers) pour afficher le QR dans <Image>. `nonce` force le rafraîchissement.
+export function wahaQrSource(sessionName, nonce = "") {
+  return {
+    uri: `${BASE}/api/waha/qr?session=${encodeURIComponent(sessionName)}${nonce ? `&n=${nonce}` : ""}`,
+    headers: TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {},
+  };
+}
+
+// ── Catalogue / produits ────────────────────────────────────────────────────
+export const getProducts = (agentId) => req(`/api/agents/${agentId}/products`);
+
+// ── Plans & paiements ───────────────────────────────────────────────────────
+export const getPlans = () => req(`/api/plans`);
+export const getPayments = () => req(`/api/payments/history`);
+export const initiatePayment = (body) => req(`/api/payments/initiate`, { method: "POST", body: JSON.stringify(body) });

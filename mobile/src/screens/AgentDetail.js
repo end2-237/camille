@@ -4,6 +4,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import Avatar from "../components/Avatar";
 import { getAgent, patchAgent } from "../api";
+import AgentEdit from "./AgentEdit";
+import AgentCapabilities from "./AgentCapabilities";
+import Catalogue from "./Catalogue";
+import ConnectWhatsApp from "./ConnectWhatsApp";
 
 const WEB = "https://camille.vps.buyticle.com";
 
@@ -18,6 +22,13 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
   const [full, setFull] = useState(null);
   const [status, setStatus] = useState(agent?.status || "active");
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState("menu");
+
+  const back = () => setView("menu");
+  if (view === "edit") return <AgentEdit agent={agent} onClose={back} onSaved={onChanged} />;
+  if (view === "capabilities") return <AgentCapabilities agent={agent} onClose={back} />;
+  if (view === "catalogue") return <Catalogue agent={agent} onClose={back} />;
+  if (view === "connect") return <ConnectWhatsApp agent={agent} onClose={back} />;
 
   useEffect(() => {
     let on = true;
@@ -116,9 +127,10 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
 
         {/* Management */}
         <Section title="Gestion">
-          <Action icon="pricetags-outline" label="Ouvrir le catalogue" onPress={() => Linking.openURL(`${WEB}/dashboard/${agent.agent_id}`)} />
-          <Action icon="create-outline" label="Éditer sur le web" onPress={() => Linking.openURL(`${WEB}/dashboard/${agent.agent_id}`)} />
-          <Action icon="link-outline" label="Connexion WhatsApp" onPress={() => Linking.openURL(`${WEB}/dashboard/${agent.agent_id}/integrations`)} />
+          <Action icon="create-outline" label="Modifier l'agent" onPress={() => setView("edit")} />
+          <Action icon="options-outline" label="Capacités" onPress={() => setView("capabilities")} />
+          <Action icon="pricetags-outline" label="Catalogue produits" onPress={() => setView("catalogue")} />
+          <Action icon="logo-whatsapp" label="Connexion WhatsApp" onPress={() => setView("connect")} />
           <Action icon="stats-chart-outline" label="Statistiques détaillées" onPress={() => Linking.openURL(`${WEB}/dashboard/stats`)} />
         </Section>
       </ScrollView>
