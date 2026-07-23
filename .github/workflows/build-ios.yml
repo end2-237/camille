@@ -1,0 +1,79 @@
+name: Build Camille Mobile (iOS Simulator)
+
+# Build iOS NON signe pour le SIMULATEUR -> testable directement sur appetize.io
+# (aucun compte Apple Developer requis). Pour un vrai iPhone il faudra une
+# signature Apple + TestFlight (voir README).
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - claude/zealous-ramanujan-wgSVV
+    paths:
+      - "mobile/**"
+      - ".github/workflows/build-ios.yml"
+
+jobs:
+  ios-sim:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies (locked)
+        run: npm ci --no-audit --no-fund
+
+      - name: Expo prebuild (generate ios/)
+        run: npx expo prebuild --platform ios --clean
+        env:
+          CI: "1"
+
+      - name: CocoaPods install
+        working-directory: mobile/ios
+        run: pod install --repo-update
+
+      - name: Resolve workspace & scheme
+        id: xc
+        working-directory: mobile/ios
+        run: |
+          WS=$(ls -d *.xcworkspace | head -n1)
+          SCHEME=$(xcodebuild -workspace "$WS" -list -json | python3 -c "import sys,json;print(json.load(sys.stdin)['workspace']['schemes'][0])")
+          echo "workspace=$WS" >> "$GITHUB_OUTPUT"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "Workspace=$WS Scheme=$SCHEME"
+
+      - name: Build for iOS Simulator (unsigned)
+        working-directory: mobile/ios
+        run: |
+          xcodebuild \
+            -workspace "${{ steps.xc.outputs.workspace }}" \
+            -scheme "${{ steps.xc.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package .app
+        working-directory: mobile/ios
+        run: |
+          APP=$(find build/Build/Products/Release-iphonesimulator -maxdepth 1 -name "*.app" | head -n1)
+          echo "APP=$APP"
+          cd "$(dirname "$APP")"
+          zip -r -y "$GITHUB_WORKSPACE/Camille-ios-sim.zip" "$(basename "$APP")"
+
+      - name: Upload iOS simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: camille-mobile-ios-sim
+          path: Camille-ios-sim.zip
+          if-no-files-found: error
+          retention-days: 30

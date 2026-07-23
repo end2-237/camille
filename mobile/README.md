@@ -30,7 +30,17 @@ Automatique via GitHub Actions : `.github/workflows/build-mobile.yml`
 (déclenchement manuel *Run workflow* ou push sur la branche).
 L'APK signé (debug-key, installable directement) est publié en **artifact** `camille-mobile-apk`.
 
-Build local équivalent :
+## Build iOS (pour tester sur appetize.io)
+Workflow `.github/workflows/build-ios.yml` : build **simulateur iOS non signé**
+(aucun compte Apple requis), publié en artifact `camille-mobile-ios-sim` (un `.zip`
+contenant `Camille.app`). Décompresse-le et **upload le `.app` sur appetize.io**
+(plateforme iOS) pour tester — c'est le même flux que l'APK Android.
+
+> Pour installer sur un **vrai iPhone**, il faut une signature Apple
+> (compte Apple Developer 99 $/an) + TestFlight. Le build simulateur ne
+> s'installe pas sur un appareil physique — uniquement simulateur / appetize.
+
+## Build Android local équivalent :
 ```bash
 cd mobile
 npm install
