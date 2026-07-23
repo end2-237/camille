@@ -6,13 +6,21 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "backgroundColor": "#ECECEC",
+    "icon": "./assets/icon.png",
     "assetBundlePatterns": ["**/*"],
     "plugins": [
       ["./plugins/withSplashColor", { "color": "#ECECEC" }]
     ],
     "android": {
       "package": "com.camille.mobile",
-      "versionCode": 1
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#101012"
+      }
+    },
+    "ios": {
+      "supportsTablet": true
     },
     "extra": {
       "apiBaseUrl": "https://camille.vps.buyticle.com"

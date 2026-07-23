@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { View, SafeAreaView, StatusBar, Platform } from "react-native";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { View, SafeAreaView, StatusBar, Platform, Animated } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { C } from "./src/theme";
 import { Header, BottomNav, ScreenTitle } from "./src/components/ui";
@@ -104,8 +104,23 @@ export default function App() {
         />
         {tab === "dash" || tab === "agents" || tab === "analytics" ? <ScreenTitle tab={tab} /> : null}
       </View>
-      <View style={{ flex: 1 }}>{Body}</View>
+      <AnimatedScreen tabKey={tab}>{Body}</AnimatedScreen>
       <BottomNav tab={tab} setTab={setTab} />
     </SafeAreaView>
+  );
+}
+
+// Fondu + léger slide vertical à chaque changement d'onglet.
+function AnimatedScreen({ tabKey, children }) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    a.setValue(0);
+    Animated.timing(a, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+  }, [tabKey, a]);
+  const translateY = a.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+  return (
+    <Animated.View style={{ flex: 1, opacity: a, transform: [{ translateY }] }}>
+      {children}
+    </Animated.View>
   );
 }
