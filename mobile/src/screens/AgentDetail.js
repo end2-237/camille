@@ -25,16 +25,18 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
   const [view, setView] = useState("menu");
 
   const back = () => setView("menu");
-  if (view === "edit") return <AgentEdit agent={agent} onClose={back} onSaved={onChanged} />;
-  if (view === "capabilities") return <AgentCapabilities agent={agent} onClose={back} />;
-  if (view === "catalogue") return <Catalogue agent={agent} onClose={back} />;
-  if (view === "connect") return <ConnectWhatsApp agent={agent} onClose={back} />;
 
   useEffect(() => {
     let on = true;
     getAgent(agent.agent_id).then((d) => { if (on) { setFull(d); if (d?.status) setStatus(d.status); } }).catch(() => {});
     return () => { on = false; };
   }, [agent.agent_id]);
+
+  // Sous-écrans : APRÈS tous les hooks (sinon violation des règles de hooks -> crash).
+  if (view === "edit") return <AgentEdit agent={agent} onClose={back} onSaved={onChanged} />;
+  if (view === "capabilities") return <AgentCapabilities agent={agent} onClose={back} />;
+  if (view === "catalogue") return <Catalogue agent={agent} onClose={back} />;
+  if (view === "connect") return <ConnectWhatsApp agent={agent} onClose={back} />;
 
   const id = full?.identity || {};
   const bc = full?.business_context || {};
