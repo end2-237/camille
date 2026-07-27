@@ -6,7 +6,7 @@ import { wahaStartSession, makeSessionName } from "@/lib/waha";
 
 // Limite de sessions WhatsApp simultanées par utilisateur.
 // Configurable via l'env MAX_WHATSAPP_SESSIONS (ex: "20" pour la phase d'essais).
-const MAX_SESSIONS = Math.max(1, parseInt(process.env.MAX_WHATSAPP_SESSIONS ?? "3", 10) || 3);
+const MAX_SESSIONS = Math.max(1, parseInt(process.env.MAX_WHATSAPP_SESSIONS ?? "5", 10) || 5);
 
 // Statuts considérés comme "session morte" : ils ne consomment pas de quota.
 const DEAD_STATUSES = ["STOPPED", "FAILED"];
