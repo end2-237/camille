@@ -22,24 +22,39 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
     setBusy(false);
   }
 
+  // Diagnostic complet : dit précisément dans quel état se trouve l'OTA.
+  function otaInfo() {
+    const id = Updates.updateId ? String(Updates.updateId).slice(0, 8) : "aucun (build d'origine)";
+    return [
+      `Actif : ${Updates.isEnabled ? "oui" : "NON"}`,
+      `Version : ${Updates.runtimeVersion || "—"}`,
+      `Canal : ${Updates.channel || "—"}`,
+      `Mise à jour installée : ${id}`,
+    ].join("\n");
+  }
+
   async function checkUpdate() {
     setChecking(true);
     try {
       if (!Updates.isEnabled) {
-        Alert.alert("Mises à jour", "Les mises à jour OTA seront actives dès la connexion du compte Expo (EAS Update).");
+        Alert.alert(
+          "Mises à jour indisponibles",
+          "Cette version de l'app ne contient pas le module de mise à jour.\n\n" +
+          "Installe l'APK le plus récent : les suivantes arriveront ensuite toutes seules.\n\n" + otaInfo()
+        );
         return;
       }
       const res = await Updates.checkForUpdateAsync();
       if (res.isAvailable) {
         await Updates.fetchUpdateAsync();
-        Alert.alert("Mise à jour prête", "L'app va redémarrer pour appliquer la mise à jour.", [
+        Alert.alert("Mise à jour prête", "L'app se recharge maintenant.", [
           { text: "OK", onPress: () => Updates.reloadAsync() },
         ]);
       } else {
-        Alert.alert("À jour", "Tu utilises déjà la dernière version.");
+        Alert.alert("À jour", "Tu utilises déjà la dernière version.\n\n" + otaInfo());
       }
     } catch (e) {
-      Alert.alert("Mises à jour", "Impossible de vérifier pour le moment.");
+      Alert.alert("Mises à jour", `Vérification impossible : ${e?.message || "erreur réseau"}\n\n` + otaInfo());
     } finally { setChecking(false); }
   }
 
@@ -76,7 +91,12 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
           )}
         </TouchableOpacity>
 
-        <Text style={{ color: C.sub, fontSize: 11, textAlign: "center", marginTop: 18 }}>Camille · v1.0.0</Text>
+        <Text style={{ color: C.sub, fontSize: 11, textAlign: "center", marginTop: 18 }}>
+          Camille · v1.0.0{Updates.isEnabled ? "" : " · OTA inactif"}
+        </Text>
+        <Text style={{ color: C.sub, fontSize: 10, textAlign: "center", marginTop: 3 }}>
+          {Updates.updateId ? `MAJ ${String(Updates.updateId).slice(0, 8)}` : "build d'origine"}
+        </Text>
       </ScrollView>
 
       <BottomDrawer visible={showPlans} onClose={() => setShowPlans(false)}>

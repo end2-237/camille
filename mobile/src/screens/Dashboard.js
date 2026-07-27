@@ -1,11 +1,12 @@
 import React from "react";
-import { View, Text, ScrollView, RefreshControl } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ImageBackground, TouchableOpacity, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import { Card, EmptyHint } from "../components/ui";
 import { BarChart, Gauge } from "../components/charts";
 import { AdCard, PlanCard } from "../components/promo";
 import { StatMini } from "../components/ui";
+import Avatar from "../components/Avatar";
 
 const WEB = "https://camille.vps.buyticle.com";
 const AD1 = "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=70";
@@ -36,6 +37,81 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
   return (
     <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
+
+      {/* ── HERO façon carte immobilière : image + titre + CTA + bandeau ── */}
+      <View style={{ borderRadius: 22, overflow: "hidden", marginBottom: S.md, backgroundColor: "#8FC0EF" }}>
+        <ImageBackground source={require("../../assets/dash-hero.png")} style={{ width: "100%", minHeight: 430 }} resizeMode="cover">
+          <View style={{ flex: 1, padding: 20, justifyContent: "flex-start" }}>
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 30, lineHeight: 34, letterSpacing: -0.8 }}>
+              Vos ventes
+            </Text>
+            <Text style={{ color: C.ink, fontWeight: "800", fontSize: 30, lineHeight: 34, letterSpacing: -0.8 }}>
+              en pilote auto
+            </Text>
+            <Text style={{ color: "rgba(255,255,255,0.92)", fontSize: 13.5, lineHeight: 19, marginTop: 12, width: "88%" }}>
+              Camille répond à vos clients, présente vos produits et conclut — pendant que vous faites autre chose.
+            </Text>
+
+            <TouchableOpacity activeOpacity={0.9} onPress={() => Linking.openURL(WEB)}
+              style={{ marginTop: 18, alignSelf: "flex-start", backgroundColor: "#fff", borderRadius: 10,
+                paddingHorizontal: 16, height: 44, flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Text style={{ color: C.ink, fontWeight: "600", fontSize: 13.5 }}>Découvrir Camille</Text>
+              <Ionicons name="arrow-forward" size={15} color={C.ink} />
+            </TouchableOpacity>
+
+            <View style={{ flex: 1 }} />
+
+            {/* bandeau bas translucide : agents + action */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.22)",
+              borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", borderRadius: 14, padding: 8 }}>
+              <View style={{ flexDirection: "row" }}>
+                {(stats?.agents || []).slice(0, 3).map((a, i) => (
+                  <View key={a.agent_id || i} style={{ marginLeft: i === 0 ? 0 : -10 }}>
+                    <Avatar name={a.name} size={30} radius={15} />
+                  </View>
+                ))}
+                {!(stats?.agents || []).length && <Avatar name="Camille" size={30} radius={15} />}
+              </View>
+              <View style={{ width: 1, height: 22, backgroundColor: "rgba(255,255,255,0.5)" }} />
+              <Text style={{ flex: 1, color: "#fff", fontWeight: "600", fontSize: 13.5 }}>
+                {(stats?.agents || []).length ? "Gérer mes agents" : "Connecter WhatsApp"}
+              </Text>
+              <View style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "rgba(255,255,255,0.7)", alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="arrow-forward" size={14} color="#fff" />
+              </View>
+            </View>
+          </View>
+        </ImageBackground>
+      </View>
+
+      {/* ── Deux cartes : satisfaction + volume ── */}
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: S.md }}>
+        <View style={{ flex: 1, backgroundColor: C.ink, borderRadius: 18, padding: 14, justifyContent: "space-between", minHeight: 130 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+            <Text style={{ color: C.white, fontWeight: "700", fontSize: 13.5, width: "72%" }}>Taux de{"\n"}réponse</Text>
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: "rgba(198,242,78,0.18)", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="flash" size={13} color={C.lime} />
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={{ color: C.white, fontWeight: "800", fontSize: 22 }}>
+              {ov.escalation_rate != null ? `${100 - Math.round(ov.escalation_rate)}%` : "—"}
+            </Text>
+            <View style={{ backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 999, paddingHorizontal: 10, height: 24, justifyContent: "center" }}>
+              <Text style={{ color: C.subDark, fontSize: 10.5 }}>30 jours</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={{ flex: 1, borderRadius: 18, overflow: "hidden", minHeight: 130 }}>
+          <ImageBackground source={require("../../assets/dash-hero.png")} style={{ flex: 1 }} resizeMode="cover">
+            <View style={{ flex: 1, backgroundColor: "rgba(16,16,18,0.35)", padding: 14, justifyContent: "flex-end" }}>
+              <Text style={{ color: "#fff", fontWeight: "800", fontSize: 22 }}>{received.toLocaleString("fr-FR")}</Text>
+              <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11 }}>messages reçus</Text>
+            </View>
+          </ImageBackground>
+        </View>
+      </View>
 
       {/* PUB #1 — au-dessus de la performance */}
       <AdCard
