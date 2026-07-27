@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { View, Text, TouchableOpacity, Animated, Dimensions, Image } from "react-native";
+import { View, Text, TouchableOpacity, Animated, Dimensions, Image, ImageBackground, StatusBar } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R } from "../theme";
 
@@ -7,11 +7,18 @@ const { width } = Dimensions.get("window");
 
 const SLIDES = [
   {
-    img: require("../../assets/ob1.png"),
-    chip: "Vendeur IA · 24h/24",
-    title: "Vos agents IA\nvendent pour vous",
-    body: "Camille répond à vos clients sur WhatsApp, présente vos produits et conclut — même la nuit.",
-    points: ["Réponses instantanées", "Catalogue intégré", "Jamais fatigué"],
+    hero: true,
+    bg: require("../../assets/ob1-hero.png"),
+    brand: "CAMILLE",
+    big: "VENDEUR",
+    line2: "Toujours",
+    line3: "disponible.",
+    body: "Vos clients écrivent, Camille répond. Elle présente vos produits, conseille et conclut la vente — 24h/24 sur WhatsApp.",
+    stats: [
+      { v: "24/7", l1: "Disponible", l2: "sans pause" },
+      { v: "< 3s", l1: "Réponse", l2: "en moyenne" },
+      { v: "100%", l1: "WhatsApp", l2: "natif" },
+    ],
   },
   {
     img: require("../../assets/ob2.png"),
@@ -59,6 +66,53 @@ export default function Onboarding({ onDone }) {
           const textTranslate = scrollX.interpolate({ inputRange, outputRange: [60, 0, -60], extrapolate: "clamp" });
           const opacity = scrollX.interpolate({ inputRange, outputRange: [0, 1, 0], extrapolate: "clamp" });
           return (
+            s.hero ? (
+              <View key={i} style={{ width, flex: 1 }}>
+                <ImageBackground source={s.bg} style={{ flex: 1 }} resizeMode="cover">
+                  <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 46, paddingBottom: 10 }}>
+                    {/* barre haute : marque + action */}
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                      <Text style={{ color: "#fff", fontWeight: "900", fontSize: 17, letterSpacing: 2 }}>{s.brand}</Text>
+                      <TouchableOpacity onPress={onDone}
+                        style={{ backgroundColor: "#fff", borderRadius: 999, paddingHorizontal: 20, height: 40, alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ color: C.ink, fontWeight: "700", fontSize: 14 }}>Commencer</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* bloc titre */}
+                    <Animated.View style={{ marginTop: 44, opacity, transform: [{ translateX: textTranslate }] }}>
+                      <Text style={{ color: "#fff", fontWeight: "900", fontSize: 54, lineHeight: 56, letterSpacing: -2 }}>
+                        {s.big}
+                      </Text>
+                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 40, lineHeight: 46, letterSpacing: -1, marginTop: 2 }}>
+                        {s.line2}
+                      </Text>
+                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 40, lineHeight: 46, letterSpacing: -1, fontStyle: "italic" }}>
+                        {s.line3}
+                      </Text>
+                      <Text style={{ color: "rgba(255,255,255,0.82)", fontSize: 14, lineHeight: 21, marginTop: 22, width: "92%" }}>
+                        {s.body}
+                      </Text>
+                    </Animated.View>
+
+                    <View style={{ flex: 1 }} />
+
+                    {/* bandeau de chiffres */}
+                    <View style={{ borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.22)", paddingTop: 16, flexDirection: "row", gap: 18 }}>
+                      {s.stats.map((st) => (
+                        <View key={st.v} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={{ color: "#fff", fontWeight: "800", fontSize: 21, letterSpacing: -0.5 }}>{st.v}</Text>
+                          <View>
+                            <Text style={{ color: "#fff", fontSize: 11.5, fontWeight: "700" }}>{st.l1}</Text>
+                            <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 10.5 }}>{st.l2}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </ImageBackground>
+              </View>
+            ) : (
             <View key={i} style={{ width, flex: 1, paddingHorizontal: 26, paddingTop: 54 }}>
               <Animated.View style={{ height: 290, alignItems: "center", justifyContent: "center", transform: [{ translateX: imgTranslate }, { scale: imgScale }] }}>
                 <Image source={s.img} style={{ width: width - 40, height: 290 }} resizeMode="contain" />
@@ -86,6 +140,7 @@ export default function Onboarding({ onDone }) {
                 </View>
               </Animated.View>
             </View>
+            )
           );
         })}
       </Animated.ScrollView>
