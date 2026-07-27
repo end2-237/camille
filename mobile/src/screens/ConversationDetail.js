@@ -11,7 +11,7 @@ export default function ConversationDetail({ agent, stats, onClose }) {
   const [full, setFull] = useState(null);
   useEffect(() => {
     let on = true;
-    getAgent(agent.agent_id).then((d) => on && setFull(d)).catch(() => {});
+    getAgent(agent.agent_id).then((d) => on && setFull(d?.agent || d)).catch(() => {});
     return () => { on = false; };
   }, [agent.agent_id]);
 

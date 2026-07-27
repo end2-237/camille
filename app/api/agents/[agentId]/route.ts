@@ -108,6 +108,9 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         latitude: row.latitude != null ? Number(row.latitude) : null,
         longitude: row.longitude != null ? Number(row.longitude) : null,
         media: Array.isArray(row.media) ? row.media : (row.media ? JSON.parse(row.media) : []),
+        // Source du catalogue : 'camille' (catalogue natif) | 'ofs_cj' (grand catalogue) | 'ofs_shop'
+        catalog_source: row.catalog_source ?? null,
+        ofs_vendor_id: row.ofs_vendor_id ?? null,
       },
     });
   } catch (err) {

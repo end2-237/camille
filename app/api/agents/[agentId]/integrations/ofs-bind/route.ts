@@ -34,6 +34,16 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   if (!ofsEnabled()) return NextResponse.json({ error: "OFS non configuré (OFS_SUPABASE_ANON_KEY)." }, { status: 400 });
+
+  // Agent OFS désigné (OFS_LIVE_AGENT_ID) : il peut rebasculer sur le grand catalogue
+  // plateforme sans re-saisir ses identifiants — c'est le comportement qui était
+  // automatique avant, désormais explicitement activable/désactivable.
+  const OFS_LIVE_AGENT = process.env.OFS_LIVE_AGENT_ID || "";
+  if (source === "ofs_cj" && OFS_LIVE_AGENT && OFS_LIVE_AGENT === agentId && !body.email) {
+    await setSource(agentId, "ofs_cj", null);
+    return NextResponse.json({ success: true, source: "ofs_cj" });
+  }
+
   const { email, password } = body;
   if (!email || !password) return NextResponse.json({ error: "email et password OFS requis" }, { status: 400 });
 

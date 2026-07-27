@@ -50,6 +50,9 @@ export default function IntegrationsPage() {
   // Auto-vectorisation OFS : visible UNIQUEMENT pour l'agent OFS désigné.
   const OFS_LIVE_AGENT = process.env.NEXT_PUBLIC_OFS_LIVE_AGENT_ID || "c2c7126b-6964-4248-befe-ce4ff7931a0a";
   const isOfsOwner = agentId === OFS_LIVE_AGENT;
+  const [catSrc, setCatSrc] = useState<string | null>(null);
+  const [catBusy, setCatBusy] = useState(false);
+  const [catMsg, setCatMsg] = useState("");
   const [vecBusy, setVecBusy] = useState(false);
   const [vecLog, setVecLog] = useState<string>("");
   const [vecTotal, setVecTotal] = useState(0);
@@ -71,9 +74,29 @@ export default function IntegrationsPage() {
       setSector(a.business_context?.sector || a.sector || "");
       setBizName(a.business_context?.business_name || a.name || "");
       setMedia(Array.isArray(a.media) ? a.media : []);
+      // null = jamais configuré : pour l'agent OFS désigné cela équivaut au grand catalogue
+      setCatSrc(a.catalog_source ?? null);
     } catch { /* ignore */ }
   }, [agentId]);
   useEffect(() => { loadAgent(); }, [loadAgent]);
+
+  // Bascule grand catalogue OFS <-> catalogue natif Camille
+  async function toggleCatalog(toOfs: boolean) {
+    setCatBusy(true); setCatMsg("");
+    try {
+      const r = await fetch(`/api/agents/${agentId}/integrations/ofs-bind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ source: toOfs ? "ofs_cj" : "camille" }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Erreur");
+      setCatSrc(d.source);
+      setCatMsg(toOfs ? "Grand catalogue OFS actif." : "Catalogue natif Camille actif.");
+    } catch (e) {
+      setCatMsg((e as Error).message);
+    } finally { setCatBusy(false); }
+  }
 
   function addMedia(kind: string) { setMedia((m) => [...m, { kind, url: "", caption: "" }]); }
   function updMedia(i: number, patch: Partial<MediaItem>) { setMedia((m) => m.map((x, k) => (k === i ? { ...x, ...patch } : x))); }
@@ -300,6 +323,47 @@ export default function IntegrationsPage() {
           {mediaMsg && <span className="text-[12px]" style={{ color: mediaMsg.startsWith("✅") ? "#0b7a4b" : "#c0392b" }}>{mediaMsg}</span>}
         </div>
       </div>
+
+      {(isOfsOwner || catSrc === "ofs_cj" || catSrc === "ofs_shop") && (() => {
+        // null = non configuré ; pour l'agent OFS désigné le grand catalogue était actif par défaut
+        const bigOn = catSrc === "ofs_cj" || catSrc === "ofs_shop" || (catSrc === null && isOfsOwner);
+        return (
+          <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
+            <div className="mb-1 flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#0e9d63" }}>🗂️</span>
+              <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Source du catalogue</h2>
+            </div>
+            <p className="mb-3 text-[12px]" style={{ color: "var(--cl-sub)" }}>
+              Choisis ce que l&apos;agent utilise pour répondre : le grand catalogue OFS (des milliers de produits)
+              ou uniquement ton catalogue Camille natif.
+            </p>
+
+            <div className="flex items-center justify-between rounded-lg p-3" style={{ background: "#f7f7f8", border: "1px solid var(--cl-line)" }}>
+              <div>
+                <div className="text-[13px] font-semibold" style={{ color: "var(--cl-ink)" }}>
+                  {bigOn ? "Grand catalogue OFS" : "Catalogue natif Camille"}
+                </div>
+                <div className="text-[11px]" style={{ color: "var(--cl-sub)" }}>
+                  {bigOn ? "L'agent répond depuis le catalogue OFS en direct." : "L'agent répond uniquement depuis tes produits Camille."}
+                </div>
+              </div>
+              <button
+                onClick={() => toggleCatalog(!bigOn)}
+                disabled={catBusy}
+                aria-label="Activer ou désactiver le grand catalogue"
+                className="relative h-7 w-12 rounded-full transition-colors disabled:opacity-50"
+                style={{ background: bigOn ? "#0e9d63" : "#cbd5e1" }}
+              >
+                <span
+                  className="absolute top-1 h-5 w-5 rounded-full bg-white transition-all"
+                  style={{ left: bigOn ? 26 : 4 }}
+                />
+              </button>
+            </div>
+            {catMsg && <div className="mt-2 text-[12px]" style={{ color: "var(--cl-sub)" }}>{catMsg}</div>}
+          </div>
+        );
+      })()}
 
       {isOfsOwner && (
         <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>

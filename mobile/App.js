@@ -94,7 +94,7 @@ export default function App() {
   const common = { stats, query, refreshing, onRefresh };
   let Body;
   if (tab === "dash") Body = <Dashboard {...common} user={user} />;
-  else if (tab === "agents") Body = <Agents {...common} onAgentChanged={onAgentChanged} />;
+  else if (tab === "agents") Body = <Agents {...common} onAgentChanged={onAgentChanged} onRefreshData={load} />;
   else if (tab === "convos") Body = <Conversations {...common} />;
   else if (tab === "analytics") Body = <Analytics {...common} />;
   else Body = <Profile user={user} setUser={setUser} onAuthChange={onAuthChange} agents={stats?.agents || []} />;

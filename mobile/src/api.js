@@ -48,6 +48,20 @@ export const getMe = () => req("/api/auth/me");
 
 export const getAgent = (id) => req(`/api/agents/${id}`);
 
+// Création d'agent : l'API attend { formData, systemPrompt }
+export const createAgent = (formData, compiledPrompt) =>
+  req(`/api/agents`, {
+    method: "POST",
+    body: JSON.stringify({ formData, systemPrompt: { compiled_prompt: compiledPrompt } }),
+  });
+
+// Source du catalogue : 'camille' (natif) | 'ofs_cj' (grand catalogue OFS)
+export const setCatalogSource = (agentId, source) =>
+  req(`/api/agents/${agentId}/integrations/ofs-bind`, {
+    method: "POST",
+    body: JSON.stringify({ source }),
+  });
+
 export const patchAgent = (id, body) =>
   req(`/api/agents/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 

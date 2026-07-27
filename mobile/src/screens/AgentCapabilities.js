@@ -21,7 +21,8 @@ export default function AgentCapabilities({ agent, onClose }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    getAgent(agent.agent_id).then((d) => {
+    getAgent(agent.agent_id).then((r) => {
+      const d = r?.agent || r;
       const c = d.capabilities || {};
       const merged = { ...Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, false])), ...c };
       setCaps(merged);

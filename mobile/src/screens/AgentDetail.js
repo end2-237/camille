@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert, Switch } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import Avatar from "../components/Avatar";
-import { getAgent, patchAgent } from "../api";
+import { getAgent, patchAgent, setCatalogSource } from "../api";
 import AgentEdit from "./AgentEdit";
 import AgentCapabilities from "./AgentCapabilities";
 import Catalogue from "./Catalogue";
@@ -23,12 +23,13 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
   const [status, setStatus] = useState(agent?.status || "active");
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState("menu");
+  const [catBusy, setCatBusy] = useState(false);
 
   const back = () => setView("menu");
 
   useEffect(() => {
     let on = true;
-    getAgent(agent.agent_id).then((d) => { if (on) { setFull(d); if (d?.status) setStatus(d.status); } }).catch(() => {});
+    getAgent(agent.agent_id).then((d) => { const A = d?.agent || d; if (on) { setFull(A); if (A?.status) setStatus(A.status); } }).catch(() => {});
     return () => { on = false; };
   }, [agent.agent_id]);
 
@@ -54,6 +55,19 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
     } catch (e) {
       Alert.alert("Erreur", e.message || "Impossible de mettre à jour.");
     } finally { setBusy(false); }
+  }
+
+  const bigCatalog = full?.catalog_source === "ofs_cj" || full?.catalog_source === "ofs_shop";
+
+  async function toggleCatalog() {
+    const next = bigCatalog ? "camille" : "ofs_cj";
+    setCatBusy(true);
+    try {
+      await setCatalogSource(agent.agent_id, next);
+      setFull((p) => ({ ...(p || {}), catalog_source: next }));
+    } catch (e) {
+      Alert.alert("Catalogue", e.message || "Bascule impossible.");
+    } finally { setCatBusy(false); }
   }
 
   const capList = Object.entries(caps).filter(([, v]) => v === true || (typeof v === "string" && v)).map(([k]) => k);
@@ -113,6 +127,26 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
           <Row label="Modèle IA" value={model} />
           <Row label="Statut" value={st.label} />
         </Section>
+
+        {full?.catalog_source !== undefined && (
+          <Section title="Source du catalogue">
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 10 }}>
+              <Ionicons name="albums-outline" size={19} color={C.ink} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.ink, fontSize: 14, fontWeight: "600" }}>
+                  {bigCatalog ? "Grand catalogue OFS" : "Catalogue natif Camille"}
+                </Text>
+                <Text style={{ color: C.sub, fontSize: 11, marginTop: 2 }}>
+                  {bigCatalog ? "L'agent répond depuis OFS en direct" : "L'agent répond depuis tes produits"}
+                </Text>
+              </View>
+              {catBusy ? <ActivityIndicator color={C.ink} /> : (
+                <Switch value={bigCatalog} onValueChange={toggleCatalog}
+                  trackColor={{ true: C.lime, false: "#DDD" }} thumbColor={C.white} />
+              )}
+            </View>
+          </Section>
+        )}
 
         {capList.length > 0 && (
           <Section title="Capacités actives">

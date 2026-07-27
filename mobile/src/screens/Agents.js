@@ -6,12 +6,14 @@ import { Card, StatMini, EmptyHint } from "../components/ui";
 import Avatar from "../components/Avatar";
 import { BottomDrawer } from "../components/Drawer";
 import AgentDetail from "./AgentDetail";
+import AgentCreate from "./AgentCreate";
 
-export default function Agents({ stats, query, refreshing, onRefresh, onAgentChanged }) {
+export default function Agents({ stats, query, refreshing, onRefresh, onAgentChanged, onRefreshData }) {
   const all = stats?.agents || [];
   const ov = stats?.overview || {};
   const q = (query || "").trim().toLowerCase();
   const [sel, setSel] = useState(null);
+  const [creating, setCreating] = useState(false);
 
   const agents = useMemo(
     () => (q ? all.filter((a) => `${a.name || ""} ${a.business_name || ""} ${a.sector || ""}`.toLowerCase().includes(q)) : all),
@@ -40,7 +42,12 @@ export default function Agents({ stats, query, refreshing, onRefresh, onAgentCha
             <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green }} />
             <Text style={{ color: C.white, fontWeight: "600", fontSize: 13 }}>{active} actif{active > 1 ? "s" : ""}</Text>
           </View>
-          <Ionicons name="hardware-chip-outline" size={80} color="rgba(0,0,0,0.08)" style={{ position: "absolute", right: -6, top: 14 }} />
+          <TouchableOpacity onPress={() => setCreating(true)} activeOpacity={0.85}
+            style={{ position: "absolute", right: 14, top: 14, flexDirection: "row", alignItems: "center", gap: 5,
+              backgroundColor: C.ink, paddingHorizontal: 12, height: 34, borderRadius: R.pill }}>
+            <Ionicons name="add" size={16} color={C.lime} />
+            <Text style={{ color: C.white, fontWeight: "700", fontSize: 12.5 }}>Nouvel agent</Text>
+          </TouchableOpacity>
         </View>
 
         {all.length > 0 && (
@@ -101,9 +108,22 @@ export default function Agents({ stats, query, refreshing, onRefresh, onAgentCha
           </TouchableOpacity>
         ))}
 
-        {!all.length && <EmptyHint text="Aucun agent pour le moment. Crée ton premier agent sur le dashboard web." />}
+        {!all.length && (
+          <View style={{ alignItems: "center", marginTop: 20 }}>
+            <EmptyHint text="Aucun agent pour le moment." />
+            <TouchableOpacity onPress={() => setCreating(true)}
+              style={{ marginTop: 14, height: 48, paddingHorizontal: 22, borderRadius: R.pill, backgroundColor: C.lime, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 }}>
+              <Ionicons name="add-circle-outline" size={18} color={C.ink} />
+              <Text style={{ color: C.ink, fontWeight: "800", fontSize: 14 }}>Créer mon premier agent</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {all.length > 0 && !agents.length && <EmptyHint text="Aucun agent ne correspond à ta recherche." />}
       </ScrollView>
+
+      <BottomDrawer visible={creating} onClose={() => setCreating(false)}>
+        {({ close }) => <AgentCreate onClose={close} onCreated={onRefreshData} />}
+      </BottomDrawer>
 
       <BottomDrawer visible={!!sel} onClose={() => setSel(null)}>
         {({ close }) => sel && <AgentDetail agent={sel} onClose={close} onChanged={onAgentChanged} />}

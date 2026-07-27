@@ -11,7 +11,8 @@ export default function AgentEdit({ agent, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    getAgent(agent.agent_id).then((d) => {
+    getAgent(agent.agent_id).then((r) => {
+      const d = r?.agent || r;
       const id = d.identity || {}, bc = d.business_context || {};
       setF({
         name: id.name || d.name || "",
