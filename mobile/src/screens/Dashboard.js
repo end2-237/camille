@@ -5,6 +5,7 @@ import { C, R, S } from "../theme";
 import { Card, EmptyHint } from "../components/ui";
 import { BarChart, Gauge } from "../components/charts";
 import { AdCard, PlanCard } from "../components/promo";
+import { StatMini } from "../components/ui";
 
 const WEB = "https://camille.vps.buyticle.com";
 const AD1 = "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=70";
@@ -18,9 +19,18 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
   const escal = Number(ov.total_escalations || 0);
   const tokens = Number(ov.total_tokens || 0);
 
+  const received = Number(ov.messages_received || 0);
+
   const bars = (stats?.monthly_tokens || []).map((m) => ({ l: String(m.period || "").slice(-2), v: Math.round(Number(m.total_tokens || 0) / 1000) }));
   const hasBars = bars.some((b) => b.v > 0);
   const gaugeMax = Math.max(messages * 1.25, 10);
+
+  // Quota de tokens : agrégé depuis les agents (l'API fournit limite + consommation du mois)
+  const ags = stats?.agents || [];
+  const tokUsed = ags.reduce((s, a) => s + Number(a.token_used_month || 0), 0);
+  const unlimited = ags.some((a) => a.token_unlimited);
+  const tokLimit = unlimited ? 0 : ags.reduce((s, a) => s + Number(a.token_limit || 0), 0);
+  const tokPct = unlimited || !tokLimit ? 0 : Math.min(100, Math.round((tokUsed / tokLimit) * 100));
 
   return (
     <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
@@ -35,6 +45,36 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
         cta="Découvrir"
         url={`${WEB}`}
       />
+
+      {/* Messages reçus (source Camille Core) + traités par l'IA */}
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: S.md }}>
+        <StatMini label="Messages reçus" value={received.toLocaleString("fr-FR")} />
+        <StatMini label="Traités par l'IA" value={messages.toLocaleString("fr-FR")} />
+      </View>
+
+      {/* Consommation de tokens et limite du plan */}
+      <Card style={{ marginBottom: S.md }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: C.white, fontWeight: "700", fontSize: 15 }}>Tokens du mois</Text>
+          <Ionicons name="flash-outline" size={16} color={C.lime} />
+        </View>
+        <Text style={{ color: C.white, fontWeight: "800", fontSize: 24, marginTop: 8 }}>
+          {tokUsed.toLocaleString("fr-FR")}
+          <Text style={{ color: C.subDark, fontWeight: "600", fontSize: 14 }}>
+            {unlimited ? "  · illimité" : tokLimit ? `  / ${tokLimit.toLocaleString("fr-FR")}` : ""}
+          </Text>
+        </Text>
+        {!unlimited && !!tokLimit && (
+          <>
+            <View style={{ height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.12)", marginTop: 12, overflow: "hidden" }}>
+              <View style={{ width: `${tokPct}%`, height: 8, borderRadius: 4, backgroundColor: tokPct >= 90 ? C.red : tokPct >= 70 ? C.amber : C.lime }} />
+            </View>
+            <Text style={{ color: C.subDark, fontSize: 11, marginTop: 6 }}>
+              {tokPct}% du quota utilisé
+            </Text>
+          </>
+        )}
+      </Card>
 
       <Card style={{ marginBottom: S.md }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>

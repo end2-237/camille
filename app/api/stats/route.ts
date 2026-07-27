@@ -10,6 +10,7 @@ import { getUserFromRequest }                         from "@/lib/auth-server";
 import { query }                                      from "@/lib/db";
 import { currentPeriod }                              from "@/lib/plans";
 import { getPlanLimitDB, isUnlimitedTokens }          from "@/lib/plans-db";
+import { wahaAnalytics }                              from "@/lib/waha";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -288,6 +289,33 @@ export async function GET(req: NextRequest) {
     const peakDay  = dailySeries.reduce((best, d) => d.messages > best.messages ? d : best, dailySeries[0] ?? { date: null, messages: 0 });
     const peakHour = hourlyDistribution.reduce((best, h) => h.count > best.count ? h : best, hourlyDistribution[0]);
 
+    // ── 11b. Messages REÇUS (source : Camille Core) ───────────────────────────
+    // agent_analytics ne compte que les messages traités par l'IA. Camille Core, lui,
+    // compte tout ce qui entre — c'est ce que l'utilisateur veut voir.
+    const receivedByAgent: Record<string, number> = {};
+    let totalReceived = 0;
+    try {
+      const sessRes = await safe(
+        `SELECT agent_id, session_name FROM camille.whatsapp_sessions WHERE agent_id = ANY($1::uuid[])`,
+        [agentIds]
+      );
+      const fromMs = new Date(`${from}T00:00:00Z`).getTime();
+      const toMs   = new Date(`${to}T23:59:59Z`).getTime();
+      const results = await Promise.all(
+        sessRes.rows.map(async (r: { agent_id: string; session_name: string }) => ({
+          agentId: r.agent_id,
+          data: await wahaAnalytics(r.session_name, fromMs, toMs),
+        }))
+      );
+      results.forEach(({ agentId: aid, data }) => {
+        if (!data) return;
+        receivedByAgent[aid] = (receivedByAgent[aid] ?? 0) + data.messages;
+        totalReceived += data.messages;
+      });
+    } catch {
+      // Camille Core indisponible : on renvoie simplement 0, sans casser les stats
+    }
+
     // ── 12. Per-agent enriched list ───────────────────────────────────────────
     const agentDetails = await Promise.all(
       (agentIdParam ? allAgents.filter((a) => a.id === agentIdParam) : allAgents).map(async (a) => {
@@ -310,6 +338,7 @@ export async function GET(req: NextRequest) {
           activeCaps:       activeCapsCount,
           created_at:       a.created_at,
           period_messages:  agg ? Number(agg.total_messages)      : 0,
+          messages_received: receivedByAgent[a.id] ?? 0,
           period_leads:     agg ? Number(agg.total_leads)         : 0,
           period_escalations: agg ? Number(agg.total_escalations) : 0,
           period_tokens:    agg ? Number(agg.total_tokens)        : 0,
@@ -332,6 +361,7 @@ export async function GET(req: NextRequest) {
       // Global KPIs
       overview: {
         total_messages:     totalMessages,
+        messages_received:  totalReceived,
         unique_contacts:    uniqueContacts,
         total_leads:        totalLeads,
         total_escalations:  totalEscalations,

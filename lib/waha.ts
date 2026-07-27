@@ -109,6 +109,28 @@ export async function wahaDeleteSession(sessionName: string) {
   return wahaStopSession(sessionName);
 }
 
+// Analytics Camille Core : nombre de messages REÇUS (et contacts uniques) sur une période.
+// Camille Core compte chaque message entrant, y compris ceux que l'IA n'a pas traités —
+// c'est la seule source fiable du "nombre de messages reçus".
+export async function wahaAnalytics(
+  sessionName: string,
+  fromMs: number,
+  toMs: number
+): Promise<{ messages: number; conversations: number } | null> {
+  try {
+    const url = `${CORE_URL}/api/analytics?session=${encodeURIComponent(sessionName)}&from=${fromMs}&to=${toMs}&granularity=day`;
+    const res = await fetch(url, { headers: coreHeaders() });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { totals?: { messages?: number; conversations?: number } };
+    return {
+      messages: Number(data?.totals?.messages ?? 0),
+      conversations: Number(data?.totals?.conversations ?? 0),
+    };
+  } catch {
+    return null; // Camille Core injoignable → on n'empêche pas les stats de s'afficher
+  }
+}
+
 // Nom de session basé sur l'agentId — Camille Core supporte le multi-session nativement
 export function makeSessionName(agentId: string) {
   const multi = process.env.WAHA_MULTI_SESSION !== "false"; // multi par défaut avec Camille Core
