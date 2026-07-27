@@ -153,10 +153,10 @@ export async function GET(req: NextRequest) {
          COUNT(*) FILTER (WHERE role = 'user')     AS user_messages,
          COUNT(*) FILTER (WHERE role = 'assistant') AS bot_messages
        FROM camille.agent_conversations
-       WHERE session_name = ANY(
-         SELECT identity->>'session_name'
-         FROM camille.agents
-         WHERE id = ANY($1::uuid[])
+       WHERE session_name IN (
+         SELECT session_name
+         FROM camille.whatsapp_sessions
+         WHERE agent_id = ANY($1::uuid[])
        )
          AND created_at >= $2::date
          AND created_at <= ($3::date + INTERVAL '1 day')`,
@@ -169,10 +169,10 @@ export async function GET(req: NextRequest) {
          EXTRACT(HOUR FROM created_at)::INT AS hour,
          COUNT(*)                           AS count
        FROM camille.agent_conversations
-       WHERE session_name = ANY(
-         SELECT identity->>'session_name'
-         FROM camille.agents
-         WHERE id = ANY($1::uuid[])
+       WHERE session_name IN (
+         SELECT session_name
+         FROM camille.whatsapp_sessions
+         WHERE agent_id = ANY($1::uuid[])
        )
          AND role = 'user'
          AND created_at >= $2::date
@@ -196,10 +196,10 @@ export async function GET(req: NextRequest) {
          EXTRACT(DOW FROM created_at)::INT AS dow,
          COUNT(*)                          AS count
        FROM camille.agent_conversations
-       WHERE session_name = ANY(
-         SELECT identity->>'session_name'
-         FROM camille.agents
-         WHERE id = ANY($1::uuid[])
+       WHERE session_name IN (
+         SELECT session_name
+         FROM camille.whatsapp_sessions
+         WHERE agent_id = ANY($1::uuid[])
        )
          AND role = 'user'
          AND created_at >= $2::date
@@ -223,10 +223,10 @@ export async function GET(req: NextRequest) {
          contact_phone,
          COUNT(*) FILTER (WHERE role = 'user') AS user_msgs
        FROM camille.agent_conversations
-       WHERE session_name = ANY(
-         SELECT identity->>'session_name'
-         FROM camille.agents
-         WHERE id = ANY($1::uuid[])
+       WHERE session_name IN (
+         SELECT session_name
+         FROM camille.whatsapp_sessions
+         WHERE agent_id = ANY($1::uuid[])
        )
          AND created_at >= $2::date
          AND created_at <= ($3::date + INTERVAL '1 day')
