@@ -12,6 +12,8 @@ on:
 jobs:
   android-apk:
     runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     defaults:
       run:
         working-directory: mobile
@@ -74,9 +76,7 @@ jobs:
       # Publie la mise a jour OTA APRES l'upload de l'APK : meme si cette etape
       # echoue (secret absent, reseau), l'APK reste disponible en artifact.
       - name: Publier la mise a jour OTA (EAS Update)
-        if: ${{ secrets.EXPO_TOKEN != '' }}
+        if: env.EXPO_TOKEN != ''
         continue-on-error: true
         working-directory: mobile
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: npx eas-cli@latest update --branch production --message "build ${{ github.sha }}" --non-interactive
