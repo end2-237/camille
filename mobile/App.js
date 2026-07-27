@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { View, SafeAreaView, StatusBar, Platform, Animated } from "react-native";
+import { View, Text, SafeAreaView, StatusBar, Platform, Animated, AppState } from "react-native";
+import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { C } from "./src/theme";
 import { Header, BottomNav, ScreenTitle } from "./src/components/ui";
@@ -21,6 +22,7 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [user, setUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   const load = useCallback(async () => {
     const [s, a, m] = await Promise.allSettled([getStats("30d"), getAgents(), getMe()]);
@@ -57,6 +59,39 @@ export default function App() {
       setTimeout(() => setBooting(false), 900);
     })();
   }, [load]);
+
+  // ── Mise à jour OTA automatique ────────────────────────────────────────────
+  // Vérifie au lancement ET chaque fois que l'app revient au premier plan.
+  // Si une mise à jour existe : téléchargement puis rechargement IMMÉDIAT du
+  // bundle JS — l'utilisateur n'a rien à faire, et le téléphone ne redémarre pas.
+  useEffect(() => {
+    if (__DEV__ || !Updates.isEnabled) return undefined;
+
+    let busy = false;
+    async function check() {
+      if (busy) return;
+      busy = true;
+      try {
+        const res = await Updates.checkForUpdateAsync();
+        if (res.isAvailable) {
+          setUpdating(true);
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync(); // recharge l'app instantanément
+        }
+      } catch {
+        // hors ligne ou serveur injoignable : on réessaiera au prochain passage
+      } finally {
+        busy = false;
+        setUpdating(false);
+      }
+    }
+
+    check();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") check();
+    });
+    return () => sub.remove();
+  }, []);
 
   const finishOnboarding = useCallback(async () => {
     try { await AsyncStorage.setItem("camille_onboarded", "1"); } catch {}
@@ -111,6 +146,11 @@ export default function App() {
         />
         {tab === "dash" || tab === "agents" || tab === "analytics" ? <ScreenTitle tab={tab} /> : null}
       </View>
+      {updating && (
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 999, backgroundColor: C.ink, paddingVertical: 6, alignItems: "center" }}>
+          <Text style={{ color: C.lime, fontSize: 11.5, fontWeight: "600" }}>Mise à jour en cours…</Text>
+        </View>
+      )}
       <AnimatedScreen tabKey={tab}>{Body}</AnimatedScreen>
       <BottomNav tab={tab} setTab={setTab} />
     </SafeAreaView>

@@ -63,6 +63,13 @@ jobs:
           echo "Found APK: $APK"
           echo "path=mobile/$APK" >> "$GITHUB_OUTPUT"
 
+      - name: Publier la mise a jour OTA (EAS Update)
+        if: env.EXPO_TOKEN != ''
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli@latest update --branch production --message "${{ github.event.head_commit.message || 'update' }}" --non-interactive
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

@@ -7,11 +7,25 @@
     "userInterfaceStyle": "light",
     "backgroundColor": "#ECECEC",
     "icon": "./assets/icon.png",
-    "runtimeVersion": { "policy": "sdkVersion" },
-    "updates": { "enabled": false, "fallbackToCacheTimeout": 0, "checkAutomatically": "ON_LOAD" },
-    "assetBundlePatterns": ["**/*"],
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "url": "https://u.expo.dev/ba055ab9-efe1-466d-984d-262230c48b78",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
-      ["./plugins/withSplashColor", { "color": "#ECECEC" }]
+      [
+        "./plugins/withSplashColor",
+        {
+          "color": "#ECECEC"
+        }
+      ]
     ],
     "android": {
       "package": "com.camille.mobile",
@@ -25,7 +39,11 @@
       "supportsTablet": true
     },
     "extra": {
-      "apiBaseUrl": "https://camille.vps.buyticle.com"
-    }
+      "apiBaseUrl": "https://camille.vps.buyticle.com",
+      "eas": {
+        "projectId": "ba055ab9-efe1-466d-984d-262230c48b78"
+      }
+    },
+    "owner": "onedev237"
   }
 }
