@@ -362,6 +362,8 @@ export async function GET(req: NextRequest) {
       overview: {
         total_messages:     totalMessages,
         messages_received:  totalReceived,
+        messages_sent:      Number(convStats.bot_messages ?? 0),
+        messages_from_user: Number(convStats.user_messages ?? 0),
         unique_contacts:    uniqueContacts,
         total_leads:        totalLeads,
         total_escalations:  totalEscalations,
@@ -375,6 +377,17 @@ export async function GET(req: NextRequest) {
         peak_day_messages:  peakDay?.messages ?? 0,
         peak_hour:          peakHour?.hour ?? null,
         peak_hour_count:    peakHour?.count ?? 0,
+      },
+
+      // Quota de tokens du mois en cours (agrégé sur les agents du compte)
+      usage: {
+        period:        nowPeriod,
+        tokens_used:   agentDetails.reduce((s2, a) => s2 + Number(a.token_used_month || 0), 0),
+        tokens_limit:  agentDetails.some((a) => a.token_unlimited)
+          ? -1
+          : agentDetails.reduce((s2, a) => s2 + Number(a.token_limit || 0), 0),
+        unlimited:     agentDetails.some((a) => a.token_unlimited),
+        plan:          allAgents[0]?.plan ?? "free",
       },
 
       // Time series

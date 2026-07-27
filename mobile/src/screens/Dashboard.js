@@ -20,6 +20,7 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
   const tokens = Number(ov.total_tokens || 0);
 
   const received = Number(ov.messages_received || 0);
+  const sent = Number(ov.messages_sent || 0);
 
   const bars = (stats?.monthly_tokens || []).map((m) => ({ l: String(m.period || "").slice(-2), v: Math.round(Number(m.total_tokens || 0) / 1000) }));
   const hasBars = bars.some((b) => b.v > 0);
@@ -47,9 +48,13 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
       />
 
       {/* Messages reçus (source Camille Core) + traités par l'IA */}
-      <View style={{ flexDirection: "row", gap: 10, marginBottom: S.md }}>
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
         <StatMini label="Messages reçus" value={received.toLocaleString("fr-FR")} />
+        <StatMini label="Messages envoyés" value={sent.toLocaleString("fr-FR")} />
+      </View>
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: S.md }}>
         <StatMini label="Traités par l'IA" value={messages.toLocaleString("fr-FR")} />
+        <StatMini label="Contacts" value={contacts.toLocaleString("fr-FR")} />
       </View>
 
       {/* Consommation de tokens et limite du plan */}

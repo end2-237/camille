@@ -123,6 +123,27 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
           <Row label="Description" value={bc.description} multiline />
         </Section>
 
+        <Section title="Utilisation & limites">
+          <Row label="Messages reçus" value={fmt(agent.messages_received)} />
+          <Row label="Messages traités" value={fmt(agent.period_messages ?? agent.messages)} />
+          <Row label="Leads" value={fmt(agent.period_leads)} />
+          <Row label="Escalades" value={fmt(agent.period_escalations)} />
+          <Row label="Tokens (mois)" value={
+            agent.token_unlimited
+              ? `${fmt(agent.token_used_month)} · illimité`
+              : `${fmt(agent.token_used_month)}${agent.token_limit ? ` / ${fmt(agent.token_limit)}` : ""}`
+          } />
+          {!agent.token_unlimited && !!agent.token_limit && (
+            <View style={{ paddingHorizontal: 14, paddingVertical: 12 }}>
+              <View style={{ height: 7, borderRadius: 4, backgroundColor: "#EEE", overflow: "hidden" }}>
+                <View style={{ width: `${Math.min(100, Number(agent.token_percent) || 0)}%`, height: 7, borderRadius: 4,
+                  backgroundColor: (agent.token_percent || 0) >= 90 ? C.red : (agent.token_percent || 0) >= 70 ? C.amber : C.green }} />
+              </View>
+              <Text style={{ color: C.sub, fontSize: 11, marginTop: 6 }}>{agent.token_percent || 0}% du quota utilisé</Text>
+            </View>
+          )}
+        </Section>
+
         <Section title="Configuration">
           <Row label="Modèle IA" value={model} />
           <Row label="Statut" value={st.label} />
@@ -206,6 +227,11 @@ function Action({ icon, label, onPress }) {
       <Ionicons name="chevron-forward" size={16} color={C.sub} />
     </TouchableOpacity>
   );
+}
+
+function fmt(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? v.toLocaleString("fr-FR") : "0";
 }
 
 function labelCap(k) {

@@ -47,12 +47,35 @@ export default function ConversationDetail({ agent, stats, onClose }) {
       <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
         {/* Stats individuelles */}
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
-          <Stat label="Messages" value={agent.messages ?? 0} icon="chatbubble-ellipses-outline" />
+          <Stat label="Messages reçus" value={nf(agent.messages_received)} icon="download-outline" />
+          <Stat label="Traités par l'IA" value={nf(agent.period_messages ?? agent.messages)} icon="chatbubble-ellipses-outline" />
+        </View>
+        <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+          <Stat label="Leads" value={nf(agent.period_leads)} icon="flag-outline" />
           <Stat label="Part du volume" value={`${share}%`} icon="pie-chart-outline" />
         </View>
-        <View style={{ flexDirection: "row", gap: 10, marginBottom: S.md }}>
-          <Stat label="État" value={online ? "Actif" : "Pause"} icon="pulse-outline" />
-          <Stat label="Canal" value="WhatsApp" icon="logo-whatsapp" />
+
+        {/* Tokens & limite */}
+        <View style={{ backgroundColor: C.ink, borderRadius: R.lg, padding: S.md, marginBottom: S.md }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: C.subDark, fontSize: 11, fontWeight: "600", letterSpacing: 0.3 }}>TOKENS DU MOIS</Text>
+            <Ionicons name="flash-outline" size={15} color={C.lime} />
+          </View>
+          <Text style={{ color: C.white, fontWeight: "800", fontSize: 22, marginTop: 6 }}>
+            {nf(agent.token_used_month)}
+            <Text style={{ color: C.subDark, fontWeight: "600", fontSize: 13 }}>
+              {agent.token_unlimited ? "  · illimité" : agent.token_limit ? `  / ${nf(agent.token_limit)}` : ""}
+            </Text>
+          </Text>
+          {!agent.token_unlimited && !!agent.token_limit && (
+            <>
+              <View style={{ height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.12)", marginTop: 10, overflow: "hidden" }}>
+                <View style={{ width: `${Math.min(100, Number(agent.token_percent) || 0)}%`, height: 8, borderRadius: 4,
+                  backgroundColor: (agent.token_percent || 0) >= 90 ? C.red : (agent.token_percent || 0) >= 70 ? C.amber : C.lime }} />
+              </View>
+              <Text style={{ color: C.subDark, fontSize: 11, marginTop: 6 }}>{agent.token_percent || 0}% du quota utilisé</Text>
+            </>
+          )}
         </View>
 
         {/* Connexion WhatsApp */}
@@ -83,6 +106,11 @@ export default function ConversationDetail({ agent, stats, onClose }) {
       </ScrollView>
     </View>
   );
+}
+
+function nf(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? v.toLocaleString("fr-FR") : "0";
 }
 
 function Stat({ label, value, icon }) {

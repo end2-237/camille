@@ -37,7 +37,7 @@ export default function App() {
           sector: ag.business_context?.sector || ag.sector,
           business_name: ag.business_context?.business_name || ag.business_name,
           status: ag.status,
-          messages: byId[ag.id]?.messages ?? 0,
+          messages: byId[ag.id]?.period_messages ?? byId[ag.id]?.messages ?? 0,
           ...byId[ag.id],
         }));
       }

@@ -4,11 +4,31 @@ import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import { Card, StatMini, EmptyHint } from "../components/ui";
 import { BarChart } from "../components/charts";
+import Avatar from "../components/Avatar";
 
 function num(x) { return typeof x === "number" ? x : Number(x) || 0; }
+function fr(n) { return num(n).toLocaleString("fr-FR"); }
 
 export default function Analytics({ stats, refreshing, onRefresh }) {
   const ov = stats?.overview || {};
+  const usage = stats?.usage || {};
+  const agents = stats?.agents || [];
+
+  const received = num(ov.messages_received);
+  const sent = num(ov.messages_sent);
+  const handled = num(ov.total_messages);
+
+  // Quota global : bloc `usage` de l'API, repli sur l'agrégat des agents
+  const tokUsed = usage.tokens_used != null
+    ? num(usage.tokens_used)
+    : agents.reduce((s, a) => s + num(a.token_used_month), 0);
+  const unlimited = usage.unlimited || agents.some((a) => a.token_unlimited);
+  const tokLimit = unlimited ? -1 : (usage.tokens_limit != null && usage.tokens_limit > 0
+    ? num(usage.tokens_limit)
+    : agents.reduce((s, a) => s + num(a.token_limit), 0));
+  const pct = unlimited || tokLimit <= 0 ? 0 : Math.min(100, Math.round((tokUsed / tokLimit) * 100));
+  const remaining = unlimited || tokLimit <= 0 ? 0 : Math.max(0, tokLimit - tokUsed);
+  const barColor = pct >= 90 ? C.red : pct >= 70 ? C.amber : C.lime;
 
   const daily = (stats?.daily_series || []).map((d) => ({
     l: String(d.date || d.day || "").slice(5),
@@ -24,16 +44,102 @@ export default function Analytics({ stats, refreshing, onRefresh }) {
     <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
 
+      {/* ── Messages : reçus / envoyés ────────────────────────────────── */}
+      <Text style={{ color: C.sub, fontSize: 12, fontWeight: "700", letterSpacing: 0.3, marginBottom: 8, marginLeft: 2 }}>MESSAGES</Text>
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
-        <StatMini label="Messages" value={num(ov.total_messages).toLocaleString("fr-FR")} />
-        <StatMini label="Contacts" value={num(ov.unique_contacts)} />
+        <StatMini label="Reçus" value={fr(received)} />
+        <StatMini label="Envoyés" value={fr(sent)} />
       </View>
       <View style={{ flexDirection: "row", gap: 10, marginBottom: S.md }}>
-        <StatMini label="Leads" value={num(ov.total_leads)} />
-        <StatMini label="Escalades" value={num(ov.total_escalations)} />
+        <StatMini label="Traités par l'IA" value={fr(handled)} />
+        <StatMini label="Contacts" value={fr(ov.unique_contacts)} />
       </View>
 
+      {/* ── Utilisation & limites ─────────────────────────────────────── */}
+      <Text style={{ color: C.sub, fontSize: 12, fontWeight: "700", letterSpacing: 0.3, marginBottom: 8, marginLeft: 2 }}>
+        UTILISATION & LIMITES
+      </Text>
       <Card style={{ marginBottom: S.md }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: C.white, fontWeight: "700", fontSize: 15 }}>Tokens du mois</Text>
+          <View style={{ backgroundColor: "rgba(198,242,78,0.15)", borderRadius: R.pill, paddingHorizontal: 10, height: 24, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: C.lime, fontWeight: "800", fontSize: 10.5 }}>
+              {String(usage.plan || "free").toUpperCase()}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={{ color: C.white, fontWeight: "800", fontSize: 26, marginTop: 10 }}>
+          {fr(tokUsed)}
+          <Text style={{ color: C.subDark, fontWeight: "600", fontSize: 14 }}>
+            {unlimited ? "  · illimité" : tokLimit > 0 ? `  / ${fr(tokLimit)}` : ""}
+          </Text>
+        </Text>
+
+        {!unlimited && tokLimit > 0 && (
+          <>
+            <View style={{ height: 10, borderRadius: 5, backgroundColor: "rgba(255,255,255,0.12)", marginTop: 12, overflow: "hidden" }}>
+              <View style={{ width: `${pct}%`, height: 10, borderRadius: 5, backgroundColor: barColor }} />
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
+              <Text style={{ color: C.subDark, fontSize: 11 }}>{pct}% utilisé</Text>
+              <Text style={{ color: C.subDark, fontSize: 11 }}>{fr(remaining)} restants</Text>
+            </View>
+            {pct >= 80 && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, backgroundColor: "rgba(248,113,113,0.12)", borderRadius: R.md, padding: 10 }}>
+                <Ionicons name="warning-outline" size={15} color={C.red} />
+                <Text style={{ color: C.red, fontSize: 11.5, flex: 1 }}>
+                  Quota bientôt atteint — pense à passer à un plan supérieur.
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {usage.period ? (
+          <Text style={{ color: C.subDark, fontSize: 10.5, marginTop: 10 }}>Période {usage.period}</Text>
+        ) : null}
+      </Card>
+
+      {/* ── Détail par agent ──────────────────────────────────────────── */}
+      {agents.length > 0 && (
+        <>
+          <Text style={{ color: C.sub, fontSize: 12, fontWeight: "700", letterSpacing: 0.3, marginBottom: 8, marginLeft: 2 }}>
+            DÉTAIL PAR AGENT
+          </Text>
+          {agents.map((a) => {
+            const u = num(a.token_used_month);
+            const l = num(a.token_limit);
+            const unl = !!a.token_unlimited;
+            const p = unl || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100));
+            return (
+              <View key={a.agent_id} style={{ backgroundColor: C.white, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: S.md, marginBottom: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Avatar name={a.name} size={38} radius={12} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: C.ink, fontWeight: "700", fontSize: 14 }}>{a.name}</Text>
+                    <Text style={{ color: C.sub, fontSize: 11, marginTop: 1 }}>
+                      {fr(a.messages_received ?? 0)} reçus · {fr(a.messages ?? a.period_messages ?? 0)} traités
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ color: C.ink, fontWeight: "800", fontSize: 13 }}>{fr(u)}</Text>
+                    <Text style={{ color: C.sub, fontSize: 10 }}>{unl ? "illimité" : l > 0 ? `/ ${fr(l)}` : "tokens"}</Text>
+                  </View>
+                </View>
+                {!unl && l > 0 && (
+                  <View style={{ height: 6, borderRadius: 3, backgroundColor: "#EEE", marginTop: 10, overflow: "hidden" }}>
+                    <View style={{ width: `${p}%`, height: 6, borderRadius: 3, backgroundColor: p >= 90 ? C.red : p >= 70 ? C.amber : C.green }} />
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </>
+      )}
+
+      {/* ── Courbes ───────────────────────────────────────────────────── */}
+      <Card style={{ marginBottom: S.md, marginTop: 4 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ color: C.white, fontWeight: "700", fontSize: 15 }}>Messages par jour</Text>
           <Ionicons name="trending-up" size={16} color={C.lime} />
@@ -68,7 +174,7 @@ export default function Analytics({ stats, refreshing, onRefresh }) {
         )}
       </Card>
 
-      {!hasDaily && !hasHourly && num(ov.total_messages) === 0 && (
+      {!received && !sent && !handled && (
         <EmptyHint text="Les statistiques apparaîtront dès les premières conversations." />
       )}
     </ScrollView>
