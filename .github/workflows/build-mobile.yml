@@ -63,13 +63,6 @@ jobs:
           echo "Found APK: $APK"
           echo "path=mobile/$APK" >> "$GITHUB_OUTPUT"
 
-      - name: Publier la mise a jour OTA (EAS Update)
-        if: env.EXPO_TOKEN != ''
-        working-directory: mobile
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas-cli@latest update --branch production --message "${{ github.event.head_commit.message || 'update' }}" --non-interactive
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -77,3 +70,13 @@ jobs:
           path: mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Publie la mise a jour OTA APRES l'upload de l'APK : meme si cette etape
+      # echoue (secret absent, reseau), l'APK reste disponible en artifact.
+      - name: Publier la mise a jour OTA (EAS Update)
+        if: ${{ secrets.EXPO_TOKEN != '' }}
+        continue-on-error: true
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli@latest update --branch production --message "build ${{ github.sha }}" --non-interactive
