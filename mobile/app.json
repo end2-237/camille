@@ -14,7 +14,10 @@
       "enabled": true,
       "url": "https://u.expo.dev/ba055ab9-efe1-466d-984d-262230c48b78",
       "fallbackToCacheTimeout": 0,
-      "checkAutomatically": "ON_LOAD"
+      "checkAutomatically": "ON_LOAD",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "assetBundlePatterns": [
       "**/*"
