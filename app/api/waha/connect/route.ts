@@ -4,7 +4,12 @@ import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { wahaStartSession, makeSessionName } from "@/lib/waha";
 
-const MAX_SESSIONS = 3;
+// Limite de sessions WhatsApp simultanées par utilisateur.
+// Configurable via l'env MAX_WHATSAPP_SESSIONS (ex: "20" pour la phase d'essais).
+const MAX_SESSIONS = Math.max(1, parseInt(process.env.MAX_WHATSAPP_SESSIONS ?? "3", 10) || 3);
+
+// Statuts considérés comme "session morte" : ils ne consomment pas de quota.
+const DEAD_STATUSES = ["STOPPED", "FAILED"];
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,14 +27,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
     }
 
+    // Quota : on ne compte QUE les sessions vivantes des AUTRES agents.
+    // - exclure l'agent courant : reconnecter un agent déjà lié ne doit jamais être bloqué
+    // - exclure les sessions mortes (STOPPED/FAILED) : elles ne consomment rien côté Camille Core
     const countRes = await query(
-      "SELECT COUNT(*) FROM camille.whatsapp_sessions WHERE user_id = $1",
-      [user.id]
+      `SELECT COUNT(*) FROM camille.whatsapp_sessions
+       WHERE user_id = $1
+         AND agent_id IS DISTINCT FROM $2
+         AND COALESCE(status, '') <> ALL($3::text[])`,
+      [user.id, agentId, DEAD_STATUSES]
     );
     const count = parseInt(countRes.rows[0].count, 10);
     if (count >= MAX_SESSIONS) {
       return NextResponse.json(
-        { error: "Limite de 3 sessions atteinte. Déconnectez un agent pour en ajouter un." },
+        {
+          error: `Limite de ${MAX_SESSIONS} session(s) WhatsApp atteinte. Déconnectez un agent pour en ajouter un.`,
+        },
         { status: 403 }
       );
     }
