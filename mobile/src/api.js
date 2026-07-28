@@ -99,6 +99,10 @@ export const updateProduct = (agentId, productId, body) =>
 export const deleteProduct = (agentId, productId) =>
   req(`/api/agents/${agentId}/products/${productId}`, { method: "DELETE" });
 
+// ── Analyse des conversations (bloc entier) ─────────────────────────────────
+export const getConversationAnalytics = (period = "30d", agentId) =>
+  req(`/api/analytics/conversations?period=${period}${agentId ? `&agentId=${agentId}` : ""}`);
+
 // ── Plans & paiements ───────────────────────────────────────────────────────
 export const getPlans = () => req(`/api/plans`);
 export const getPayments = () => req(`/api/payments/history`);

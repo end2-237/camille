@@ -131,7 +131,7 @@ export default function App() {
   if (tab === "dash") Body = <Dashboard {...common} user={user} />;
   else if (tab === "agents") Body = <Agents {...common} onAgentChanged={onAgentChanged} onRefreshData={load} />;
   else if (tab === "convos") Body = <Conversations {...common} />;
-  else if (tab === "analytics") Body = <Analytics {...common} />;
+  else if (tab === "analytics") Body = <Analytics {...common} user={user} />;
   else Body = <Profile user={user} setUser={setUser} onAuthChange={onAuthChange} agents={stats?.agents || []} />;
 
   return (

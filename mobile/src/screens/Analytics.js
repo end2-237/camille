@@ -1,15 +1,21 @@
-import React from "react";
-import { View, Text, ScrollView, RefreshControl } from "react-native";
+import React, { useState } from "react";
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import { Card, StatMini, EmptyHint } from "../components/ui";
 import { BarChart } from "../components/charts";
 import Avatar from "../components/Avatar";
+import Insights from "./Insights";
 
 function num(x) { return typeof x === "number" ? x : Number(x) || 0; }
 function fr(n) { return num(n).toLocaleString("fr-FR"); }
 
-export default function Analytics({ stats, refreshing, onRefresh }) {
+// Outil interne : l'analyse de friction n'est pas destinée aux clients.
+const INTERNAL_EMAILS = ["emansoga@gmail.com"];
+
+export default function Analytics({ stats, refreshing, onRefresh, user }) {
+  const [view, setView] = useState("volume");
+  const internal = INTERNAL_EMAILS.includes(String(user?.email || "").toLowerCase());
   const ov = stats?.overview || {};
   const usage = stats?.usage || {};
   const agents = stats?.agents || [];
@@ -40,8 +46,32 @@ export default function Analytics({ stats, refreshing, onRefresh }) {
   const hasHourly = hourly.some((h) => num(h.count) > 0);
   const maxH = Math.max(1, ...hourly.map((h) => num(h.count)));
 
+  const Switcher = !internal ? null : (
+    <View style={{ flexDirection: "row", backgroundColor: C.white, borderRadius: R.pill, padding: 4,
+      marginHorizontal: S.md, marginBottom: 12, borderWidth: 1, borderColor: C.line }}>
+      {[["volume", "Volume"], ["insights", "Discussions"]].map(([k, l]) => (
+        <TouchableOpacity key={k} onPress={() => setView(k)}
+          style={{ flex: 1, height: 34, borderRadius: R.pill, alignItems: "center", justifyContent: "center",
+            backgroundColor: view === k ? C.ink : "transparent" }}>
+          <Text style={{ fontSize: 12.5, fontWeight: "600", color: view === k ? C.white : C.sub }}>{l}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  if (view === "insights" && internal) {
+    return (
+      <View style={{ flex: 1 }}>
+        {Switcher}
+        <Insights refreshing={refreshing} onRefresh={onRefresh} />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
+    <View style={{ flex: 1 }}>
+      {Switcher}
+    <ScrollView contentContainerStyle={{ padding: S.md, paddingTop: 0, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
 
       {/* ── Messages : reçus / envoyés ────────────────────────────────── */}
@@ -178,5 +208,6 @@ export default function Analytics({ stats, refreshing, onRefresh }) {
         <EmptyHint text="Les statistiques apparaîtront dès les premières conversations." />
       )}
     </ScrollView>
+    </View>
   );
 }
