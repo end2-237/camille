@@ -71,6 +71,7 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "location", "target_audience", "owner_name", "owner_email", "whatsapp_number",
   "products_services", "pricing_info", "business_hours", "policies",
   "faq", "forbidden_topics", "capabilities", "target_model", "compiled_prompt", "status",
+  "conversion_mode",
   "google_calendar_email",
   // ── Config Niveau 1 ──
   "level", "out_of_scope_behavior", "welcome_enabled", "welcome_message", "n8n_webhook_url",
@@ -110,6 +111,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         media: Array.isArray(row.media) ? row.media : (row.media ? JSON.parse(row.media) : []),
         // Source du catalogue : 'camille' (catalogue natif) | 'ofs_cj' (grand catalogue) | 'ofs_shop'
         catalog_source: row.catalog_source ?? null,
+        conversion_mode: row.conversion_mode ?? "whatsapp",
         ofs_vendor_id: row.ofs_vendor_id ?? null,
       },
     });

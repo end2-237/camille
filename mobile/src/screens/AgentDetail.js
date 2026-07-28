@@ -8,6 +8,7 @@ import AgentEdit from "./AgentEdit";
 import AgentCapabilities from "./AgentCapabilities";
 import Catalogue from "./Catalogue";
 import ConnectWhatsApp from "./ConnectWhatsApp";
+import Orders from "./Orders";
 
 const WEB = "https://camille.vps.buyticle.com";
 
@@ -38,6 +39,7 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
   if (view === "capabilities") return <AgentCapabilities agent={agent} onClose={back} />;
   if (view === "catalogue") return <Catalogue agent={agent} onClose={back} />;
   if (view === "connect") return <ConnectWhatsApp agent={agent} onClose={back} />;
+  if (view === "orders") return <Orders agent={agent} onClose={back} />;
 
   const id = full?.identity || {};
   const bc = full?.business_context || {};
@@ -55,6 +57,17 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
     } catch (e) {
       Alert.alert("Erreur", e.message || "Impossible de mettre à jour.");
     } finally { setBusy(false); }
+  }
+
+  const convMode = full?.conversion_mode || "whatsapp";
+
+  async function setConv(mode) {
+    setCatBusy(true);
+    try {
+      await patchAgent(agent.agent_id, { conversion_mode: mode });
+      setFull((p) => ({ ...(p || {}), conversion_mode: mode }));
+    } catch (e) { Alert.alert("Mode de conversion", e.message); }
+    finally { setCatBusy(false); }
   }
 
   const bigCatalog = full?.catalog_source === "ofs_cj" || full?.catalog_source === "ofs_shop";
@@ -183,7 +196,28 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
         )}
 
         {/* Management */}
+        <Section title="Mode de conversion">
+          {[
+            { id: "whatsapp", t: "Conclure dans WhatsApp", d: "Panier + commande enregistrée, vous êtes notifié" },
+            { id: "boutique", t: "Renvoyer vers ma boutique", d: "Le lien produit reste l'action principale" },
+          ].map((o, i) => {
+            const on = convMode === o.id;
+            return (
+              <TouchableOpacity key={o.id} onPress={() => setConv(o.id)} disabled={catBusy}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13,
+                  borderBottomWidth: i === 0 ? 1 : 0, borderBottomColor: "#F0F0F0" }}>
+                <Ionicons name={on ? "radio-button-on" : "radio-button-off"} size={19} color={on ? C.green : C.sub} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.ink, fontSize: 14, fontWeight: on ? "700" : "600" }}>{o.t}</Text>
+                  <Text style={{ color: C.sub, fontSize: 11, marginTop: 2 }}>{o.d}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </Section>
+
         <Section title="Gestion">
+          <Action icon="receipt-outline" label="Commandes" onPress={() => setView("orders")} />
           <Action icon="create-outline" label="Modifier l'agent" onPress={() => setView("edit")} />
           <Action icon="options-outline" label="Capacités" onPress={() => setView("capabilities")} />
           <Action icon="pricetags-outline" label="Catalogue produits" onPress={() => setView("catalogue")} />

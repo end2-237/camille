@@ -50,6 +50,8 @@ export default function IntegrationsPage() {
   // Auto-vectorisation OFS : visible UNIQUEMENT pour l'agent OFS désigné.
   const OFS_LIVE_AGENT = process.env.NEXT_PUBLIC_OFS_LIVE_AGENT_ID || "c2c7126b-6964-4248-befe-ce4ff7931a0a";
   const isOfsOwner = agentId === OFS_LIVE_AGENT;
+  const [convMode, setConvMode] = useState<string>("whatsapp");
+  const [convBusy, setConvBusy] = useState(false);
   const [catSrc, setCatSrc] = useState<string | null>(null);
   const [catBusy, setCatBusy] = useState(false);
   const [catMsg, setCatMsg] = useState("");
@@ -76,9 +78,26 @@ export default function IntegrationsPage() {
       setMedia(Array.isArray(a.media) ? a.media : []);
       // null = jamais configuré : pour l'agent OFS désigné cela équivaut au grand catalogue
       setCatSrc(a.catalog_source ?? null);
+      setConvMode(a.conversion_mode || "whatsapp");
     } catch { /* ignore */ }
   }, [agentId]);
   useEffect(() => { loadAgent(); }, [loadAgent]);
+
+  // Mode de conversion : conclure dans WhatsApp, ou renvoyer vers la boutique
+  async function saveConvMode(mode: string) {
+    setConvBusy(true);
+    try {
+      const r = await fetch(`/api/agents/${agentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ conversion_mode: mode }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || "Erreur");
+      setConvMode(mode);
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally { setConvBusy(false); }
+  }
 
   // Bascule grand catalogue OFS <-> catalogue natif Camille
   async function toggleCatalog(toOfs: boolean) {
@@ -321,6 +340,36 @@ export default function IntegrationsPage() {
             {mediaBusy ? "Enregistrement…" : "Enregistrer les médias"}
           </button>
           {mediaMsg && <span className="text-[12px]" style={{ color: mediaMsg.startsWith("✅") ? "#0b7a4b" : "#c0392b" }}>{mediaMsg}</span>}
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
+        <div className="mb-1 flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#101012" }}>🎯</span>
+          <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Mode de conversion</h2>
+        </div>
+        <p className="mb-3 text-[12px]" style={{ color: "var(--cl-sub)" }}>
+          Où la vente se conclut. En mode WhatsApp, l&apos;agent enregistre la commande dans la conversation
+          et vous notifie ; le lien produit devient informatif.
+        </p>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[
+            { id: "whatsapp", t: "Conclure dans WhatsApp", d: "Panier + commande enregistrée. Recommandé si vous livrez et encaissez à la livraison." },
+            { id: "boutique", t: "Renvoyer vers ma boutique", d: "Le lien produit reste l'action principale. Pour une boutique avec paiement en ligne." },
+          ].map((o) => {
+            const on = convMode === o.id;
+            return (
+              <button key={o.id} onClick={() => saveConvMode(o.id)} disabled={convBusy}
+                className="rounded-lg p-3 text-left transition disabled:opacity-50"
+                style={{ border: on ? "2px solid #0e9d63" : "1px solid var(--cl-line)", background: on ? "#F2FBF7" : "#fff" }}>
+                <div className="text-[13px] font-semibold" style={{ color: "var(--cl-ink)" }}>
+                  {on ? "✓ " : ""}{o.t}
+                </div>
+                <div className="mt-1 text-[11.5px]" style={{ color: "var(--cl-sub)" }}>{o.d}</div>
+              </button>
+            );
+          })}
         </div>
       </div>
 

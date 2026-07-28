@@ -99,6 +99,13 @@ export const updateProduct = (agentId, productId, body) =>
 export const deleteProduct = (agentId, productId) =>
   req(`/api/agents/${agentId}/products/${productId}`, { method: "DELETE" });
 
+// ── Commandes ───────────────────────────────────────────────────────────────
+export const getOrders = (agentId, status) =>
+  req(`/api/orders${agentId || status ? "?" : ""}${agentId ? `agentId=${agentId}` : ""}${agentId && status ? "&" : ""}${status ? `status=${status}` : ""}`);
+
+export const setOrderStatus = (orderId, status) =>
+  req(`/api/orders/${orderId}`, { method: "PATCH", body: JSON.stringify({ status }) });
+
 // ── Analyse des conversations (bloc entier) ─────────────────────────────────
 export const getConversationAnalytics = (period = "30d", agentId) =>
   req(`/api/analytics/conversations?period=${period}${agentId ? `&agentId=${agentId}` : ""}`);

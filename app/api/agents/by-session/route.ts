@@ -7,6 +7,7 @@ import { query } from "@/lib/db";
 import { resolveWelcome, sectorProfile } from "@/lib/sectorProfiles";
 
 const AGENT_COLS = `
+  COALESCE(to_jsonb(a)->>'conversion_mode', 'whatsapp') AS conversion_mode,
   a.id,
   a.name,
   a.compiled_prompt,
