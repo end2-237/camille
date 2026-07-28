@@ -90,6 +90,15 @@ export function wahaQrSource(sessionName, nonce = "") {
 // ── Catalogue / produits ────────────────────────────────────────────────────
 export const getProducts = (agentId) => req(`/api/agents/${agentId}/products`);
 
+export const createProduct = (agentId, body) =>
+  req(`/api/agents/${agentId}/products`, { method: "POST", body: JSON.stringify(body) });
+
+export const updateProduct = (agentId, productId, body) =>
+  req(`/api/agents/${agentId}/products/${productId}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const deleteProduct = (agentId, productId) =>
+  req(`/api/agents/${agentId}/products/${productId}`, { method: "DELETE" });
+
 // ── Plans & paiements ───────────────────────────────────────────────────────
 export const getPlans = () => req(`/api/plans`);
 export const getPayments = () => req(`/api/payments/history`);
