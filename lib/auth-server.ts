@@ -44,7 +44,7 @@ export async function getUserFromRequest(
   if (!payload) return null;
 
   const result = await query(
-    `SELECT u.id, u.email, u.full_name, u.plan
+    `SELECT u.id, u.email, u.full_name, u.plan, u.created_at
      FROM camille.sessions s
      JOIN camille.users u ON u.id = s.user_id
      WHERE s.token = $1 AND s.expires_at > NOW()`,

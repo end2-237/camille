@@ -7,7 +7,38 @@ import { logout } from "../api";
 import { BottomDrawer } from "../components/Drawer";
 import Plans from "./Plans";
 
+// Durée de l'essai gratuit (jours). Le décompte démarre à la création du compte,
+// ou à défaut à la création du premier agent.
+const TRIAL_DAYS = 14;
+
+function trialInfo(user, agents) {
+  const paid = user?.plan && String(user.plan).toLowerCase() !== "free";
+  if (paid) return { paid: true };
+
+  // date de départ : compte, sinon agent le plus ancien
+  let start = user?.created_at ? new Date(user.created_at) : null;
+  if (!start || isNaN(start.getTime())) {
+    const dates = (agents || [])
+      .map((a) => (a.created_at ? new Date(a.created_at) : null))
+      .filter((d) => d && !isNaN(d.getTime()));
+    start = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
+  }
+  if (!start) return { unknown: true };
+
+  const end = new Date(start.getTime() + TRIAL_DAYS * 86400000);
+  const msLeft = end.getTime() - Date.now();
+  const daysLeft = Math.max(0, Math.ceil(msLeft / 86400000));
+  const used = Math.min(TRIAL_DAYS, Math.max(0, TRIAL_DAYS - daysLeft));
+  return {
+    daysLeft,
+    used,
+    expired: msLeft <= 0,
+    endLabel: end.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }),
+  };
+}
+
 export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
+  const trial = trialInfo(user, agents);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
@@ -68,6 +99,51 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
           <Text style={{ fontSize: 20, fontWeight: "800", color: C.ink, marginTop: 14 }}>{name}</Text>
           <Text style={{ fontSize: 13, color: C.sub, marginTop: 2 }}>{user?.email}</Text>
         </View>
+
+        {/* ── Essai gratuit ── */}
+        {trial.paid ? (
+          <View style={{ backgroundColor: C.ink, borderRadius: R.lg, padding: S.md, marginBottom: S.md, flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(198,242,78,0.16)", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="checkmark-circle" size={22} color={C.lime} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: C.white, fontWeight: "800", fontSize: 15 }}>Plan {String(user?.plan).toUpperCase()} actif</Text>
+              <Text style={{ color: C.subDark, fontSize: 12, marginTop: 2 }}>Merci de ta confiance 🙌</Text>
+            </View>
+          </View>
+        ) : trial.unknown ? null : (
+          <View style={{ backgroundColor: C.ink, borderRadius: R.lg, padding: S.md, marginBottom: S.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ color: C.subDark, fontSize: 11, fontWeight: "700", letterSpacing: 0.4 }}>ESSAI GRATUIT</Text>
+              <View style={{ backgroundColor: trial.expired ? "rgba(248,113,113,0.18)" : "rgba(198,242,78,0.16)", borderRadius: R.pill, paddingHorizontal: 10, height: 22, justifyContent: "center" }}>
+                <Text style={{ color: trial.expired ? C.red : C.lime, fontWeight: "800", fontSize: 10 }}>
+                  {trial.expired ? "TERMINÉ" : "EN COURS"}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={{ color: C.white, fontWeight: "800", fontSize: 26, marginTop: 8 }}>
+              {trial.expired ? "Essai terminé" : `${trial.daysLeft} jour${trial.daysLeft > 1 ? "s" : ""}`}
+              {!trial.expired && <Text style={{ color: C.subDark, fontWeight: "600", fontSize: 14 }}>  restant{trial.daysLeft > 1 ? "s" : ""}</Text>}
+            </Text>
+
+            <View style={{ height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.12)", marginTop: 12, overflow: "hidden" }}>
+              <View style={{ width: `${Math.round((trial.used / TRIAL_DAYS) * 100)}%`, height: 8, borderRadius: 4,
+                backgroundColor: trial.expired ? C.red : trial.daysLeft <= 3 ? C.red : trial.daysLeft <= 7 ? C.amber : C.lime }} />
+            </View>
+            <Text style={{ color: C.subDark, fontSize: 11, marginTop: 6 }}>
+              {trial.expired ? "Passe à un plan pour réactiver ton agent." : `Se termine le ${trial.endLabel}`}
+            </Text>
+
+            <TouchableOpacity onPress={() => setShowPlans(true)} activeOpacity={0.9}
+              style={{ marginTop: 14, height: 46, borderRadius: R.pill, backgroundColor: C.lime, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 }}>
+              <Ionicons name="rocket-outline" size={17} color={C.ink} />
+              <Text style={{ color: C.ink, fontWeight: "800", fontSize: 14 }}>
+                {trial.expired ? "Choisir un plan" : "Passer à Pro"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={{ backgroundColor: C.white, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, overflow: "hidden", marginBottom: S.md }}>
           <InfoRow icon="pricetag-outline" label="Plan" value={String(user?.plan || "free").toUpperCase()} />
