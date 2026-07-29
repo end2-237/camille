@@ -173,10 +173,13 @@ export async function GET(req: NextRequest) {
   const agentId = req.nextUrl.searchParams.get("agentId");
   const status = req.nextUrl.searchParams.get("status");
 
+  // Déclarés hors du try : le repli du catch en a besoin.
+  const params: any[] = [user.id];
+  let sql = "";
+
   try {
     // Les coordonnées de la boutique servent de point de départ à l'itinéraire.
-    const params: any[] = [user.id];
-    let sql = `SELECT o.*,
+    sql = `SELECT o.*,
                       a.latitude  AS shop_lat,
                       a.longitude AS shop_lng,
                       a.business_name AS shop_name
@@ -190,6 +193,18 @@ export async function GET(req: NextRequest) {
     const r = await query(sql, params);
     return NextResponse.json({ orders: r.rows });
   } catch (e) {
+    // 42703 = colonne absente : ce sont les coordonnées de la boutique qui
+    // manquent, pas les commandes. On réessaie sans elles plutôt que de
+    // renvoyer une liste vide et un message trompeur.
+    if ((e as { code?: string }).code === "42703") {
+      try {
+        const r2 = await query(sql.replace(/,\s*a\.latitude[\s\S]*?a\.business_name AS shop_name/, ""), params);
+        return NextResponse.json({
+          orders: r2.rows,
+          warning: "Itinéraire indisponible — applique migration_agent_geo.sql.",
+        });
+      } catch { /* on tombe dans le message générique ci-dessous */ }
+    }
     return NextResponse.json({
       orders: [],
       error: "Table des commandes absente — applique migration_orders.sql",

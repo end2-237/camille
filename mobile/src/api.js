@@ -26,7 +26,11 @@ async function req(path, opts = {}) {
   const text = await res.text();
   let data = {};
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  // On remonte le detail du serveur : un "Erreur 500" nu ne dit rien a l'usage.
+  if (!res.ok) {
+    const msg = data.error || `Erreur ${res.status}`;
+    throw new Error(data.detail ? `${msg} — ${data.detail}` : msg);
+  }
   return data;
 }
 
