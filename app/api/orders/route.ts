@@ -51,10 +51,13 @@ export async function POST(req: NextRequest) {
       ref = makeRef();
     }
 
+    // Note libre : en restauration, le mode de service (sur place / à emporter / livraison)
+    const note = String(b.note ?? "").slice(0, 120);
+
     await query(
-      `INSERT INTO camille.orders (ref, agent_id, session_name, contact_phone, items, total, currency)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7)`,
-      [ref, agentId, b.session ?? null, b.phone ?? null, JSON.stringify(items), total, currency]
+      `INSERT INTO camille.orders (ref, agent_id, session_name, contact_phone, items, total, currency, note)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`,
+      [ref, agentId, b.session ?? null, b.phone ?? null, JSON.stringify(items), total, currency, note || null]
     );
 
     // Coordonnées de la boutique (pour le message au commerçant)
@@ -71,13 +74,16 @@ export async function POST(req: NextRequest) {
     // Message destiné au CLIENT (accusé de réception)
     const clientText =
       `✅ Commande enregistrée — n° ${ref}\n\n${lignes}\n\n` +
-      `Total : ${money(total, currency)}\n\n` +
+      `Total : ${money(total, currency)}\n` +
+      (note ? `Service : ${note}\n` : "") +
+      `\n` +
       `On te contacte tout de suite pour confirmer la livraison${shop.location ? ` (${shop.location})` : ""} 📞`;
 
     // Message destiné au COMMERÇANT
     const ownerText =
       `🛎️ NOUVELLE COMMANDE — n° ${ref}\n\n${lignes}\n\n` +
       `Total : ${money(total, currency)}\n` +
+      (note ? `Service : ${note}\n` : "") +
       `Client : ${String(b.phone || "").replace(/@c\.us$/, "")}\n\n` +
       `Réponds à ce client pour confirmer.`;
 

@@ -118,6 +118,33 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
           )}
         </TouchableOpacity>
 
+        {/* Raccourcis : les actions les plus utilisées restent visibles sans scroller. */}
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: S.md }}>
+          <Quick icon="receipt-outline" label="Commandes" highlight onPress={() => setView("orders")} />
+          <Quick icon="pricetags-outline" label="Catalogue" onPress={() => setView("catalogue")} />
+          <Quick icon="logo-whatsapp" label="WhatsApp" onPress={() => setView("connect")} />
+        </View>
+
+        <Section title="Mode de conversion">
+          {[
+            { id: "whatsapp", t: "Conclure dans WhatsApp", d: "Panier + commande enregistrée, vous êtes notifié" },
+            { id: "boutique", t: "Renvoyer vers ma boutique", d: "Le lien produit reste l'action principale" },
+          ].map((o, i) => {
+            const on = convMode === o.id;
+            return (
+              <TouchableOpacity key={o.id} onPress={() => setConv(o.id)} disabled={catBusy}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13,
+                  borderBottomWidth: i === 0 ? 1 : 0, borderBottomColor: "#F0F0F0" }}>
+                <Ionicons name={on ? "radio-button-on" : "radio-button-off"} size={19} color={on ? C.green : C.sub} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.ink, fontSize: 14, fontWeight: on ? "700" : "600" }}>{o.t}</Text>
+                  <Text style={{ color: C.sub, fontSize: 11, marginTop: 2 }}>{o.d}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </Section>
+
         {!full && <ActivityIndicator color={C.ink} style={{ marginVertical: 20 }} />}
 
         <Section title="Identité">
@@ -195,27 +222,6 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
           </Section>
         )}
 
-        {/* Management */}
-        <Section title="Mode de conversion">
-          {[
-            { id: "whatsapp", t: "Conclure dans WhatsApp", d: "Panier + commande enregistrée, vous êtes notifié" },
-            { id: "boutique", t: "Renvoyer vers ma boutique", d: "Le lien produit reste l'action principale" },
-          ].map((o, i) => {
-            const on = convMode === o.id;
-            return (
-              <TouchableOpacity key={o.id} onPress={() => setConv(o.id)} disabled={catBusy}
-                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13,
-                  borderBottomWidth: i === 0 ? 1 : 0, borderBottomColor: "#F0F0F0" }}>
-                <Ionicons name={on ? "radio-button-on" : "radio-button-off"} size={19} color={on ? C.green : C.sub} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: C.ink, fontSize: 14, fontWeight: on ? "700" : "600" }}>{o.t}</Text>
-                  <Text style={{ color: C.sub, fontSize: 11, marginTop: 2 }}>{o.d}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </Section>
-
         <Section title="Gestion">
           <Action icon="receipt-outline" label="Commandes" onPress={() => setView("orders")} />
           <Action icon="create-outline" label="Modifier l'agent" onPress={() => setView("edit")} />
@@ -250,6 +256,18 @@ function Row({ label, value, multiline }) {
         {String(value)}
       </Text>
     </View>
+  );
+}
+
+function Quick({ icon, label, onPress, highlight }) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85}
+      style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14,
+        borderRadius: R.lg, backgroundColor: highlight ? C.ink : C.white,
+        borderWidth: 1, borderColor: highlight ? C.ink : C.line }}>
+      <Ionicons name={icon} size={20} color={highlight ? C.lime : C.ink} />
+      <Text style={{ fontSize: 11.5, fontWeight: "700", color: highlight ? C.white : C.ink }}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 

@@ -95,6 +95,13 @@ export default function Orders({ agent, onClose }) {
                   ))}
                 </View>
 
+                {o.note ? (
+                  <View style={{ alignSelf: "flex-start", marginTop: 8, backgroundColor: "#F3F7E4", borderRadius: R.pill,
+                    paddingHorizontal: 10, height: 22, justifyContent: "center" }}>
+                    <Text style={{ color: "#4A6B00", fontSize: 11, fontWeight: "700" }}>{o.note}</Text>
+                  </View>
+                ) : null}
+
                 <Text style={{ color: C.ink, fontWeight: "800", fontSize: 15, marginTop: 8 }}>
                   {Number(o.total || 0).toLocaleString("fr-FR")} {o.currency || "XAF"}
                 </Text>
