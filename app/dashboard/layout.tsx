@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug,
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt,
 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -128,6 +128,9 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
           icon={<Bot className="w-3.5 h-3.5" />}
           active={false} collapsed={collapsed}
           badge={mounted ? agents.length : undefined} />
+        <NavItem href="/dashboard/orders" label="Commandes"
+          icon={<Receipt className="w-3.5 h-3.5" />}
+          active={pathname === "/dashboard/orders"} collapsed={collapsed} />
         <NavItem href="/dashboard/stats" label="Statistiques"
           icon={<BarChart2 className="w-3.5 h-3.5" />}
           active={pathname === "/dashboard/stats"} collapsed={collapsed} />
@@ -323,6 +326,7 @@ function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop
 
   const pageLabel = (() => {
     if (pathname === "/dashboard")         return "Tableau de bord";
+    if (pathname === "/dashboard/orders")  return "Commandes";
     if (pathname === "/dashboard/stats")   return "Statistiques";
     if (pathname === "/dashboard/billing") return "Plans & Facturation";
     const match = agents.find((a) => pathname.includes(a.id));
