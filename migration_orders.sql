@@ -42,3 +42,9 @@ ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS address     TEXT;
 ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS lat         DOUBLE PRECISION;
 ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS lng         DOUBLE PRECISION;
 ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS place_label TEXT;
+
+-- Corrige les commandes enregistrees avant le correctif : une position absente
+-- etait convertie en 0,0 (Number(null) === 0), soit un point au large du Ghana.
+UPDATE camille.orders
+   SET lat = NULL, lng = NULL, place_label = NULL
+ WHERE lat = 0 AND lng = 0;

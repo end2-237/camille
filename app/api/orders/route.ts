@@ -79,8 +79,16 @@ export async function POST(req: NextRequest) {
     // Coordonnées de livraison
     const customerName = String(b.customerName ?? "").slice(0, 60);
     const address = String(b.customerAddress ?? "").slice(0, 200);
-    const lat = Number.isFinite(Number(b.lat)) ? Number(b.lat) : null;
-    const lng = Number.isFinite(Number(b.lng)) ? Number(b.lng) : null;
+    // Attention : Number(null) === 0 et 0 est "finite". Sans ce filtre, une position
+    // absente était enregistrée comme 0,0 (au large du golfe de Guinée).
+    const coord = (v: unknown, max: number): number | null => {
+      if (v === null || v === undefined || v === "") return null;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n === 0 || Math.abs(n) > max) return null;
+      return n;
+    };
+    const lat = coord(b.lat, 90);
+    const lng = coord(b.lng, 180);
     const placeLabel = lat != null && lng != null ? await reverseGeocode(lat, lng) : "";
 
     await query(
