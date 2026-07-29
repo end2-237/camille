@@ -29,10 +29,12 @@ const STATUS_BG: Record<string, string> = {
   nouvelle: "#101012", traitee: "#0e9d63", annulee: "#c0392b",
 };
 
-// Aperçu carto sans clé d'API : on calcule la tuile OpenStreetMap qui contient
-// le point, et on place le marqueur à sa position exacte dans cette tuile.
+// Aperçu carto sans clé d'API : on calcule la tuile qui contient le point et on
+// place le marqueur à sa position exacte dedans.
+// Tuiles CARTO : tile.openstreetmap.org renvoie 403 aux clients applicatifs.
 const TILE = 256;
 const ZOOM = 16;
+const TILE_HOST = "https://a.basemaps.cartocdn.com/rastertiles/voyager";
 
 function tileOf(lat: number, lng: number) {
   const n = 2 ** ZOOM;
@@ -253,7 +255,7 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
 function MapPreview({ lat, lng }: { lat: number; lng: number }) {
   const height = 120;
   const { tx, ty, fx, fy } = tileOf(lat, lng);
-  const uris = [-1, 0, 1].map((d) => `https://tile.openstreetmap.org/${ZOOM}/${tx + d}/${ty}.png`);
+  const uris = [-1, 0, 1].map((d) => `${TILE_HOST}/${ZOOM}/${tx + d}/${ty}.png`);
   return (
     <div style={{ position: "relative", height, overflow: "hidden", background: "#E8E8E8",
       border: "1px solid var(--cl-line)", borderBottom: "none", borderRadius: "10px 10px 0 0" }}>
@@ -262,6 +264,9 @@ function MapPreview({ lat, lng }: { lat: number; lng: number }) {
         {uris.map((u) => <img key={u} src={u} alt="" width={TILE} height={TILE} />)}
       </div>
       <div style={{ position: "absolute", left: TILE + fx * TILE - 7, top: height / 2 - 20, fontSize: 22 }}>📍</div>
+      <div style={{ position: "absolute", right: 4, bottom: 1, fontSize: 8, color: "#5A5A5A" }}>
+        © OpenStreetMap · CARTO
+      </div>
     </div>
   );
 }

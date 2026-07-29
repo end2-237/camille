@@ -13,10 +13,14 @@ const TABS = [
 
 const STATUS_COLOR = { nouvelle: C.lime, traitee: C.green, annulee: C.red };
 
-// Aperçu carto sans clé d'API : on calcule la tuile OpenStreetMap qui contient
-// le point, et on place le marqueur à sa position exacte dans cette tuile.
+// Aperçu carto sans clé d'API : on calcule la tuile qui contient le point et on
+// place le marqueur à sa position exacte dedans.
+// Les tuiles viennent de CARTO : tile.openstreetmap.org renvoie 403 aux clients
+// applicatifs (leur politique d'usage interdit les apps), CARTO les autorise.
 const TILE = 256;
 const ZOOM = 16;
+const TILE_HOST = "https://a.basemaps.cartocdn.com/rastertiles/voyager";
+const TILE_HEADERS = { "User-Agent": "Camille/1.0 (support@camille.local)" };
 
 function tileOf(lat, lng) {
   const n = 2 ** ZOOM;
@@ -27,17 +31,27 @@ function tileOf(lat, lng) {
 }
 
 function MapPreview({ lat, lng, height = 120 }) {
+  const [failed, setFailed] = useState(false);
   const { tx, ty, fx, fy } = tileOf(Number(lat), Number(lng));
+  // Si le fournisseur de tuiles refuse, on n'affiche pas un carré gris muet :
+  // l'adresse et le lien Maps juste en dessous suffisent.
+  if (failed) return null;
   // Trois tuiles de large : le point reste visible même s'il tombe près d'un bord.
-  const uris = [-1, 0, 1].map((d) => `https://tile.openstreetmap.org/${ZOOM}/${tx + d}/${ty}.png`);
+  const uris = [-1, 0, 1].map((d) => `${TILE_HOST}/${ZOOM}/${tx + d}/${ty}.png`);
   return (
     <View style={{ height, overflow: "hidden", backgroundColor: "#E8E8E8" }}>
       <View style={{ flexDirection: "row", position: "absolute", top: -(fy * TILE - height / 2), left: 0 }}>
-        {uris.map((u) => <Image key={u} source={{ uri: u }} style={{ width: TILE, height: TILE }} />)}
+        {uris.map((u) => (
+          <Image key={u} source={{ uri: u, headers: TILE_HEADERS }} style={{ width: TILE, height: TILE }}
+            onError={() => setFailed(true)} />
+        ))}
       </View>
       <View style={{ position: "absolute", left: TILE + fx * TILE - 9, top: height / 2 - 18 }}>
         <Ionicons name="location" size={26} color={C.red} />
       </View>
+      <Text style={{ position: "absolute", right: 4, bottom: 2, fontSize: 8, color: "#5A5A5A" }}>
+        © OpenStreetMap · CARTO
+      </Text>
     </View>
   );
 }
