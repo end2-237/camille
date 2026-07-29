@@ -8,7 +8,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { authHeaders } from "@/lib/auth-client";
 
-type Item = { name: string; variant?: string; qty?: number; price?: number; currency?: string };
+type Item = { name: string; variant?: string; qty?: number; price?: number; currency?: string; image?: string };
 type Order = {
   id: string; ref: string; agent_id: string; status: string;
   items: Item[] | string; total: number; currency: string; note?: string | null;
@@ -16,6 +16,7 @@ type Order = {
   address?: string | null; place_label?: string | null;
   lat?: number | null; lng?: number | null;
   processing_at?: string | null; delivered_at?: string | null;
+  shop_lat?: number | null; shop_lng?: number | null;
   created_at: string;
 };
 type Agent = { id: string; identity?: { name?: string } };
@@ -206,11 +207,28 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
             {items.map((it, i) => {
               const q = it.qty || 1, u = Number(it.price || 0);
               return (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13.5, color: "var(--cl-ink)", padding: "2px 0" }}>
-                  <span>{i + 1}. {it.name}{it.variant ? ` — ${it.variant}` : ""} ×{q}</span>
-                  <span style={{ color: "var(--cl-sub)", whiteSpace: "nowrap" }}>
-                    {money(u, o.currency)} → <strong style={{ color: "var(--cl-ink)" }}>{money(u * q, o.currency)}</strong>
-                  </span>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0",
+                  borderBottom: i === items.length - 1 ? "none" : "1px solid #F2F2F2" }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    {it.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={it.image} alt="" width={40} height={40}
+                        style={{ borderRadius: 8, objectFit: "cover", background: "#F4F4F4" }} />
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: 8, background: "#F4F4F4" }} />
+                    )}
+                    <span style={{ position: "absolute", top: -5, right: -5, minWidth: 18, height: 18,
+                      borderRadius: 9, background: "#101012", color: "#C6F24E", fontSize: 10, fontWeight: 800,
+                      display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px",
+                      border: "2px solid #fff" }}>{q}</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--cl-ink)" }}>{it.name}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>
+                      {it.variant ? `${it.variant} · ` : ""}{money(u, o.currency)} l&apos;unité
+                    </div>
+                  </div>
+                  <strong style={{ fontSize: 13.5, color: "var(--cl-ink)", whiteSpace: "nowrap" }}>{money(u * q, o.currency)}</strong>
                 </div>
               );
             })}
@@ -269,6 +287,17 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
                 borderRadius: hasGeo ? "0 0 10px 10px" : 10 }}>
               📍 {lieu}
             </a>
+            {hasGeo && (
+              <a href={`https://www.google.com/maps/dir/?api=1&destination=${o.lat},${o.lng}` +
+                   (o.shop_lat != null && o.shop_lng != null ? `&origin=${o.shop_lat},${o.shop_lng}` : "") +
+                   `&travelmode=driving`}
+                target="_blank" rel="noreferrer"
+                style={{ display: "block", textAlign: "center", marginTop: 8, padding: "9px 12px",
+                  borderRadius: 999, background: "#2563EB", color: "#fff", fontSize: 12.5,
+                  fontWeight: 700, textDecoration: "none" }}>
+                Lancer l&apos;itinéraire
+              </a>
+            )}
           </div>
         )}
 

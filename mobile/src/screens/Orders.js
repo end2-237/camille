@@ -4,7 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import { EmptyHint } from "../components/ui";
 import { BottomDrawer } from "../components/Drawer";
-import { getOrders, setOrderStatus } from "../api";
+import { getOrders, setOrderStatus, getItinerary, getProducts } from "../api";
+import Svg, { Polyline } from "react-native-svg";
 
 // Cycle de vie : à traiter → en traitement → livrée. "traitee" est l'ancien
 // statut des commandes créées avant le suivi ; on le traite comme "en traitement".
@@ -63,22 +64,87 @@ function openMaps(o) {
     : `https://www.google.com/maps/search/${encodeURIComponent(label)}`);
 }
 
-function MapPreview({ lat, lng, height = 120 }) {
+// Projection Web Mercator en coordonnées de tuiles, pour un zoom donné.
+function projAt(lat, lng, z) {
+  const n = 2 ** z;
+  const la = (lat * Math.PI) / 180;
+  return {
+    x: ((lng + 180) / 360) * n,
+    y: ((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2) * n,
+  };
+}
+
+// Zoom le plus serré qui fait tenir tous les points dans la zone visible.
+// Sans ça, un trajet de plusieurs kilomètres sort entièrement du cadre.
+function fitZoom(points, w, h) {
+  if (!points || points.length < 2) return ZOOM;
+  let lo = 1e9, hi = -1e9, lo2 = 1e9, hi2 = -1e9;
+  points.forEach((p) => {
+    lo = Math.min(lo, p.lng); hi = Math.max(hi, p.lng);
+    lo2 = Math.min(lo2, p.lat); hi2 = Math.max(hi2, p.lat);
+  });
+  for (let z = ZOOM; z >= 3; z--) {
+    const a = projAt(hi2, lo, z), b = projAt(lo2, hi, z);
+    if (Math.abs(b.x - a.x) * TILE <= w * 0.88 && Math.abs(b.y - a.y) * TILE <= h * 0.88) return z;
+  }
+  return 3;
+}
+
+// Carte : grille de tuiles centrée sur `center`, marqueur sur (lat,lng),
+// tracé facultatif. `route` déclenche le cadrage automatique.
+function MapPreview({ lat, lng, height = 120, route, width = 340 }) {
   const [failed, setFailed] = useState(false);
-  const { tx, ty, fx, fy } = tileOf(Number(lat), Number(lng));
-  // Si le fournisseur de tuiles refuse, on n'affiche pas un carré gris muet :
-  // l'adresse et le lien Maps juste en dessous suffisent.
+
+  const pts = Array.isArray(route) && route.length > 1 ? route : null;
+  const z = pts ? fitZoom(pts, width, height) : ZOOM;
+
+  // Centre : milieu du trajet s'il y en a un, sinon le client.
+  let cLat = Number(lat), cLng = Number(lng);
+  if (pts) {
+    let a = 1e9, b = -1e9, c = 1e9, d = -1e9;
+    pts.forEach((p) => { a = Math.min(a, p.lat); b = Math.max(b, p.lat); c = Math.min(c, p.lng); d = Math.max(d, p.lng); });
+    cLat = (a + b) / 2; cLng = (c + d) / 2;
+  }
+
+  const ctr = projAt(cLat, cLng, z);
+  const ctx = Math.floor(ctr.x), cty = Math.floor(ctr.y);
+  // Pixel écran d'un point : décalage par rapport au centre de la vue.
+  const toPx = (p) => {
+    const q = projAt(p.lat, p.lng, z);
+    return { x: width / 2 + (q.x - ctr.x) * TILE, y: height / 2 + (q.y - ctr.y) * TILE };
+  };
+
   if (failed) return null;
-  const uris = [-1, 0, 1].map((d) => `${TILE_HOST}/${ZOOM}/${tx + d}/${ty}.png`);
+
+  const cols = [-1, 0, 1], rows = [-1, 0, 1];
+  const originX = width / 2 - (ctr.x - ctx) * TILE;
+  const originY = height / 2 - (ctr.y - cty) * TILE;
+  const marker = toPx({ lat: Number(lat), lng: Number(lng) });
+
   return (
-    <View style={{ height, overflow: "hidden", backgroundColor: "#E8E8E8" }}>
-      <View style={{ flexDirection: "row", position: "absolute", top: -(fy * TILE - height / 2), left: 0 }}>
-        {uris.map((u) => (
-          <Image key={u} source={{ uri: u, headers: TILE_HEADERS }} style={{ width: TILE, height: TILE }}
-            onError={() => setFailed(true)} />
-        ))}
-      </View>
-      <View style={{ position: "absolute", left: TILE + fx * TILE - 9, top: height / 2 - 18 }}>
+    <View style={{ height, width: "100%", overflow: "hidden", backgroundColor: "#E8E8E8" }}>
+      {rows.map((ry) =>
+        cols.map((rx) => (
+          <Image
+            key={`${rx}_${ry}`}
+            source={{ uri: `${TILE_HOST}/${z}/${ctx + rx}/${cty + ry}.png`, headers: TILE_HEADERS }}
+            onError={() => setFailed(true)}
+            style={{ position: "absolute", width: TILE, height: TILE,
+              left: originX + rx * TILE, top: originY + ry * TILE }}
+          />
+        ))
+      )}
+      {pts && (
+        <Svg style={{ position: "absolute", left: 0, top: 0 }} width={width} height={height} pointerEvents="none">
+          <Polyline points={pts.map((p) => { const q = toPx(p); return `${q.x},${q.y}`; }).join(" ")}
+            fill="none" stroke="#2563EB" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )}
+      {pts && (() => { const q = toPx(pts[0]); return (
+        <View style={{ position: "absolute", left: q.x - 7, top: q.y - 7, width: 14, height: 14, borderRadius: 7,
+          backgroundColor: "#2563EB", borderWidth: 2.5, borderColor: C.white }} />
+      ); })()}
+      <View style={{ position: "absolute", left: marker.x - 9, top: marker.y - 22 }}>
         <Ionicons name="location" size={26} color={C.red} />
       </View>
       <Text style={{ position: "absolute", right: 4, bottom: 2, fontSize: 8, color: "#5A5A5A" }}>
@@ -273,46 +339,148 @@ function Actions({ order: o, onChange, compact }) {
   );
 }
 
-// Suivi : les étapes franchies portent leur horodatage réel.
+// Suivi horizontal : pastilles reliées par une barre qui se remplit.
 function Tracking({ order: o }) {
   const cancelled = o.status === "annulee";
   const steps = [
-    { key: "recue",   label: "Commande reçue",   at: o.created_at,    icon: "receipt-outline" },
-    { key: "traite",  label: "En traitement",    at: o.processing_at, icon: "sync-outline" },
-    { key: "livree",  label: "Livrée",           at: o.delivered_at,  icon: "checkmark-done-outline" },
+    { key: "recue",  label: "Reçue",         at: o.created_at,    icon: "receipt-outline" },
+    { key: "traite", label: "En traitement", at: o.processing_at, icon: "sync-outline" },
+    { key: "livree", label: "Livrée",        at: o.delivered_at,  icon: "checkmark-done-outline" },
   ];
+  const doneCount = steps.filter((x) => x.at).length;
+  const active = Math.max(0, doneCount - 1);
+  const accent = cancelled ? C.red : "#2563EB";
+
   return (
-    <View style={{ marginTop: 4 }}>
-      {steps.map((sp, i) => {
-        const on = !!sp.at;
-        const last = i === steps.length - 1;
-        return (
-          <View key={sp.key} style={{ flexDirection: "row" }}>
-            <View style={{ alignItems: "center", width: 30 }}>
-              <View style={{ width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center",
-                backgroundColor: on ? (cancelled ? "#FDECEC" : C.lime) : "#F0F0F0" }}>
-                <Ionicons name={sp.icon} size={12} color={on ? C.ink : C.sub} />
+    <View>
+      <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+        {steps.map((sp, i) => {
+          const on = !!sp.at;
+          const isActive = i === active && !cancelled;
+          return (
+            <View key={sp.key} style={{ flex: 1, alignItems: "center" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", width: "100%" }}>
+                <View style={{ flex: 1, height: 3, backgroundColor: i === 0 ? "transparent" : (on ? accent : "#EAEAEA") }} />
+                <View style={{ width: isActive ? 32 : 28, height: isActive ? 32 : 28, borderRadius: 16,
+                  alignItems: "center", justifyContent: "center",
+                  backgroundColor: on ? accent : "#F1F1F1",
+                  borderWidth: isActive ? 3 : 0, borderColor: "#BFDBFE" }}>
+                  <Ionicons name={sp.icon} size={isActive ? 15 : 13} color={on ? C.white : C.sub} />
+                </View>
+                <View style={{ flex: 1, height: 3, backgroundColor: i === steps.length - 1 ? "transparent" : (steps[i + 1]?.at ? accent : "#EAEAEA") }} />
               </View>
-              {!last && <View style={{ width: 2, flex: 1, minHeight: 22, backgroundColor: on ? C.lime : "#EEE" }} />}
-            </View>
-            <View style={{ flex: 1, paddingBottom: last ? 0 : 14, paddingTop: 1 }}>
-              <Text style={{ fontSize: 13, fontWeight: on ? "700" : "600", color: on ? C.ink : C.sub }}>{sp.label}</Text>
-              <Text style={{ fontSize: 11, color: C.sub, marginTop: 1 }}>
-                {on ? new Date(sp.at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "En attente"}
+              <Text style={{ fontSize: 11.5, fontWeight: on ? "800" : "600", color: on ? C.ink : C.sub, marginTop: 6 }}>
+                {sp.label}
+              </Text>
+              <Text style={{ fontSize: 9.5, color: C.sub, marginTop: 1 }}>
+                {sp.at ? new Date(sp.at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
               </Text>
             </View>
-          </View>
-        );
-      })}
+          );
+        })}
+      </View>
       {cancelled && (
-        <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "700", color: C.red }}>Commande annulée</Text>
+        <Text style={{ marginTop: 12, fontSize: 12, fontWeight: "700", color: C.red, textAlign: "center" }}>
+          Commande annulée
+        </Text>
       )}
     </View>
   );
 }
 
+// Trajet boutique → client : distance, durée, tracé et ouverture dans Maps.
+function Itinerary({ order: o }) {
+  const [it, setIt] = useState(null);
+
+  useEffect(() => {
+    let on = true;
+    getItinerary(o.id).then((d) => { if (on) setIt(d); }).catch(() => { if (on) setIt({ ok: false }); });
+    return () => { on = false; };
+  }, [o.id]);
+
+  const openRoute = () => {
+    const dest = `${o.lat},${o.lng}`;
+    const org = it?.from ? `${it.from.lat},${it.from.lng}` : "";
+    Linking.openURL(
+      `https://www.google.com/maps/dir/?api=1&destination=${dest}${org ? `&origin=${org}` : ""}&travelmode=driving`
+    );
+  };
+
+  if (it === null) return <ActivityIndicator color={C.ink} style={{ marginVertical: 14 }} />;
+
+  if (!it.ok) {
+    const why = it.reason === "no_shop_position"
+      ? "Renseigne les coordonnées de ta boutique pour calculer le trajet."
+      : it.reason === "no_customer_position"
+      ? "Ce client a donné une adresse écrite, sans position exacte."
+      : "Trajet indisponible pour le moment.";
+    return (
+      <View>
+        <Text style={{ color: C.sub, fontSize: 12.5, marginBottom: 10 }}>{why}</Text>
+        <TouchableOpacity onPress={() => openMaps(o)}
+          style={{ height: 42, borderRadius: R.pill, borderWidth: 1, borderColor: C.line,
+            alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 }}>
+          <Ionicons name="navigate-outline" size={15} color={C.ink} />
+          <Text style={{ color: C.ink, fontWeight: "700", fontSize: 13 }}>Ouvrir dans Maps</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const km = (it.distance_m / 1000).toFixed(it.distance_m < 10000 ? 1 : 0);
+  const min = Math.max(1, Math.round(it.duration_s / 60));
+
+  return (
+    <View>
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+        <Metric icon="speedometer-outline" value={`${km} km`} label="Distance" />
+        <Metric icon="time-outline" value={`${min} min`} label="En voiture" />
+      </View>
+      <View style={{ borderRadius: R.md, overflow: "hidden", borderWidth: 1, borderColor: C.line }}>
+        <MapPreview lat={o.lat} lng={o.lng} height={150} route={it.points} />
+      </View>
+      <TouchableOpacity onPress={openRoute}
+        style={{ height: 46, borderRadius: R.pill, backgroundColor: "#2563EB", marginTop: 12,
+          alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 }}>
+        <Ionicons name="navigate" size={16} color={C.white} />
+        <Text style={{ color: C.white, fontWeight: "800", fontSize: 13.5 }}>Lancer l&apos;itinéraire</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function Metric({ icon, value, label }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: "#F7F7F8", borderRadius: R.md, padding: 12 }}>
+      <Ionicons name={icon} size={16} color={C.sub} />
+      <Text style={{ color: C.ink, fontSize: 16, fontWeight: "800", marginTop: 4 }}>{value}</Text>
+      <Text style={{ color: C.sub, fontSize: 11 }}>{label}</Text>
+    </View>
+  );
+}
+
 function OrderDetail({ order: o, onChange, onClose }) {
-  const items = itemsOf(o);
+  // Les commandes passées avant le stockage de l'image n'en ont pas :
+  // on retombe sur le catalogue de l'agent, par correspondance de nom.
+  const [cat, setCat] = useState({});
+  useEffect(() => {
+    let on = true;
+    if (!o.agent_id) return undefined;
+    getProducts(o.agent_id)
+      .then((d) => {
+        if (!on) return;
+        const m = {};
+        (d?.products || []).forEach((p) => { if (p?.name) m[String(p.name).toLowerCase()] = p.image_url; });
+        setCat(m);
+      })
+      .catch(() => {});
+    return () => { on = false; };
+  }, [o.agent_id]);
+
+  const items = itemsOf(o).map((it) => ({
+    ...it,
+    image: it.image || cat[String(it.name || "").toLowerCase()] || "",
+  }));
   const st = stOf(o);
   const { hasGeo, label } = placeOf(o);
   const cur = o.currency || "XAF";
@@ -340,9 +508,20 @@ function OrderDetail({ order: o, onChange, onClose }) {
             return (
               <View key={i} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10,
                 borderBottomWidth: i === items.length - 1 ? 0 : 1, borderBottomColor: "#F0F0F0" }}>
-                <View style={{ width: 30, height: 30, borderRadius: 9, backgroundColor: "#F4F4F4",
-                  alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "800", color: C.ink }}>×{q}</Text>
+                <View style={{ marginRight: 10 }}>
+                  {it.image ? (
+                    <Image source={{ uri: it.image }} style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: "#F4F4F4" }} />
+                  ) : (
+                    <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: "#F4F4F4",
+                      alignItems: "center", justifyContent: "center" }}>
+                      <Ionicons name="image-outline" size={18} color={C.sub} />
+                    </View>
+                  )}
+                  <View style={{ position: "absolute", right: -5, top: -5, minWidth: 20, height: 20, borderRadius: 10,
+                    paddingHorizontal: 5, backgroundColor: C.ink, alignItems: "center", justifyContent: "center",
+                    borderWidth: 2, borderColor: C.white }}>
+                    <Text style={{ fontSize: 10, fontWeight: "800", color: C.lime }}>{q}</Text>
+                  </View>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: C.ink, fontSize: 14, fontWeight: "700" }}>{it.name}</Text>
@@ -382,6 +561,12 @@ function OrderDetail({ order: o, onChange, onClose }) {
         <Block title="Suivi">
           <Tracking order={o} />
         </Block>
+
+        {hasGeo && (
+          <Block title="Itinéraire">
+            <Itinerary order={o} />
+          </Block>
+        )}
 
         <Actions order={o} onChange={onChange} />
 

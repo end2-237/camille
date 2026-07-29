@@ -106,6 +106,9 @@ export const getOrders = (agentId, status) =>
 export const setOrderStatus = (orderId, status) =>
   req(`/api/orders/${orderId}`, { method: "PATCH", body: JSON.stringify({ status }) });
 
+// Trajet boutique -> client (distance, duree, trace)
+export const getItinerary = (orderId) => req(`/api/orders/${orderId}/itinerary`);
+
 // ── Analyse des conversations (bloc entier) ─────────────────────────────────
 export const getConversationAnalytics = (period = "30d", agentId) =>
   req(`/api/analytics/conversations?period=${period}${agentId ? `&agentId=${agentId}` : ""}`);

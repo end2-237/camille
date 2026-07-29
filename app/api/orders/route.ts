@@ -158,10 +158,15 @@ export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get("status");
 
   try {
+    // Les coordonnées de la boutique servent de point de départ à l'itinéraire.
     const params: any[] = [user.id];
-    let sql = `SELECT o.* FROM camille.orders o
-               JOIN camille.agents a ON a.id = o.agent_id
-               WHERE a.user_id = $1`;
+    let sql = `SELECT o.*,
+                      a.latitude  AS shop_lat,
+                      a.longitude AS shop_lng,
+                      a.business_name AS shop_name
+                 FROM camille.orders o
+                 JOIN camille.agents a ON a.id = o.agent_id
+                WHERE a.user_id = $1`;
     if (agentId) { params.push(agentId); sql += ` AND o.agent_id = $${params.length}`; }
     if (status)  { params.push(status);  sql += ` AND o.status = $${params.length}`; }
     sql += " ORDER BY o.created_at DESC LIMIT 200";
