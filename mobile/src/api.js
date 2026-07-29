@@ -117,6 +117,10 @@ export const getItinerary = (orderId) => req(`/api/orders/${orderId}/itinerary`)
 export const registerPushToken = (token, platform) =>
   req(`/api/push/register`, { method: "POST", body: JSON.stringify({ token, platform }) });
 
+// Diagnostic : quel maillon de la chaine push est casse
+export const pushDiagnostic = () => req(`/api/push/diagnostic`);
+export const pushTest = () => req(`/api/push/diagnostic`, { method: "POST" });
+
 // ── Analyse des conversations (bloc entier) ─────────────────────────────────
 export const getConversationAnalytics = (period = "30d", agentId) =>
   req(`/api/analytics/conversations?period=${period}${agentId ? `&agentId=${agentId}` : ""}`);

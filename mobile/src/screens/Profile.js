@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Alert } fr
 import { Ionicons } from "@expo/vector-icons";
 import * as Updates from "expo-updates";
 import { C, R, S } from "../theme";
-import { logout } from "../api";
+import { logout, pushDiagnostic, pushTest } from "../api";
 import { BottomDrawer } from "../components/Drawer";
 import Plans from "./Plans";
 
@@ -42,6 +42,7 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const name = user?.full_name || user?.email || "Utilisateur";
   const initials = (name.split(/[\s@.]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join("") || "U").toUpperCase();
 
@@ -87,6 +88,22 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
     } catch (e) {
       Alert.alert("Mises à jour", `Vérification impossible : ${e?.message || "erreur réseau"}\n\n` + otaInfo());
     } finally { setChecking(false); }
+  }
+
+  // ── Notifications : dire precisement quel maillon manque ────────────────────
+  async function checkPush() {
+    setPushing(true);
+    try {
+      const d = await pushDiagnostic();
+      const lines = (d.checks || []).map((c) => `${c.ok ? "✅" : "❌"} ${c.label}${c.detail ? `\n     ${c.detail}` : ""}${c.fix ? `\n     → ${c.fix}` : ""}`);
+      if (d.ready) {
+        const t = await pushTest().catch((e) => ({ ok: false, skipped: e.message }));
+        lines.push("", t.ok ? `📨 Test envoye a ${t.sent} appareil(s)` : `❌ Envoi du test : ${t.skipped || "echec"}`);
+      }
+      Alert.alert(d.ready ? "Notifications prêtes" : "Notifications incomplètes", lines.join("\n"));
+    } catch (e) {
+      Alert.alert("Notifications", e?.message || "Diagnostic impossible");
+    } finally { setPushing(false); }
   }
 
   return (
@@ -155,6 +172,8 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
           <NavRow icon="card-outline" label="Plans & paiement" onPress={() => setShowPlans(true)} />
           <Divider />
           <NavRow icon="cloud-download-outline" label="Rechercher une mise à jour" onPress={checkUpdate} right={checking ? <ActivityIndicator size="small" color={C.sub} /> : null} />
+          <Divider />
+          <NavRow icon="notifications-outline" label="Tester les notifications" onPress={checkPush} right={pushing ? <ActivityIndicator size="small" color={C.sub} /> : null} />
         </View>
 
         <TouchableOpacity onPress={doLogout} disabled={busy}
