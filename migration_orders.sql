@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS camille.orders (
   session_name   TEXT,
   contact_phone  TEXT,
   customer_name  TEXT,
+  address        TEXT,                                -- adresse tapee par le client
+  lat            DOUBLE PRECISION,                    -- position partagee via WhatsApp
+  lng            DOUBLE PRECISION,
+  place_label    TEXT,                                -- adresse resolue depuis lat/lng
 
   items          JSONB NOT NULL DEFAULT '[]'::jsonb,  -- [{name, variant, qty, price, currency}]
   total          NUMERIC(12,2) DEFAULT 0,
@@ -32,3 +36,9 @@ CREATE INDEX IF NOT EXISTS idx_orders_status     ON camille.orders (status);
 --   'boutique' → on renvoie vers le site marchand du client
 ALTER TABLE camille.agents
   ADD COLUMN IF NOT EXISTS conversion_mode TEXT NOT NULL DEFAULT 'whatsapp';
+
+-- ── Livraison : coordonnees du client (rejouable sur une base deja migree) ────
+ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS address     TEXT;
+ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS lat         DOUBLE PRECISION;
+ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS lng         DOUBLE PRECISION;
+ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS place_label TEXT;

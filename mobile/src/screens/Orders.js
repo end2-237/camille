@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl, Alert, Linking } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl, Alert, Linking, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import { EmptyHint } from "../components/ui";
@@ -12,6 +12,58 @@ const TABS = [
 ];
 
 const STATUS_COLOR = { nouvelle: C.lime, traitee: C.green, annulee: C.red };
+
+// Aperçu carto sans clé d'API : on calcule la tuile OpenStreetMap qui contient
+// le point, et on place le marqueur à sa position exacte dans cette tuile.
+const TILE = 256;
+const ZOOM = 16;
+
+function tileOf(lat, lng) {
+  const n = 2 ** ZOOM;
+  const x = ((lng + 180) / 360) * n;
+  const la = (lat * Math.PI) / 180;
+  const y = ((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2) * n;
+  return { tx: Math.floor(x), ty: Math.floor(y), fx: x - Math.floor(x), fy: y - Math.floor(y) };
+}
+
+function MapPreview({ lat, lng, height = 120 }) {
+  const { tx, ty, fx, fy } = tileOf(Number(lat), Number(lng));
+  // Trois tuiles de large : le point reste visible même s'il tombe près d'un bord.
+  const uris = [-1, 0, 1].map((d) => `https://tile.openstreetmap.org/${ZOOM}/${tx + d}/${ty}.png`);
+  return (
+    <View style={{ height, overflow: "hidden", backgroundColor: "#E8E8E8" }}>
+      <View style={{ flexDirection: "row", position: "absolute", top: -(fy * TILE - height / 2), left: 0 }}>
+        {uris.map((u) => <Image key={u} source={{ uri: u }} style={{ width: TILE, height: TILE }} />)}
+      </View>
+      <View style={{ position: "absolute", left: TILE + fx * TILE - 9, top: height / 2 - 18 }}>
+        <Ionicons name="location" size={26} color={C.red} />
+      </View>
+    </View>
+  );
+}
+
+function Destination({ order: o }) {
+  const hasGeo = o.lat != null && o.lng != null;
+  const label = o.place_label || o.address || (hasGeo ? `${Number(o.lat).toFixed(5)}, ${Number(o.lng).toFixed(5)}` : "");
+  if (!label) return null;
+
+  const open = () =>
+    Linking.openURL(hasGeo
+      ? `https://www.google.com/maps?q=${o.lat},${o.lng}`
+      : `https://www.google.com/maps/search/${encodeURIComponent(label)}`);
+
+  return (
+    <View style={{ marginTop: 10, borderRadius: R.md, borderWidth: 1, borderColor: C.line, overflow: "hidden" }}>
+      {hasGeo && <MapPreview lat={o.lat} lng={o.lng} />}
+      <TouchableOpacity onPress={open} activeOpacity={0.8}
+        style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 10, backgroundColor: "#FAFAFA" }}>
+        <Ionicons name="location" size={15} color={C.red} />
+        <Text style={{ flex: 1, color: C.ink, fontSize: 11.5 }} numberOfLines={2}>{label}</Text>
+        <Ionicons name="open-outline" size={14} color={C.sub} />
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function Orders({ agent, onClose }) {
   const [orders, setOrders] = useState(null);
@@ -106,8 +158,10 @@ export default function Orders({ agent, onClose }) {
                   {Number(o.total || 0).toLocaleString("fr-FR")} {o.currency || "XAF"}
                 </Text>
                 <Text style={{ color: C.sub, fontSize: 11, marginTop: 2 }}>
-                  {phone} · {new Date(o.created_at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  {o.customer_name ? `${o.customer_name} · ` : ""}{phone} · {new Date(o.created_at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                 </Text>
+
+                <Destination order={o} />
 
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                   {phone ? (

@@ -23,6 +23,28 @@ function money(n: number, cur: string) {
   return `${Number(n || 0).toLocaleString("fr-FR")} ${cur || "XAF"}`;
 }
 
+// Géocodage inverse via Nominatim (OpenStreetMap) : public, sans clé d'API.
+// Best-effort — une commande ne doit jamais échouer parce que le service est lent.
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const url =
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
+      `&lat=${lat}&lon=${lng}&zoom=18&accept-language=fr`;
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 3000);
+    const r = await fetch(url, {
+      signal: ctl.signal,
+      headers: { "User-Agent": "Camille/1.0 (contact: support@camille.local)" },
+    });
+    clearTimeout(t);
+    if (!r.ok) return "";
+    const j = await r.json();
+    return String(j?.display_name || "").slice(0, 200);
+  } catch {
+    return "";
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const b = await req.json();
@@ -54,10 +76,20 @@ export async function POST(req: NextRequest) {
     // Note libre : en restauration, le mode de service (sur place / à emporter / livraison)
     const note = String(b.note ?? "").slice(0, 120);
 
+    // Coordonnées de livraison
+    const customerName = String(b.customerName ?? "").slice(0, 60);
+    const address = String(b.customerAddress ?? "").slice(0, 200);
+    const lat = Number.isFinite(Number(b.lat)) ? Number(b.lat) : null;
+    const lng = Number.isFinite(Number(b.lng)) ? Number(b.lng) : null;
+    const placeLabel = lat != null && lng != null ? await reverseGeocode(lat, lng) : "";
+
     await query(
-      `INSERT INTO camille.orders (ref, agent_id, session_name, contact_phone, items, total, currency, note)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`,
-      [ref, agentId, b.session ?? null, b.phone ?? null, JSON.stringify(items), total, currency, note || null]
+      `INSERT INTO camille.orders
+         (ref, agent_id, session_name, contact_phone, items, total, currency, note,
+          customer_name, address, lat, lng, place_label)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [ref, agentId, b.session ?? null, b.phone ?? null, JSON.stringify(items), total, currency,
+       note || null, customerName || null, address || null, lat, lng, placeLabel || null]
     );
 
     // Coordonnées de la boutique (pour le message au commerçant)
@@ -77,15 +109,27 @@ export async function POST(req: NextRequest) {
       `Total : ${money(total, currency)}\n` +
       (note ? `Service : ${note}\n` : "") +
       `\n` +
-      `On te contacte tout de suite pour confirmer la livraison${shop.location ? ` (${shop.location})` : ""} 📞`;
+      (placeLabel ? `Livraison : ${placeLabel}\n` : address ? `Livraison : ${address}\n` : "") +
+      `\nOn te contacte tout de suite pour confirmer 📞`;
+
+    // Où livrer : la position partagée prime, sinon l'adresse tapée
+    const lieu =
+      lat != null && lng != null
+        ? `📍 ${placeLabel || `${lat.toFixed(5)}, ${lng.toFixed(5)}`}\n` +
+          `🗺️ https://www.google.com/maps?q=${lat},${lng}\n`
+        : address
+        ? `📍 ${address}\n`
+        : "";
 
     // Message destiné au COMMERÇANT
     const ownerText =
       `🛎️ NOUVELLE COMMANDE — n° ${ref}\n\n${lignes}\n\n` +
       `Total : ${money(total, currency)}\n` +
       (note ? `Service : ${note}\n` : "") +
-      `Client : ${String(b.phone || "").replace(/@c\.us$/, "")}\n\n` +
-      `Réponds à ce client pour confirmer.`;
+      (customerName ? `Client : ${customerName}\n` : "") +
+      `Tél : ${String(b.phone || "").replace(/@c\.us$/, "")}\n` +
+      lieu +
+      `\nRéponds à ce client pour confirmer.`;
 
     // Numéro du commerçant au format WhatsApp (si renseigné)
     const raw = String(shop.whatsapp_number || "").replace(/[^0-9]/g, "");
