@@ -1,10 +1,12 @@
-// PATCH /api/orders/[orderId] — change le statut d'une commande (nouvelle | traitee | annulee)
+// PATCH /api/orders/[orderId] — fait avancer une commande dans son cycle de vie.
+// nouvelle (à traiter) → en_traitement → livree ; annulee possible à tout moment.
+// "traitee" est conservé : les commandes créées avant l'ajout du cycle l'utilisent.
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
-const ALLOWED = ["nouvelle", "traitee", "annulee"];
+const ALLOWED = ["nouvelle", "en_traitement", "livree", "traitee", "annulee"];
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const user = await getUserFromRequest(req);
@@ -17,9 +19,17 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Statut invalide" }, { status: 400 });
   }
 
+  // Horodatage de chaque étape : c'est ce qui alimente le suivi côté app.
+  // COALESCE : on ne réécrit jamais une date déjà posée, l'historique reste vrai.
   const r = await query(
     `UPDATE camille.orders o
-        SET status = $1, note = COALESCE($2, o.note), updated_at = NOW()
+        SET status        = $1,
+            note          = COALESCE($2, o.note),
+            processing_at = CASE WHEN $1 IN ('en_traitement','livree','traitee')
+                                 THEN COALESCE(o.processing_at, NOW()) ELSE o.processing_at END,
+            delivered_at  = CASE WHEN $1 = 'livree'
+                                 THEN COALESCE(o.delivered_at, NOW()) ELSE o.delivered_at END,
+            updated_at    = NOW()
        FROM camille.agents a
       WHERE o.agent_id = a.id AND a.user_id = $3 AND o.id = $4
       RETURNING o.*`,

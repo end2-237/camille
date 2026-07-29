@@ -15,19 +15,28 @@ type Order = {
   customer_name?: string | null; contact_phone?: string | null;
   address?: string | null; place_label?: string | null;
   lat?: number | null; lng?: number | null;
+  processing_at?: string | null; delivered_at?: string | null;
   created_at: string;
 };
 type Agent = { id: string; identity?: { name?: string } };
 
-const TABS = [
-  { key: "nouvelle", label: "Nouvelles" },
-  { key: "traitee", label: "Traitées" },
-  { key: "annulee", label: "Annulées" },
-];
-
-const STATUS_BG: Record<string, string> = {
-  nouvelle: "#101012", traitee: "#0e9d63", annulee: "#c0392b",
+// Cycle de vie : à traiter → en traitement → livrée. "traitee" est l'ancien
+// statut des commandes créées avant le suivi ; on l'affiche comme "en traitement".
+const ST: Record<string, { label: string; bg: string; fg: string }> = {
+  nouvelle:      { label: "À traiter",     bg: "#F3F7E4", fg: "#4A6B00" },
+  en_traitement: { label: "En traitement", bg: "#FDF1DC", fg: "#8A5A00" },
+  traitee:       { label: "En traitement", bg: "#FDF1DC", fg: "#8A5A00" },
+  livree:        { label: "Livrée",        bg: "#E4F8EC", fg: "#0e6b45" },
+  annulee:       { label: "Annulée",       bg: "#FDECEC", fg: "#c0392b" },
 };
+const stOf = (s?: string) => ST[s || "nouvelle"] || ST.nouvelle;
+
+const TABS: { key: string; label: string; match: (s?: string) => boolean }[] = [
+  { key: "nouvelle", label: "À traiter", match: (s) => !s || s === "nouvelle" },
+  { key: "encours",  label: "En cours",  match: (s) => s === "en_traitement" || s === "traitee" },
+  { key: "livree",   label: "Livrées",   match: (s) => s === "livree" },
+  { key: "annulee",  label: "Annulées",  match: (s) => s === "annulee" },
+];
 
 // Aperçu carto sans clé d'API : on calcule la tuile qui contient le point et on
 // place le marqueur à sa position exacte dedans.
@@ -79,24 +88,26 @@ export default function OrdersPage() {
 
   async function change(o: Order, status: string) {
     try {
-      await fetch(`/api/orders/${o.id}`, {
+      const r = await fetch(`/api/orders/${o.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ status }),
       });
-      setOrders((p) => (p || []).map((x) => (x.id === o.id ? { ...x, status } : x)));
+      const d = await r.json().catch(() => ({}));
+      const fresh = d?.order || { ...o, status };
+      setOrders((p) => (p || []).map((x) => (x.id === o.id ? { ...x, ...fresh } : x)));
     } catch (e) { setErr((e as Error).message); }
   }
 
-  const counts = useMemo(() => ({
-    nouvelle: (orders || []).filter((o) => (o.status || "nouvelle") === "nouvelle").length,
-    traitee: (orders || []).filter((o) => o.status === "traitee").length,
-    annulee: (orders || []).filter((o) => o.status === "annulee").length,
-  }), [orders]);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    TABS.forEach((t) => { c[t.key] = (orders || []).filter((o) => t.match(o.status)).length; });
+    return c;
+  }, [orders]);
 
-  const list = (orders || []).filter((o) => (o.status || "nouvelle") === tab);
+  const list = (orders || []).filter((o) => (TABS.find((t) => t.key === tab) || TABS[0]).match(o.status));
   const caTotal = (orders || [])
-    .filter((o) => o.status === "traitee")
+    .filter((o) => o.status === "livree")
     .reduce((s, o) => s + Number(o.total || 0), 0);
 
   return (
@@ -130,9 +141,9 @@ export default function OrdersPage() {
 
       {/* Récapitulatif */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 22 }}>
-        <Kpi label="Nouvelles" value={String(counts.nouvelle)} hint="à traiter" accent={counts.nouvelle > 0} />
-        <Kpi label="Traitées" value={String(counts.traitee)} hint="confirmées" />
-        <Kpi label="Montant traité" value={money(caTotal, (orders || [])[0]?.currency)} hint="hors annulées" />
+        <Kpi label="À traiter" value={String(counts.nouvelle)} hint="en attente" accent={counts.nouvelle > 0} />
+        <Kpi label="En traitement" value={String(counts.encours)} hint="en cours" />
+        <Kpi label="Livrées" value={String(counts.livree)} hint={money(caTotal, (orders || [])[0]?.currency)} />
       </div>
 
       {/* Onglets */}
@@ -142,7 +153,7 @@ export default function OrdersPage() {
             style={{ padding: "7px 16px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
               border: "1px solid var(--cl-line)", background: tab === t.key ? "#101012" : "#fff",
               color: tab === t.key ? "#fff" : "var(--cl-sub)" }}>
-            {t.label} · {counts[t.key as keyof typeof counts]}
+            {t.label} · {counts[t.key] ?? 0}
           </button>
         ))}
       </div>
@@ -179,9 +190,9 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
         <div style={{ flex: "1 1 320px", minWidth: 260 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <strong style={{ fontSize: 15, color: "var(--cl-ink)" }}>n° {o.ref}</strong>
-            <span style={{ background: STATUS_BG[o.status] || "#101012", color: "#fff", borderRadius: 999,
+            <span style={{ background: stOf(o.status).bg, color: stOf(o.status).fg, borderRadius: 999,
               padding: "2px 10px", fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3 }}>
-              {String(o.status || "nouvelle").toUpperCase()}
+              {stOf(o.status).label.toUpperCase()}
             </span>
             {o.note && (
               <span style={{ background: "#F3F7E4", color: "#4A6B00", borderRadius: 999,
@@ -192,11 +203,17 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
           </div>
 
           <div style={{ marginBottom: 8 }}>
-            {items.map((it, i) => (
-              <div key={i} style={{ fontSize: 13.5, color: "var(--cl-ink)" }}>
-                {i + 1}. {it.name}{it.variant ? ` — ${it.variant}` : ""} ×{it.qty || 1}
-              </div>
-            ))}
+            {items.map((it, i) => {
+              const q = it.qty || 1, u = Number(it.price || 0);
+              return (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13.5, color: "var(--cl-ink)", padding: "2px 0" }}>
+                  <span>{i + 1}. {it.name}{it.variant ? ` — ${it.variant}` : ""} ×{q}</span>
+                  <span style={{ color: "var(--cl-sub)", whiteSpace: "nowrap" }}>
+                    {money(u, o.currency)} → <strong style={{ color: "var(--cl-ink)" }}>{money(u * q, o.currency)}</strong>
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           <div style={{ fontSize: 15, fontWeight: 800, color: "var(--cl-ink)" }}>{money(o.total, o.currency)}</div>
@@ -213,14 +230,21 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
                 Répondre sur WhatsApp
               </a>
             )}
-            {o.status !== "traitee" && (
-              <button onClick={() => onChange(o, "traitee")}
+            {(!o.status || o.status === "nouvelle") && (
+              <button onClick={() => onChange(o, "en_traitement")}
                 style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
                   border: "none", background: "#101012", color: "#fff" }}>
-                Marquer traitée
+                Mettre en traitement
               </button>
             )}
-            {o.status !== "annulee" && (
+            {(o.status === "en_traitement" || o.status === "traitee") && (
+              <button onClick={() => onChange(o, "livree")}
+                style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                  border: "none", background: "#C6F24E", color: "#101012" }}>
+                Marquer livrée
+              </button>
+            )}
+            {o.status !== "annulee" && o.status !== "livree" && (
               <button onClick={() => onChange(o, "annulee")}
                 style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
                   border: "1px solid var(--cl-line)", background: "#fff", color: "#c0392b" }}>
@@ -247,7 +271,47 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
             </a>
           </div>
         )}
+
+        {/* Suivi : chaque étape franchie porte son horodatage réel */}
+        <div style={{ flex: "0 1 220px", minWidth: 200 }}>
+          <Tracking order={o} />
+        </div>
       </div>
+    </div>
+  );
+}
+
+function Tracking({ order: o }: { order: Order }) {
+  const cancelled = o.status === "annulee";
+  const steps = [
+    { key: "recue",  label: "Commande reçue", at: o.created_at },
+    { key: "traite", label: "En traitement",  at: o.processing_at },
+    { key: "livree", label: "Livrée",         at: o.delivered_at },
+  ];
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cl-sub)", letterSpacing: 0.3, marginBottom: 8 }}>SUIVI</div>
+      {steps.map((sp, i) => {
+        const on = !!sp.at;
+        const last = i === steps.length - 1;
+        return (
+          <div key={sp.key} style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16 }}>
+              <div style={{ width: 11, height: 11, borderRadius: 6, marginTop: 3,
+                background: on ? (cancelled ? "#c0392b" : "#C6F24E") : "#E4E4E4",
+                border: on ? "none" : "1px solid #D8D8D8" }} />
+              {!last && <div style={{ width: 2, flex: 1, minHeight: 18, background: on ? "#C6F24E" : "#EEE" }} />}
+            </div>
+            <div style={{ paddingBottom: last ? 0 : 10 }}>
+              <div style={{ fontSize: 12.5, fontWeight: on ? 700 : 500, color: on ? "var(--cl-ink)" : "var(--cl-sub)" }}>{sp.label}</div>
+              <div style={{ fontSize: 11, color: "var(--cl-sub)" }}>
+                {on ? new Date(sp.at as string).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "En attente"}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {cancelled && <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: "#c0392b" }}>Commande annulée</div>}
     </div>
   );
 }

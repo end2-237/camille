@@ -115,7 +115,8 @@ export async function POST(req: NextRequest) {
     const clientText =
       `✅ Commande enregistrée — n° ${ref}\n\n${lignes}\n\n` +
       `Total : ${money(total, currency)}\n` +
-      (note ? `Service : ${note}\n` : "") +
+      `Statut : En traitement 🔄\n` +
+      (note ? `Mode : ${note}\n` : "") +
       (placeLabel || address ? `Livraison : ${placeLabel || address}\n` : "") +
       `\nOn te contacte tout de suite pour confirmer 📞`;
 
