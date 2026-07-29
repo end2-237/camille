@@ -8,40 +8,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
-import { notifyUser } from "@/lib/fcm";
+import { notifyUser, serviceAccount } from "@/lib/fcm";
 import crypto from "crypto";
 
 type Check = { ok: boolean; label: string; detail?: string; fix?: string };
 
-async function checkServiceAccount(): Promise<Check & { projectId?: string }> {
+// On réutilise la lecture de lib/fcm : un diagnostic qui parse autrement que
+// l'envoi finirait par mentir.
+function checkServiceAccount(): Check {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
     return {
       ok: false,
       label: "Compte de service Firebase",
       detail: "Variable FIREBASE_SERVICE_ACCOUNT_JSON absente",
-      fix: "Console Firebase → Paramètres du projet → Comptes de service → Générer une clé privée, puis coller le JSON dans Coolify.",
+      fix: "Console Firebase → Paramètres du projet → Comptes de service → Générer une nouvelle clé privée, puis coller le JSON (ou sa version base64) dans Coolify et redéployer.",
     };
   }
-  try {
-    const j = JSON.parse(raw);
-    if (!j.client_email || !j.private_key || !j.project_id) {
-      return { ok: false, label: "Compte de service Firebase", detail: "JSON incomplet (client_email / private_key / project_id)" };
-    }
-    return { ok: true, label: "Compte de service Firebase", detail: j.project_id, projectId: j.project_id };
-  } catch {
-    return { ok: false, label: "Compte de service Firebase", detail: "JSON illisible — vérifie qu'il est bien sur une seule ligne" };
+  const sa = serviceAccount();
+  if (!sa) {
+    return {
+      ok: false,
+      label: "Compte de service Firebase",
+      detail: `variable présente (${raw.length} caractères) mais illisible`,
+      fix: "Le JSON est probablement tronqué par les sauts de ligne. Encode-le en base64 : base64 -w0 cle.json",
+    };
   }
+  return { ok: true, label: "Compte de service Firebase", detail: sa.project_id };
 }
 
 // Un compte de service peut être présent mais refusé (clé révoquée, horloge
 // décalée…). On tente réellement l'échange de jeton OAuth.
 async function checkFirebaseAuth(): Promise<Check> {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) return { ok: false, label: "Authentification Firebase", detail: "non testée (pas de compte de service)" };
+  const sa = serviceAccount();
+  if (!sa) return { ok: false, label: "Authentification Firebase", detail: "non testée (pas de compte de service)" };
   try {
-    const sa = JSON.parse(raw);
-    const key = String(sa.private_key).replace(/\\n/g, "\n");
+    const key = sa.private_key;
     const now = Math.floor(Date.now() / 1000);
     const b64 = (b: string) =>
       Buffer.from(b).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -117,7 +119,7 @@ export async function GET(req: NextRequest) {
   }
 
   // 3 & 4. Configuration et authentification Firebase
-  const sa = await checkServiceAccount();
+  const sa = checkServiceAccount();
   checks.push(sa);
   if (sa.ok) checks.push(await checkFirebaseAuth());
 

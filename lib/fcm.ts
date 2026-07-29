@@ -13,18 +13,31 @@
 import crypto from "crypto";
 import { query } from "@/lib/db";
 
-type ServiceAccount = { client_email: string; private_key: string; project_id: string };
+export type ServiceAccount = { client_email: string; private_key: string; project_id: string };
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
-function serviceAccount(): ServiceAccount | null {
+/**
+ * Lit le compte de service depuis l'environnement.
+ * Accepte le JSON brut OU sa version base64 : une variable d'environnement
+ * multi-lignes casse facilement (Coolify, Docker, CI), le base64 supprime
+ * le problème.
+ */
+export function serviceAccount(): ServiceAccount | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) return null;
+
+  let text = raw.trim();
+  // Base64 : ne commence pas par '{' et n'utilise que l'alphabet base64.
+  if (!text.startsWith("{") && /^[A-Za-z0-9+/=\s]+$/.test(text)) {
+    try { text = Buffer.from(text, "base64").toString("utf8").trim(); } catch { /* on tentera tel quel */ }
+  }
+
   try {
-    const j = JSON.parse(raw);
+    const j = JSON.parse(text);
     if (!j.client_email || !j.private_key || !j.project_id) return null;
-    // Les sauts de ligne de la clé survivent rarement au passage en variable
-    // d'environnement : on les restaure.
+    // La clé arrive avec des \n littéraux (c'est ainsi dans le fichier
+    // téléchargé) alors que crypto exige de vrais sauts de ligne.
     j.private_key = String(j.private_key).replace(/\\n/g, "\n");
     return j as ServiceAccount;
   } catch {
