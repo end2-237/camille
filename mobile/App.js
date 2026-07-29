@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { View, Text, SafeAreaView, StatusBar, Platform, Animated, AppState } from "react-native";
 import * as Updates from "expo-updates";
+import { registerForPush, listenPush, clearBadge } from "./src/push";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { C } from "./src/theme";
 import { Header, BottomNav, ScreenTitle } from "./src/components/ui";
@@ -59,6 +60,23 @@ export default function App() {
       setTimeout(() => setBooting(false), 900);
     })();
   }, [load]);
+
+  // ── Notifications push ─────────────────────────────────────────────────────
+  // Enregistrement une fois connecté (le jeton est rattaché au compte), puis
+  // écoute : bandeau si l'app est ouverte, rafraîchissement au tap.
+  useEffect(() => {
+    if (!user) return undefined;
+    registerForPush();
+    const stop = listenPush(
+      () => { load().catch(() => {}); },              // reçue app ouverte
+      (data) => {                                     // l'utilisateur a tapé dessus
+        clearBadge();
+        load().catch(() => {});
+        if (data?.type === "order") setTab("agents");
+      }
+    );
+    return stop;
+  }, [user, load]);
 
   // ── Mise à jour OTA automatique ────────────────────────────────────────────
   // Vérifie au lancement ET chaque fois que l'app revient au premier plan.

@@ -109,6 +109,10 @@ export const setOrderStatus = (orderId, status) =>
 // Trajet boutique -> client (distance, duree, trace)
 export const getItinerary = (orderId) => req(`/api/orders/${orderId}/itinerary`);
 
+// ── Notifications push ──────────────────────────────────────────────────────
+export const registerPushToken = (token, platform) =>
+  req(`/api/push/register`, { method: "POST", body: JSON.stringify({ token, platform }) });
+
 // ── Analyse des conversations (bloc entier) ─────────────────────────────────
 export const getConversationAnalytics = (period = "30d", agentId) =>
   req(`/api/analytics/conversations?period=${period}${agentId ? `&agentId=${agentId}` : ""}`);

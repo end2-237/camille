@@ -28,6 +28,14 @@
         {
           "color": "#ECECEC"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/adaptive-icon.png",
+          "color": "#101012",
+          "defaultChannel": "commandes"
+        }
       ]
     ],
     "android": {
@@ -36,7 +44,13 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#101012"
-      }
+      },
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ]
     },
     "ios": {
       "supportsTablet": true

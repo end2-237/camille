@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { notifyUser } from "@/lib/fcm";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -91,18 +92,21 @@ export async function POST(req: NextRequest) {
     const lng = coord(b.lng, 180);
     const placeLabel = lat != null && lng != null ? await reverseGeocode(lat, lng) : "";
 
-    await query(
+    const ins = await query(
       `INSERT INTO camille.orders
          (ref, agent_id, session_name, contact_phone, items, total, currency, note,
           customer_name, address, lat, lng, place_label)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13)`,
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13)
+       RETURNING id`,
       [ref, agentId, b.session ?? null, b.phone ?? null, JSON.stringify(items), total, currency,
        note || null, customerName || null, address || null, lat, lng, placeLabel || null]
     );
 
+    const orderId = ins.rows[0]?.id ?? null;
+
     // Coordonnées de la boutique (pour le message au commerçant)
     const ag = await query(
-      "SELECT name, business_name, whatsapp_number, location FROM camille.agents WHERE id = $1",
+      "SELECT name, business_name, whatsapp_number, location, user_id FROM camille.agents WHERE id = $1",
       [agentId]
     );
     const shop = ag.rows[0] ?? {};
@@ -142,6 +146,18 @@ export async function POST(req: NextRequest) {
     // Numéro du commerçant au format WhatsApp (si renseigné)
     const raw = String(shop.whatsapp_number || "").replace(/[^0-9]/g, "");
     const ownerChatId = raw ? `${raw}@c.us` : null;
+
+    // Notification au commerçant. Volontairement après la création : une panne
+    // de push ne doit jamais faire échouer l'enregistrement d'une commande.
+    if (shop.user_id) {
+      const quoi = items.map((i) => `${i.qty || 1}× ${i.name}`).join(", ");
+      notifyUser(shop.user_id, "commande", {
+        title: `Nouvelle commande — ${money(total, currency)}`,
+        body: `${customerName ? `${customerName} · ` : ""}${quoi}`.slice(0, 160),
+        data: { type: "order", ref, orderId: String(orderId || ""), agentId: String(agentId) },
+        channel: "commandes",
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ ok: true, ref, total, currency, clientText, ownerText, ownerChatId });
   } catch (err) {
