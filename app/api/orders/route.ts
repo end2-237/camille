@@ -116,8 +116,7 @@ export async function POST(req: NextRequest) {
       `✅ Commande enregistrée — n° ${ref}\n\n${lignes}\n\n` +
       `Total : ${money(total, currency)}\n` +
       (note ? `Service : ${note}\n` : "") +
-      `\n` +
-      (placeLabel ? `Livraison : ${placeLabel}\n` : address ? `Livraison : ${address}\n` : "") +
+      (placeLabel || address ? `Livraison : ${placeLabel || address}\n` : "") +
       `\nOn te contacte tout de suite pour confirmer 📞`;
 
     // Où livrer : la position partagée prime, sinon l'adresse tapée
