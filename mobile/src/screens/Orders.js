@@ -202,6 +202,17 @@ export default function Orders({ agent, onClose }) {
       const fresh = d?.order || { ...o, status };
       setOrders((p) => (p || []).map((x) => (x.id === o.id ? { ...x, ...fresh } : x)));
       setSel((s) => (s && s.id === o.id ? { ...s, ...fresh } : s));
+
+      // Bon de commande : on dit franchement si l'envoi au client a abouti.
+      if (d?.doc) {
+        if (d.doc.ok) {
+          Alert.alert("Bon de commande envoyé",
+            `Le PDF n° ${d.doc.number} est parti au client sur WhatsApp 📄`);
+        } else {
+          Alert.alert("Commande en traitement",
+            `Le statut est bien à jour, mais le bon de commande n'a pas pu être envoyé :\n\n${d.doc.reason}`);
+        }
+      }
     } catch (e) { Alert.alert("Erreur", e.message); }
   }, []);
 
@@ -566,6 +577,23 @@ function OrderDetail({ order: o, onChange, onClose }) {
               <Text style={{ flex: 1, color: C.ink, fontSize: 12.5 }}>{label}</Text>
               <Text style={{ color: C.ink, fontSize: 12, fontWeight: "700" }}>Ouvrir</Text>
               <Ionicons name="open-outline" size={14} color={C.sub} />
+            </TouchableOpacity>
+          </Block>
+        ) : null}
+
+        {o.doc_url ? (
+          <Block title="Bon de commande">
+            <TouchableOpacity onPress={() => Linking.openURL(o.doc_url)} activeOpacity={0.8}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#FCF1E8",
+                alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="document-text" size={20} color="#DD5509" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.ink, fontSize: 14, fontWeight: "700" }}>{o.doc_number || "Document"}</Text>
+                <Text style={{ color: C.sub, fontSize: 11.5, marginTop: 1 }}>Envoyé au client · toucher pour ouvrir</Text>
+              </View>
+              <Ionicons name="download-outline" size={18} color={C.sub} />
             </TouchableOpacity>
           </Block>
         ) : null}

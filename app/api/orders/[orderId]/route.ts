@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sendOrderDocument } from "@/lib/facturation";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 const ALLOWED = ["nouvelle", "en_traitement", "livree", "traitee", "annulee"];
@@ -74,5 +75,16 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   }
 
   if (!r.rows.length) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 });
-  return NextResponse.json({ order: r.rows[0] });
+
+  const order = r.rows[0];
+
+  // Passage en traitement = accuse de reception : on envoie le bon de commande
+  // en PDF au client. On ATTEND le resultat pour pouvoir le remonter dans l'app,
+  // mais un echec ne remet jamais en cause le changement de statut.
+  let doc: Awaited<ReturnType<typeof sendOrderDocument>> | undefined;
+  if (status === "en_traitement" && !order.doc_url) {
+    doc = await sendOrderDocument(orderId);
+  }
+
+  return NextResponse.json({ order, ...(doc ? { doc } : {}) });
 }

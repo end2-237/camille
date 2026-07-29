@@ -59,3 +59,9 @@ ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS delivered_at  TIMESTAMPTZ;
 UPDATE camille.orders
    SET processing_at = COALESCE(processing_at, updated_at)
  WHERE status = 'traitee' AND processing_at IS NULL;
+
+-- ── Bon de commande PDF (buyfacturation) ─────────────────────────────────────
+-- Memorise le document envoye au client pour ne pas le regenerer et pouvoir
+-- le renvoyer depuis le dashboard.
+ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS doc_number TEXT;
+ALTER TABLE camille.orders ADD COLUMN IF NOT EXISTS doc_url    TEXT;
