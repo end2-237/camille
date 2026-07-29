@@ -47,7 +47,13 @@ function itemsOf(o) {
   try { return JSON.parse(String(o?.items || "[]")); } catch { return []; }
 }
 const fmt = (n) => Number(n || 0).toLocaleString("fr-FR");
-const phoneOf = (o) => String(o?.contact_phone || "").replace(/@c\.us$/, "");
+const phoneOf = (o) => String(o?.contact_phone || "").replace(/@(c\.us|lid|s\.whatsapp\.net)$/, "");
+
+// WhatsApp adresse parfois les contacts par LID : un identifiant interne, pas
+// un numero. Un lien wa.me construit dessus ne mene nulle part.
+// Les LID observes font 15 chiffres ou plus ; aucun numero mobile reel
+// n'atteint cette longueur (Cameroun = 12, France = 11). On coupe a 14.
+const isRealPhone = (p) => /^\d{8,14}$/.test(String(p || ""));
 
 function placeOf(o) {
   const hasGeo = o?.lat != null && o?.lng != null;
@@ -300,15 +306,21 @@ function Actions({ order: o, onChange, compact }) {
   const inProgress = s === "en_traitement" || s === "traitee";
   const done = s === "livree" || s === "annulee";
   const phone = phoneOf(o);
+  const canWhatsApp = isRealPhone(phone);
   const h = compact ? 40 : 46;
 
   return (
     <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
       {phone ? (
-        <TouchableOpacity onPress={() => Linking.openURL(`https://wa.me/${phone}`)}
-          style={{ width: compact ? 46 : 52, height: h, borderRadius: R.pill, backgroundColor: "#E4F8EC",
+        <TouchableOpacity
+          onPress={() => canWhatsApp
+            ? Linking.openURL(`https://wa.me/${phone}`)
+            : Alert.alert("Numéro indisponible",
+                "Cette commande a été enregistrée avant la résolution des identifiants WhatsApp. Réponds au client depuis la conversation.")}
+          style={{ width: compact ? 46 : 52, height: h, borderRadius: R.pill,
+            backgroundColor: canWhatsApp ? "#E4F8EC" : "#F1F1F1",
             alignItems: "center", justifyContent: "center" }}>
-          <Ionicons name="logo-whatsapp" size={17} color="#25D366" />
+          <Ionicons name="logo-whatsapp" size={17} color={canWhatsApp ? "#25D366" : C.sub} />
         </TouchableOpacity>
       ) : null}
 

@@ -54,6 +54,11 @@ function tileOf(lat: number, lng: number) {
   return { tx: Math.floor(x), ty: Math.floor(y), fx: x - Math.floor(x), fy: y - Math.floor(y) };
 }
 
+// WhatsApp adresse parfois les contacts par LID : un identifiant interne, pas
+// un numéro. Les LID observés font 15 chiffres ou plus ; aucun numéro mobile
+// réel n'atteint cette longueur. Un lien wa.me construit dessus est mort.
+const isRealPhone = (p: string) => /^\d{8,14}$/.test(p);
+
 function money(n: number, cur?: string) {
   return `${Number(n || 0).toLocaleString("fr-FR")} ${cur || "XAF"}`;
 }
@@ -180,7 +185,7 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
     ? o.items
     : (() => { try { return JSON.parse(String(o.items || "[]")); } catch { return []; } })();
 
-  const phone = String(o.contact_phone || "").replace(/@c\.us$/, "");
+  const phone = String(o.contact_phone || "").replace(/@(c\.us|lid|s\.whatsapp\.net)$/, "");
   const hasGeo = o.lat != null && o.lng != null;
   const lieu = o.place_label || o.address || (hasGeo ? `${Number(o.lat).toFixed(5)}, ${Number(o.lng).toFixed(5)}` : "");
 
@@ -241,12 +246,19 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-            {phone && (
+            {phone && isRealPhone(phone) && (
               <a href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer"
                 style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700,
                   background: "#E4F8EC", color: "#0e6b45", textDecoration: "none" }}>
                 Répondre sur WhatsApp
               </a>
+            )}
+            {phone && !isRealPhone(phone) && (
+              <span title="Commande enregistrée avant la résolution des identifiants WhatsApp"
+                style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 600,
+                  background: "#F1F1F1", color: "var(--cl-sub)" }}>
+                Numéro indisponible
+              </span>
             )}
             {(!o.status || o.status === "nouvelle") && (
               <button onClick={() => onChange(o, "en_traitement")}
