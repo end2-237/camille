@@ -123,10 +123,24 @@ export default function DocsPage() {
       "tags": []
     }
   ],
+  "merchant": {
+    "name": "YoosFood",
+    "whatsapp": "237691175480",
+    "location": "Douala, Bonamoussadi",
+    "website": "https://yoosfood.com",
+    "sector": "restauration"
+  },
   "total": 42,
   "limit": 24,
   "offset": 0
 }`}</Pre>
+
+        <Callout>
+          <strong style={{ color: T.ink }}>Sers-toi de <Code>merchant</Code> plutôt que de recopier.</strong>{" "}
+          Le numéro WhatsApp, le nom commercial et la ville viennent de l&apos;agent. Un site
+          qui les code en dur affiche de fausses coordonnées le jour où le marchand en
+          change — et personne ne s&apos;en aperçoit avant qu&apos;un client se plaigne.
+        </Callout>
       </Section>
 
       {/* ── Commandes ── */}
@@ -157,7 +171,7 @@ export default function DocsPage() {
           head={["Champ", "Requis", "Rôle"]}
           rows={[
             ["items[]", "oui", "id + qty, ou name + price + qty"],
-            ["customer.phone", "oui", "Sans + ni espaces. C'est là que part l'accusé WhatsApp"],
+            ["customer.phone", "oui", "Chiffres seuls, INDICATIF PAYS COMPRIS : 237699887766"],
             ["customer.name", "non", "Apparaît sur le bon de commande"],
             ["delivery.address", "non", "Sert aussi à trouver le tarif du quartier"],
             ["delivery.lat / lng", "non", "Position exacte — active l'itinéraire vendeur"],
@@ -181,6 +195,16 @@ export default function DocsPage() {
   "whatsapp_notified": true
 }`}</Pre>
 
+        <Callout tone="warn">
+          <strong style={{ color: T.ink }}>Deux refus fréquents, et ce qu&apos;ils veulent dire.</strong>{" "}
+          <Code>customer.phone</Code> sans indicatif pays crée une commande dont la
+          confirmation n&apos;arrivera jamais : envoie <Code>237699887766</Code>, pas
+          <Code>699887766</Code>. Et un <Code>id</Code> produit n&apos;est valable que dans le
+          catalogue de <B>sa</B> clé : si tu changes de clé, les identifiants de l&apos;ancien
+          agent renvoient <Code>Produit introuvable dans ce catalogue</Code>. Pense aux
+          paniers déjà enregistrés chez tes visiteurs.
+        </Callout>
+
         <Callout tone="ok">
           <strong style={{ color: T.ink }}>Ce qui se passe ensuite, sans rien coder de plus.</strong>{" "}
           Le client reçoit son accusé sur WhatsApp. Le commerçant reçoit une alerte et une
@@ -203,7 +227,10 @@ export default function DocsPage() {
         <Table
           head={["Code", "Signification", "Que faire"]}
           rows={[
-            ["401", "Clé absente, invalide, révoquée, ou agent inactif", "Vérifie l'en-tête et que l'agent est actif"],
+            ["401 « Clé manquante »", "En-tête absent", "Ajoute X-Camille-Key"],
+            ["401 « Clé inconnue »", "Aucune clé ne correspond", "Recopie-la entièrement, sans espace ni retour à la ligne"],
+            ["401 « Clé révoquée »", "La clé a été désactivée", "Génère-en une nouvelle dans Intégrations"],
+            ["403 « Agent inactif »", "L'agent est en pause ou archivé", "Réactive l'agent — la clé, elle, est bonne"],
             ["403 (clé)", "Clé publique utilisée pour créer une commande", "Utilise la clé cam_sk_ côté serveur"],
             ["403 (domaine)", "Origine non déclarée", "Ajoute le domaine dans Intégrations"],
             ["400", "Requête incomplète", "Le message dit précisément quel champ manque"],
@@ -273,6 +300,40 @@ app.post("/api/commander", async (req, res) => {
   });
   res.status(r.status).json(await r.json());
 });`}</Pre>
+      </Section>
+
+      {/* ── Changer d'agent / faire tourner les clés ── */}
+      <Section n="8" title="Changer d'agent, remplacer une clé">
+        <p style={p}>
+          C&apos;est la clé qui désigne l&apos;agent — jamais une configuration du site.
+          Pour qu&apos;un site serve un autre compte, il suffit donc de changer la valeur de
+          <Code>CAMILLE_SECRET_KEY</Code> chez ton hébergeur. Catalogue, commandes, numéro
+          WhatsApp, nom commercial : tout suit la nouvelle clé sans toucher au code.
+        </p>
+
+        <Table
+          head={["Étape", "Où", "Pourquoi"]}
+          rows={[
+            ["Générer la clé du nouvel agent", "Dashboard → Intégrations", "Elle n'est affichée qu'une fois"],
+            ["Remplacer CAMILLE_SECRET_KEY", "Variables d'environnement", "Et la clé publique si tu en utilises une"],
+            ["Redéployer", "Ton hébergeur", "Une variable changée ne prend effet qu'au déploiement suivant"],
+            ["Révoquer l'ancienne clé", "Dashboard → Intégrations", "Tant qu'elle vit, elle commande encore"],
+          ]}
+        />
+
+        <Callout tone="warn">
+          <strong style={{ color: T.ink }}>Les paniers en cours pointent vers l&apos;ancien catalogue.</strong>{" "}
+          Un visiteur qui avait rempli son panier avant la bascule garde des identifiants
+          produit du compte précédent : sa commande sera refusée avec
+          <Code>Produit introuvable dans ce catalogue</Code>. Prévois de purger les lignes
+          dont l&apos;<Code>id</Code> a disparu du catalogue au chargement de la page — c&apos;est
+          quelques lignes, et ça évite un client bloqué sans comprendre.
+        </Callout>
+
+        <p style={{ ...p, marginTop: 18 }}>
+          Même procédure pour une clé compromise : générer, remplacer, redéployer, révoquer.
+          Dans cet ordre — révoquer d&apos;abord couperait le site entre les deux.
+        </p>
       </Section>
 
       <footer style={{ marginTop: 46, paddingTop: 22, borderTop: `1px solid ${T.line}`, fontSize: 13, color: T.faint }}>
@@ -413,11 +474,12 @@ function Table({ head, rows }: { head: string[]; rows: string[][] }) {
   );
 }
 
-function Callout({ children, tone }: { children: React.ReactNode; tone?: "ok" }) {
+function Callout({ children, tone }: { children: React.ReactNode; tone?: "ok" | "warn" }) {
+  const accent = tone === "ok" ? "#0e9d63" : tone === "warn" ? "#c2410c" : T.gold;
   return (
     <div style={{ marginTop: 22, padding: 16, borderRadius: 12, fontSize: 14, lineHeight: 1.6,
       color: T.soft, background: T.sub,
-      borderLeft: `3px solid ${tone === "ok" ? "#0e9d63" : T.gold}` }}>
+      borderLeft: `3px solid ${accent}` }}>
       {children}
     </div>
   );
