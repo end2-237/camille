@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Updates from "expo-updates";
 import { C, R, S } from "../theme";
-import { logout, pushDiagnostic, pushTest } from "../api";
+import { logout, pushDiagnostic, pushTest, deleteAccount } from "../api";
 import { BottomDrawer } from "../components/Drawer";
 import Plans from "./Plans";
 
@@ -43,6 +43,11 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
   const [checking, setChecking] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [delPwd, setDelPwd] = useState("");
+  const [delConfirm, setDelConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [delError, setDelError] = useState("");
   const name = user?.full_name || user?.email || "Utilisateur";
   const initials = (name.split(/[\s@.]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join("") || "U").toUpperCase();
 
@@ -52,6 +57,33 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
     setUser(null);
     await onAuthChange();
     setBusy(false);
+  }
+
+  // Suppression du compte. On demande le mot de passe ET un mot à recopier :
+  // c'est irréversible, et un téléphone déverrouillé ne doit pas suffire.
+  async function doDelete() {
+    setDelError("");
+    if (!delPwd) { setDelError("Entre ton mot de passe."); return; }
+    if (delConfirm.trim().toUpperCase() !== "SUPPRIMER") {
+      setDelError("Écris SUPPRIMER en toutes lettres pour confirmer.");
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteAccount(delPwd, delConfirm);
+      setShowDelete(false);
+      Alert.alert(
+        "Compte supprimé",
+        "Tes agents, ton catalogue et tes commandes ont été effacés.\n\n" +
+        "Les messages déjà envoyés restent dans les conversations WhatsApp de tes clients."
+      );
+      setUser(null);
+      await onAuthChange();
+    } catch (e) {
+      setDelError(e?.message || "Suppression impossible.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   // Diagnostic complet : dit précisément dans quel état se trouve l'OTA.
@@ -174,6 +206,10 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
           <NavRow icon="cloud-download-outline" label="Rechercher une mise à jour" onPress={checkUpdate} right={checking ? <ActivityIndicator size="small" color={C.sub} /> : null} />
           <Divider />
           <NavRow icon="notifications-outline" label="Tester les notifications" onPress={checkPush} right={pushing ? <ActivityIndicator size="small" color={C.sub} /> : null} />
+          <Divider />
+          <NavRow icon="document-text-outline" label="Confidentialité" onPress={() => Linking.openURL("https://camille.vps.buyticle.com/privacy")} />
+          <Divider />
+          <NavRow icon="trash-outline" label="Supprimer mon compte" onPress={() => { setDelPwd(""); setDelConfirm(""); setDelError(""); setShowDelete(true); }} />
         </View>
 
         <TouchableOpacity onPress={doLogout} disabled={busy}
@@ -196,6 +232,60 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
 
       <BottomDrawer visible={showPlans} onClose={() => setShowPlans(false)}>
         {({ close }) => <Plans user={user} agents={agents} onClose={close} />}
+      </BottomDrawer>
+
+      <BottomDrawer visible={showDelete} onClose={() => setShowDelete(false)}>
+        {({ close }) => (
+          <View style={{ padding: S.md }}>
+            <Text style={{ fontSize: 20, fontWeight: "800", color: C.ink, marginBottom: 6 }}>
+              Supprimer mon compte
+            </Text>
+            <Text style={{ color: C.sub, fontSize: 13, lineHeight: 19, marginBottom: 14 }}>
+              Tes agents, ton catalogue, tes commandes et tes conversations seront
+              effacés définitivement. Cette action est irréversible.
+              {"\n\n"}
+              Les messages déjà envoyés restent dans les conversations WhatsApp de
+              tes clients : ils ne nous appartiennent plus.
+            </Text>
+
+            <TextInput
+              value={delPwd}
+              onChangeText={setDelPwd}
+              placeholder="Ton mot de passe"
+              placeholderTextColor={C.sub}
+              secureTextEntry
+              style={{ height: 48, borderRadius: R.md, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, color: C.ink, marginBottom: 10 }}
+            />
+            <TextInput
+              value={delConfirm}
+              onChangeText={setDelConfirm}
+              placeholder="Écris SUPPRIMER"
+              placeholderTextColor={C.sub}
+              autoCapitalize="characters"
+              style={{ height: 48, borderRadius: R.md, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, color: C.ink, marginBottom: 10 }}
+            />
+
+            {delError ? (
+              <Text style={{ color: C.red, fontSize: 13, marginBottom: 10 }}>{delError}</Text>
+            ) : null}
+
+            <TouchableOpacity
+              onPress={doDelete}
+              disabled={deleting}
+              style={{ height: 52, borderRadius: R.pill, backgroundColor: C.red, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 }}>
+              {deleting ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Ionicons name="trash-outline" size={18} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Supprimer définitivement</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={close} style={{ height: 48, alignItems: "center", justifyContent: "center", marginTop: 8 }}>
+              <Text style={{ color: C.sub, fontWeight: "600", fontSize: 14 }}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </BottomDrawer>
     </>
   );

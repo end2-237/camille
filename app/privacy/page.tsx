@@ -48,12 +48,14 @@ function Ul({ items }: { items: string[] }) {
 const TOC = [
   { id: "qui-sommes-nous",       label: "Qui sommes-nous ?" },
   { id: "donnees-collectees",    label: "Données collectées" },
+  { id: "application-mobile",    label: "Application mobile Android" },
   { id: "google-api",            label: "Utilisation des données Google" },
   { id: "finalites",             label: "Finalités du traitement" },
   { id: "partage",               label: "Partage des données" },
   { id: "conservation",          label: "Durée de conservation" },
   { id: "securite",              label: "Sécurité" },
   { id: "droits",                label: "Vos droits" },
+  { id: "suppression",           label: "Supprimer son compte" },
   { id: "cookies",               label: "Cookies" },
   { id: "modifications",         label: "Modifications" },
   { id: "contact",               label: "Contact" },
@@ -139,7 +141,13 @@ export default function PrivacyPage() {
                 automatisées.
               </P>
               <P>
-                <strong style={{ color: "var(--text-primary)" }}>Responsable du traitement :</strong> Buyticle
+                <strong style={{ color: "var(--text-primary)" }}>Responsable du traitement :</strong> BUYTICLE ETS
+                <br />
+                <strong style={{ color: "var(--text-primary)" }}>N° RCCM :</strong> CM-DLA-01-2025-A10-01482
+                <br />
+                <strong style={{ color: "var(--text-primary)" }}>Siège :</strong> Bonamoussadi, Douala — Cameroun
+                <br />
+                <strong style={{ color: "var(--text-primary)" }}>Téléphone :</strong> (+237) 696 99 58 79
                 <br />
                 <strong style={{ color: "var(--text-primary)" }}>Site web :</strong>{" "}
                 <a href="https://camille.vps.buyticle.com" style={{ color: "var(--color-gold)" }}>
@@ -196,6 +204,41 @@ export default function PrivacyPage() {
             </Section>
 
             {/* 3 — Google API — section clé pour la vérification Google */}
+            {/* Application mobile — ce que collecte l'app Android */}
+            <Section id="application-mobile" title="3. Application mobile Android">
+              <P>
+                L&apos;application Camille pour Android, destinée aux commerçants,
+                traite deux catégories de données que le site web ne traite pas.
+                Elles sont détaillées ici parce qu&apos;elles apparaissent dans la
+                section « Sécurité des données » de Google Play.
+              </P>
+              <P>
+                <strong style={{ color: "var(--text-primary)" }}>Notifications push.</strong>{" "}
+                Si vous les autorisez, l&apos;application enregistre un jeton
+                d&apos;appareil fourni par Firebase Cloud Messaging (Google). Ce jeton
+                identifie votre appareil, pas votre personne, et sert uniquement à
+                vous prévenir d&apos;une nouvelle commande ou d&apos;un événement sur vos
+                agents. Il est supprimé à la déconnexion, au refus de
+                l&apos;autorisation, et à la suppression du compte. Refuser les
+                notifications n&apos;empêche aucune autre fonction de l&apos;application.
+              </P>
+              <P>
+                <strong style={{ color: "var(--text-primary)" }}>Localisation des commandes.</strong>{" "}
+                Lorsqu&apos;un de vos clients partage sa position dans WhatsApp pour
+                être livré, ces coordonnées sont enregistrées avec la commande et
+                affichées dans l&apos;application, avec un itinéraire pour le livreur.
+                Il s&apos;agit de la position du <em>client</em>, transmise volontairement
+                par lui dans sa conversation. L&apos;application ne demande ni n&apos;utilise
+                la localisation de votre propre appareil, et ne la suit jamais en
+                arrière-plan.
+              </P>
+              <P>
+                Les fonds de carte et le calcul d&apos;itinéraire sont fournis par des
+                services cartographiques ouverts (OpenStreetMap, CARTO, OSRM),
+                interrogés sans identifiant de compte.
+              </P>
+            </Section>
+
             <Section id="google-api" title="3. Utilisation des données Google (Google API Services)">
               <div className="rounded-xl p-5 space-y-4"
                 style={{ background: "rgba(66,133,244,0.05)", border: "1px solid rgba(66,133,244,0.2)" }}>
@@ -397,6 +440,33 @@ export default function PrivacyPage() {
                 "Infrastructure hébergée sur un VPS privé en Europe, sans accès public à la base de données.",
                 "Accès administrateur restreint par liste blanche d'adresses IP.",
               ]} />
+            </Section>
+
+            {/* Suppression du compte — exigence Google Play */}
+            <Section id="suppression" title="Supprimer son compte et ses données">
+              <P>
+                Vous pouvez effacer votre compte et l&apos;ensemble des données
+                associées à tout moment, vous-même, sans passer par notre support.
+                Dans l&apos;application&nbsp;: <strong style={{ color: "var(--text-primary)" }}>Profil → Supprimer mon compte</strong>.
+                La marche à suivre complète, ainsi que le recours pour qui n&apos;a plus
+                accès à l&apos;application, sont détaillés sur la page{" "}
+                <Link href="/supprimer-compte" style={{ color: "var(--color-gold)" }}>
+                  Supprimer mon compte
+                </Link>.
+              </P>
+              <P>
+                Sont effacés définitivement&nbsp;: le compte, les agents, les
+                catalogues, les commandes, les conversations, les clés d&apos;API et les
+                jetons de notification. La suppression est immédiate et
+                irréversible.
+              </P>
+              <P>
+                Deux choses subsistent, et nous préférons le dire clairement&nbsp;:
+                les messages déjà envoyés restent dans les conversations WhatsApp de
+                vos clients, sur leur téléphone, hors de notre portée ; et les
+                pièces comptables liées à un paiement sont conservées le temps
+                imposé par la loi commerciale, puis détruites.
+              </P>
             </Section>
 
             {/* 8 — Droits */}

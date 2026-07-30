@@ -69,6 +69,17 @@ export const setCatalogSource = (agentId, source) =>
 export const patchAgent = (id, body) =>
   req(`/api/agents/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
+/**
+ * Suppression définitive du compte. Exigée par Google Play pour toute app
+ * permettant d'en créer un : l'utilisateur doit pouvoir tout effacer sans
+ * passer par le support.
+ */
+export const deleteAccount = (password, confirm) =>
+  req("/api/account/delete", {
+    method: "POST",
+    body: JSON.stringify({ password, confirm }),
+  });
+
 export async function logout() {
   try { await req("/api/auth/logout", { method: "POST" }); } catch {}
   await setToken(null);
