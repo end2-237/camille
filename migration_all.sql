@@ -5,6 +5,7 @@
 -- Entierement rejouable : aucune donnee existante n'est touchee.
 --
 -- Contenu :
+--   0. Source du catalogue          (bascule catalogue natif / OFS)
 --   1. Geolocalisation des agents   (itineraire vendeur)
 --   2. Commandes + suivi + document (bon de commande, livraison)
 --   3. Notifications push           (jetons + journal in-app)
@@ -12,6 +13,15 @@
 --   5. Traces de conversation       (analyse de friction, interne)
 -- ═════════════════════════════════════════════════════════════════════════════
 
+
+-- ═════════════════════ migration_agent_catalog_source.sql ═════════════════════
+
+-- Source du catalogue par agent (pour le mode LIVE marketplace, multi-tenant).
+-- catalog_source : 'camille' (défaut, catalogue local) | 'ofs_cj' (plateforme CJ live)
+--                  | 'ofs_shop' (boutique du marchand, live)
+-- ofs_vendor_id  : id de la boutique OFS quand catalog_source = 'ofs_shop'
+ALTER TABLE camille.agents ADD COLUMN IF NOT EXISTS catalog_source text NOT NULL DEFAULT 'camille';
+ALTER TABLE camille.agents ADD COLUMN IF NOT EXISTS ofs_vendor_id  text;
 
 -- ═════════════════════ migration_agent_geo.sql ═════════════════════
 

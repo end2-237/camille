@@ -56,6 +56,7 @@ export default function AgentSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [regen, setRegen] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // La carte du menu est propre à la restauration.
   const isResto = /resto|restaurant|food|cuisine|snack|fast|pizz|traiteur|patisser|boulanger|glacier/i
@@ -89,6 +90,27 @@ export default function AgentSettingsPage() {
   }, [agentId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // On reutilise la route d'upload des images produit : meme stockage, meme
+  // controle de taille et de format. Pas de second chemin a maintenir.
+  async function uploadMenu(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`/api/agents/${agentId}/products/upload`, {
+        method: "POST",
+        headers: { ...authHeaders() },
+        body: fd,
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.url) throw new Error(d.error || "Envoi impossible");
+      setCfg((p) => (p ? { ...p, menu_image_url: d.url } : p));
+      toast.success("Carte envoyée — pense à enregistrer");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setUploading(false); }
+  }
 
   async function save() {
     if (!cfg) return;
@@ -271,8 +293,22 @@ export default function AgentSettingsPage() {
       {/* Carte du menu — restauration uniquement */}
       {isResto && (
         <Section title="Carte du menu" icon={MapPin}>
-          <label className="mb-1 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
-            Image de la carte (URL)
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="btn-ghost cursor-pointer">
+              {uploading ? "Envoi…" : cfg.menu_image_url ? "Remplacer l'image" : "Choisir une image"}
+              <input type="file" accept="image/*" className="hidden" disabled={uploading}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadMenu(f); e.target.value = ""; }} />
+            </label>
+            {cfg.menu_image_url && (
+              <button type="button" className="text-[12px] underline"
+                style={{ color: "var(--text-disabled)" }}
+                onClick={() => setCfg({ ...cfg, menu_image_url: "" })}>
+                Retirer
+              </button>
+            )}
+          </div>
+          <label className="mb-1 mt-3 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+            …ou coller une URL
           </label>
           <input className="input-midnight" value={cfg.menu_image_url ?? ""}
             onChange={(e) => setCfg({ ...cfg, menu_image_url: e.target.value })}

@@ -113,6 +113,25 @@ export const setOrderStatus = (orderId, status) =>
 // Trajet boutique -> client (distance, duree, trace)
 export const getItinerary = (orderId) => req(`/api/orders/${orderId}/itinerary`);
 
+// ── Upload d'image (carte du menu, photos produit) ──────────────────────────
+// multipart : on ne passe PAS par req() qui force application/json.
+export async function uploadImage(agentId, uri, name = "carte.jpg") {
+  const fd = new FormData();
+  const ext = (uri.split(".").pop() || "jpg").toLowerCase().replace("jpeg", "jpg");
+  fd.append("file", { uri, name: `${name}`, type: `image/${ext === "png" ? "png" : "jpeg"}` });
+
+  const res = await fetch(`${BASE}/api/agents/${agentId}/products/upload`, {
+    method: "POST",
+    headers: TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {},
+    body: fd,
+  });
+  const text = await res.text();
+  let d = {};
+  try { d = text ? JSON.parse(text) : {}; } catch { d = { raw: text }; }
+  if (!res.ok || !d.url) throw new Error(d.error || `Envoi impossible (${res.status})`);
+  return d.url;
+}
+
 // ── Notifications push ──────────────────────────────────────────────────────
 export const registerPushToken = (token, platform) =>
   req(`/api/push/register`, { method: "POST", body: JSON.stringify({ token, platform }) });

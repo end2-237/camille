@@ -3,7 +3,8 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking, A
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import Avatar from "../components/Avatar";
-import { getAgent, patchAgent, setCatalogSource } from "../api";
+import { getAgent, patchAgent, setCatalogSource, uploadImage } from "../api";
+import * as ImagePicker from "expo-image-picker";
 import AgentEdit from "./AgentEdit";
 import AgentCapabilities from "./AgentCapabilities";
 import Catalogue from "./Catalogue";
@@ -73,6 +74,30 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
       setFull((p) => ({ ...(p || {}), conversion_mode: mode }));
     } catch (e) { Alert.alert("Mode de conversion", e.message); }
     finally { setCatBusy(false); }
+  }
+
+  // Upload de la carte depuis la galerie du telephone.
+  async function pickMenu() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Autorisation refusée", "Camille a besoin d'accéder à tes photos pour envoyer la carte.");
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (res.canceled || !res.assets?.[0]?.uri) return;
+
+      setCatBusy(true);
+      const url = await uploadImage(agent.agent_id, res.assets[0].uri, "carte-menu.jpg");
+      await patchAgent(agent.agent_id, { menu_image_url: url });
+      setFull((p) => ({ ...(p || {}), menu_image_url: url }));
+      Alert.alert("Carte enregistrée", "Elle sera envoyée au client quand il demandera le menu 📋");
+    } catch (e) {
+      Alert.alert("Carte du menu", e.message || "Envoi impossible");
+    } finally { setCatBusy(false); }
   }
 
   const bigCatalog = full?.catalog_source === "ofs_cj" || full?.catalog_source === "ofs_shop";
@@ -254,7 +279,7 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
               </View>
             )}
             <Action icon="image-outline" label={full?.menu_image_url ? "Remplacer la carte" : "Ajouter la carte"}
-              onPress={() => Linking.openURL(`${WEB}/dashboard/${agent.agent_id}/settings`)} />
+              onPress={pickMenu} />
           </Section>
         )}
 

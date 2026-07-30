@@ -29,7 +29,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   // Retour au catalogue local : pas besoin d'OFS.
   if (source === "camille") {
-    await setSource(agentId, "camille", null);
+    const err = await setSource(agentId, "camille", null);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
     return NextResponse.json({ success: true, source: "camille" });
   }
 
@@ -40,7 +41,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   // automatique avant, désormais explicitement activable/désactivable.
   const OFS_LIVE_AGENT = process.env.OFS_LIVE_AGENT_ID || "";
   if (source === "ofs_cj" && OFS_LIVE_AGENT && OFS_LIVE_AGENT === agentId && !body.email) {
-    await setSource(agentId, "ofs_cj", null);
+    const err = await setSource(agentId, "ofs_cj", null);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
     return NextResponse.json({ success: true, source: "ofs_cj" });
   }
 
@@ -56,20 +58,31 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   if (source === "ofs_cj") {
     if (!conn.isSuperAdmin) return NextResponse.json({ error: "Le catalogue plateforme (CJ) est réservé aux super-admins." }, { status: 403 });
-    await setSource(agentId, "ofs_cj", null);
+    const err2 = await setSource(agentId, "ofs_cj", null);
+    if (err2) return NextResponse.json({ error: err2 }, { status: 400 });
     return NextResponse.json({ success: true, source: "ofs_cj" });
   }
 
   // ofs_shop
   if (!conn.vendor) return NextResponse.json({ error: "Aucune boutique OFS liée à ce compte. Crée d'abord ta boutique sur OFS." }, { status: 400 });
-  await setSource(agentId, "ofs_shop", String(conn.vendor.id));
+  const err3 = await setSource(agentId, "ofs_shop", String(conn.vendor.id));
+  if (err3) return NextResponse.json({ error: err3 }, { status: 400 });
   return NextResponse.json({ success: true, source: "ofs_shop", vendor: { id: conn.vendor.id, shop_name: conn.vendor.shop_name } });
 }
 
-async function setSource(agentId: string, source: string, vendorId: string | null) {
+/**
+ * @returns null si tout va bien, sinon le message a renvoyer au client.
+ * On ne LEVE plus : l'appelant renvoyait un 500 opaque, illisible depuis l'app.
+ */
+async function setSource(agentId: string, source: string, vendorId: string | null): Promise<string | null> {
   try {
     await query("UPDATE camille.agents SET catalog_source = $1, ofs_vendor_id = $2 WHERE id = $3", [source, vendorId, agentId]);
-  } catch {
-    throw new Error("Colonnes catalog_source/ofs_vendor_id absentes — applique migration_agent_catalog_source.sql");
+    return null;
+  } catch (e) {
+    // 42703 = colonne absente : la migration n'est pas passee.
+    if ((e as { code?: string }).code === "42703") {
+      return "Colonnes catalog_source / ofs_vendor_id absentes — applique migration_agent_catalog_source.sql (incluse dans migration_all.sql).";
+    }
+    return `Base de donnees : ${(e as Error).message}`;
   }
 }
