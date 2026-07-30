@@ -8,43 +8,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
-import { notifyUser } from "@/lib/fcm";
+import { createOrder } from "@/lib/orders";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-function makeRef() {
-  // Référence courte, lisible au téléphone (sans I/O/0/1 pour éviter les confusions)
-  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let s = "";
-  for (let i = 0; i < 6; i++) s += A[Math.floor(Math.random() * A.length)];
-  return s;
-}
-
-function money(n: number, cur: string) {
-  return `${Number(n || 0).toLocaleString("fr-FR")} ${cur || "XAF"}`;
-}
-
-// Géocodage inverse via Nominatim (OpenStreetMap) : public, sans clé d'API.
-// Best-effort — une commande ne doit jamais échouer parce que le service est lent.
-async function reverseGeocode(lat: number, lng: number): Promise<string> {
-  try {
-    const url =
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
-      `&lat=${lat}&lon=${lng}&zoom=18&accept-language=fr`;
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 3000);
-    const r = await fetch(url, {
-      signal: ctl.signal,
-      headers: { "User-Agent": "Camille/1.0 (contact: support@camille.local)" },
-    });
-    clearTimeout(t);
-    if (!r.ok) return "";
-    const j = await r.json();
-    return String(j?.display_name || "").slice(0, 200);
-  } catch {
-    return "";
-  }
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,112 +26,33 @@ export async function POST(req: NextRequest) {
     }
     if (!agentId) return NextResponse.json({ ok: false, error: "agent introuvable" });
 
-    const items: any[] = Array.isArray(b.items) ? b.items : [];
-    if (!items.length) return NextResponse.json({ ok: false, error: "panier vide" });
+    // Chemin PARTAGE avec l'API publique : une commande venue du site et une
+    // commande venue de WhatsApp doivent etre rigoureusement identiques.
+    const created = await createOrder({
+      agentId,
+      items: Array.isArray(b.items) ? b.items : [],
+      session: b.session ?? null,
+      phone: b.phone ?? null,
+      customerName: b.customerName,
+      address: b.customerAddress,
+      lat: b.lat,
+      lng: b.lng,
+      note: b.note,
+      deliveryFee: b.deliveryFee,
+      source: "whatsapp",
+    });
 
-    const currency = items.find((i) => i.currency)?.currency || "XAF";
-    const subtotal = items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 1), 0);
-    // Les frais sont figes sur la commande : changer le bareme plus tard ne
-    // doit pas reecrire l'historique.
-    const deliveryFee = Math.max(0, Number(b.deliveryFee) || 0);
-    const total = subtotal + deliveryFee;
+    if (!created.ok) return NextResponse.json({ ok: false, error: created.error });
 
-    // Référence unique (quelques tentatives en cas de collision improbable)
-    let ref = makeRef();
-    for (let k = 0; k < 5; k++) {
-      const exists = await query("SELECT 1 FROM camille.orders WHERE ref = $1", [ref]);
-      if (!exists.rows.length) break;
-      ref = makeRef();
-    }
-
-    // Note libre : en restauration, le mode de service (sur place / à emporter / livraison)
-    const note = String(b.note ?? "").slice(0, 120);
-
-    // Coordonnées de livraison
-    const customerName = String(b.customerName ?? "").slice(0, 60);
-    const address = String(b.customerAddress ?? "").slice(0, 200);
-    // Attention : Number(null) === 0 et 0 est "finite". Sans ce filtre, une position
-    // absente était enregistrée comme 0,0 (au large du golfe de Guinée).
-    const coord = (v: unknown, max: number): number | null => {
-      if (v === null || v === undefined || v === "") return null;
-      const n = Number(v);
-      if (!Number.isFinite(n) || n === 0 || Math.abs(n) > max) return null;
-      return n;
-    };
-    const lat = coord(b.lat, 90);
-    const lng = coord(b.lng, 180);
-    const placeLabel = lat != null && lng != null ? await reverseGeocode(lat, lng) : "";
-
-    const ins = await query(
-      `INSERT INTO camille.orders
-         (ref, agent_id, session_name, contact_phone, items, total, currency, note,
-          customer_name, address, lat, lng, place_label, delivery_fee)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-       RETURNING id`,
-      [ref, agentId, b.session ?? null, b.phone ?? null, JSON.stringify(items), total, currency,
-       note || null, customerName || null, address || null, lat, lng, placeLabel || null, deliveryFee]
-    );
-
-    const orderId = ins.rows[0]?.id ?? null;
-
-    // Coordonnées de la boutique (pour le message au commerçant)
-    const ag = await query(
-      "SELECT name, business_name, whatsapp_number, location, user_id FROM camille.agents WHERE id = $1",
-      [agentId]
-    );
-    const shop = ag.rows[0] ?? {};
-
-    const lignes = items
-      .map((i, k) => `${k + 1}. ${i.name}${i.variant ? ` — ${i.variant}` : ""}  ×${i.qty || 1}`)
-      .join("\n");
-
-    // Message destiné au CLIENT (accusé de réception)
-    const clientText =
-      `✅ Commande enregistrée — n° ${ref}\n\n${lignes}\n\n` +
-      (deliveryFee > 0 ? `Sous-total : ${money(subtotal, currency)}\nLivraison : ${money(deliveryFee, currency)}\n` : "") +
-      `Total : ${money(total, currency)}\n` +
-      `Statut : En traitement 🔄\n` +
-      (note ? `Mode : ${note}\n` : "") +
-      (placeLabel || address ? `Livraison : ${placeLabel || address}\n` : "") +
-      `\nOn te contacte tout de suite pour confirmer 📞`;
-
-    // Où livrer : la position partagée prime, sinon l'adresse tapée
-    const lieu =
-      lat != null && lng != null
-        ? `📍 ${placeLabel || `${lat.toFixed(5)}, ${lng.toFixed(5)}`}\n` +
-          `🗺️ https://www.google.com/maps?q=${lat},${lng}\n`
-        : address
-        ? `📍 ${address}\n`
-        : "";
-
-    // Message destiné au COMMERÇANT
-    const ownerText =
-      `🛎️ NOUVELLE COMMANDE — n° ${ref}\n\n${lignes}\n\n` +
-      (deliveryFee > 0 ? `Sous-total : ${money(subtotal, currency)}\nLivraison : ${money(deliveryFee, currency)}\n` : "") +
-      `Total : ${money(total, currency)}\n` +
-      (note ? `Service : ${note}\n` : "") +
-      (customerName ? `Client : ${customerName}\n` : "") +
-      `Tél : ${String(b.phone || "").replace(/@c\.us$/, "")}\n` +
-      lieu +
-      `\nRéponds à ce client pour confirmer.`;
-
-    // Numéro du commerçant au format WhatsApp (si renseigné)
-    const raw = String(shop.whatsapp_number || "").replace(/[^0-9]/g, "");
-    const ownerChatId = raw ? `${raw}@c.us` : null;
-
-    // Notification au commerçant. Volontairement après la création : une panne
-    // de push ne doit jamais faire échouer l'enregistrement d'une commande.
-    if (shop.user_id) {
-      const quoi = items.map((i) => `${i.qty || 1}× ${i.name}`).join(", ");
-      notifyUser(shop.user_id, "commande", {
-        title: `Nouvelle commande — ${money(total, currency)}`,
-        body: `${customerName ? `${customerName} · ` : ""}${quoi}`.slice(0, 160),
-        data: { type: "order", ref, orderId: String(orderId || ""), agentId: String(agentId) },
-        channel: "commandes",
-      }).catch(() => {});
-    }
-
-    return NextResponse.json({ ok: true, ref, total, currency, clientText, ownerText, ownerChatId });
+    return NextResponse.json({
+      ok: true,
+      ref: created.ref,
+      total: created.total,
+      currency: created.currency,
+      clientText: created.clientText,
+      ownerText: created.ownerText,
+      ownerChatId: created.ownerChatId,
+    });
   } catch (err) {
     console.error("[POST /api/orders]", (err as Error).message);
     return NextResponse.json({ ok: false, error: "erreur serveur" });

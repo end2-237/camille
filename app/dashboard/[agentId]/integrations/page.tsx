@@ -441,6 +441,158 @@ export default function IntegrationsPage() {
           </p>
         </div>
       )}
+
+      <ApiKeysSection agentId={agentId} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cles d'API : le site du marchand devient un consommateur de l'API Camille.
+// ─────────────────────────────────────────────────────────────────────────────
+function ApiKeysSection({ agentId }: { agentId: string }) {
+  const [keys, setKeys] = useState<any[]>([]);
+  const [err, setErr] = useState("");
+  const [fresh, setFresh] = useState<{ key: string; kind: string } | null>(null);
+  const [origins, setOrigins] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const load = useCallback(() => {
+    fetch(`/api/agents/${agentId}/api-keys`, { headers: { ...authHeaders() } })
+      .then((r) => r.json())
+      .then((d) => { setKeys(d.keys || []); setErr(d.error || ""); })
+      .catch((e) => setErr(e.message));
+  }, [agentId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function create(kind: "public" | "secret") {
+    setCreating(true);
+    try {
+      const r = await fetch(`/api/agents/${agentId}/api-keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          kind,
+          label: kind === "public" ? "Site web — lecture" : "Site web — commandes",
+          origins: origins.split(/[\s,]+/).map((o) => o.trim()).filter(Boolean),
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Création impossible");
+      setFresh({ key: d.key, kind });
+      load();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setCreating(false); }
+  }
+
+  async function revoke(id: string) {
+    await fetch(`/api/agents/${agentId}/api-keys`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ id }),
+    });
+    load();
+  }
+
+  const base = typeof window !== "undefined" ? window.location.origin : "";
+
+  return (
+    <div className="mt-6 rounded-xl p-4" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
+      <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>API — brancher le site du client</h2>
+      <p className="mt-1 text-[12.5px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>
+        Le site appelle Camille comme n&apos;importe quelle API. Le catalogue reste saisi
+        une seule fois, et les commandes du site arrivent au même endroit que celles
+        de WhatsApp — avec le même accusé de réception au client.
+      </p>
+
+      {err && (
+        <div className="mt-3 rounded-lg p-3 text-[12.5px]" style={{ background: "#FDECEC", color: "#c0392b" }}>{err}</div>
+      )}
+
+      {fresh && (
+        <div className="mt-3 rounded-lg p-3" style={{ background: "#FDF7E7", border: "1px solid #F3D5A5" }}>
+          <div className="text-[12.5px] font-semibold" style={{ color: "#8A5A00" }}>
+            Copie cette clé maintenant — elle ne sera plus jamais affichée.
+          </div>
+          <code className="mt-2 block break-all rounded p-2 text-[12px]" style={{ background: "#fff" }}>{fresh.key}</code>
+          {fresh.kind === "secret" && (
+            <div className="mt-2 text-[11.5px]" style={{ color: "#8A5A00" }}>
+              Clé secrète : à n&apos;utiliser que côté serveur. Jamais dans du code envoyé au navigateur.
+            </div>
+          )}
+          <button onClick={() => setFresh(null)} className="mt-2 text-[12px] underline" style={{ color: "var(--cl-ink-soft)" }}>
+            J&apos;ai copié
+          </button>
+        </div>
+      )}
+
+      <label className="mt-4 block text-[11.5px] font-medium" style={{ color: "var(--cl-ink-soft)" }}>
+        Domaines autorisés (un par ligne ou séparés par des virgules) — laisser vide pour tout autoriser
+      </label>
+      <textarea className="input-midnight mt-1" rows={2} value={origins}
+        onChange={(e) => setOrigins(e.target.value)}
+        placeholder="https://boutique-client.com" />
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={() => create("public")} disabled={creating}
+          className="rounded-lg px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-50" style={{ background: "#0e9d63" }}>
+          Clé de lecture (catalogue)
+        </button>
+        <button onClick={() => create("secret")} disabled={creating}
+          className="rounded-lg px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-50" style={{ background: "#101012" }}>
+          Clé secrète (commandes)
+        </button>
+      </div>
+
+      {keys.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {keys.map((k) => (
+            <div key={k.id} className="flex flex-wrap items-center gap-2 rounded-lg p-2.5"
+              style={{ background: "var(--cl-bg-soft)", opacity: k.revoked_at ? 0.5 : 1 }}>
+              <code className="text-[12px]" style={{ color: "var(--cl-ink)" }}>{k.key_prefix}…</code>
+              <span className="rounded px-2 py-0.5 text-[10.5px] font-semibold"
+                style={{ background: k.kind === "secret" ? "#101012" : "#E4F8EC", color: k.kind === "secret" ? "#fff" : "#0e6b45" }}>
+                {k.kind === "secret" ? "SECRÈTE" : "LECTURE"}
+              </span>
+              <span className="text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+                {k.label} · {k.calls_count} appel(s)
+              </span>
+              <div className="flex-1" />
+              {k.revoked_at
+                ? <span className="text-[11.5px]" style={{ color: "#c0392b" }}>révoquée</span>
+                : <button onClick={() => revoke(k.id)} className="text-[11.5px] underline" style={{ color: "#c0392b" }}>Révoquer</button>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <details className="mt-4">
+        <summary className="cursor-pointer text-[12.5px] font-semibold" style={{ color: "var(--cl-ink)" }}>
+          Exemples de code
+        </summary>
+        <pre className="mt-2 overflow-auto rounded-lg p-3 text-[11px] leading-relaxed"
+          style={{ background: "var(--cl-bg-soft)", color: "var(--cl-ink-soft)", whiteSpace: "pre-wrap" }}>
+{`// 1. Afficher le catalogue sur le site (cle de lecture, navigateur OK)
+const r = await fetch("${base}/api/public/v1/catalog?limit=24", {
+  headers: { "X-Camille-Key": "cam_pk_…" },
+});
+const { products } = await r.json();
+
+// 2. Envoyer le panier a Camille (cle SECRETE, cote serveur uniquement)
+await fetch("${base}/api/public/v1/orders", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "X-Camille-Key": "cam_sk_…" },
+  body: JSON.stringify({
+    items: [{ id: "<id produit Camille>", qty: 2 }],
+    customer: { name: "Eman Soga", phone: "237699887766" },
+    delivery: { address: "Bonaberi, face marche" },
+  }),
+});
+// -> le client recoit son accuse sur WhatsApp,
+//    la commande apparait dans l'app, le vendeur est notifie.`}
+        </pre>
+      </details>
     </div>
   );
 }
