@@ -32,6 +32,15 @@ const AGENT_COLS = `
   a.welcome_enabled,
   a.welcome_message,
   COALESCE(to_jsonb(a)->'media', '[]'::jsonb) AS media,
+  -- Réglages boutique lus par le workflow : la carte du menu et le barème de
+  -- livraison. Sans eux, l'image téléversée n'était jamais envoyée et les
+  -- frais retombaient sur la valeur par défaut, en silence.
+  -- to_jsonb plutôt que a.colonne : une base sans la migration renverrait NULL
+  -- au lieu de faire échouer toute la requête, donc tout l'agent.
+  to_jsonb(a)->>'menu_image_url' AS menu_image_url,
+  COALESCE((to_jsonb(a)->>'delivery_enabled')::boolean, true) AS delivery_enabled,
+  (to_jsonb(a)->>'delivery_fee')::numeric AS delivery_fee,
+  COALESCE(to_jsonb(a)->'delivery_zones', '[]'::jsonb) AS delivery_zones,
   (a.owner_password_hash IS NOT NULL) AS has_owner_password
 `;
 
