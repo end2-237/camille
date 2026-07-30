@@ -65,11 +65,15 @@ jobs:
             exit 0
           fi
 
-          # Un secret colle depuis Windows arrive avec des retours chariot, et
-          # « base64 -w0 » n est pas toujours utilise : on retire tout espace
-          # avant de decoder, plutot que d echouer sur « invalid input ».
+          # Le secret arrive rarement propre : retours chariot Windows, base64
+          # replie sur 76 colonnes, ou armure PEM quand il a ete produit par
+          # « certutil -encode ». On retire l armure, puis tout ce qui n est pas
+          # du base64, plutot que d echouer sur « invalid input ».
           KEYSTORE=android/app/camille-release.keystore
-          printf '%s' "$KS" | tr -d '[:space:]' | base64 -d > "$KEYSTORE" 2>/dev/null || true
+          printf '%s' "$KS" \
+            | sed -e '/-----BEGIN/d' -e '/-----END/d' \
+            | tr -cd 'A-Za-z0-9+/=' \
+            | base64 -d > "$KEYSTORE" 2>/dev/null || true
 
           # Un keystore commence par FEEDFEED (JKS) ou 30 (PKCS#12). Sans ce
           # controle, un secret invalide donne un fichier vide, et l echec
@@ -79,8 +83,12 @@ jobs:
             feedfeed*|30*) ;;
             *)
               echo "::error::ANDROID_KEYSTORE_BASE64 ne contient pas un keystore valide."
-              echo "Regenere le secret avec :  base64 -w0 camille-release.keystore"
-              echo "puis colle le resultat SANS retour a la ligne ni espace."
+              echo "Le contenu a ete decode mais ne commence ni par FEEDFEED (JKS)"
+              echo "ni par 30 (PKCS#12). Regenere le secret :"
+              echo "  Linux/macOS : base64 -w0 camille-release.keystore"
+              echo "  PowerShell  : [Convert]::ToBase64String([IO.File]::ReadAllBytes('camille-release.keystore'))"
+              echo "Verifie aussi que le secret contient bien le KEYSTORE encode,"
+              echo "et non son mot de passe ou le chemin du fichier."
               rm -f "$KEYSTORE"
               exit 1
               ;;
