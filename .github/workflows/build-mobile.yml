@@ -1,4 +1,4 @@
-name: Build Camille Mobile (APK)
+name: Build Camille Mobile (APK + AAB)
 
 on:
   workflow_dispatch: {}
@@ -64,7 +64,7 @@ jobs:
             echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "$KS" | base64 -d > mobile/android/app/camille-release.keystore
+          echo "$KS" | base64 -d > android/app/camille-release.keystore
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Gradle build (assembleRelease)
@@ -108,11 +108,11 @@ jobs:
         with:
           name: camille-aab
           path: mobile/android/app/build/outputs/bundle/release/*.aab
-          if-no-files-found: warn
+          if-no-files-found: error
       # La cle ne doit pas survivre au job, meme en cas d'echec plus loin.
       - name: Effacer la cle
         if: always()
-        run: rm -f mobile/android/app/camille-release.keystore
+        run: rm -f android/app/camille-release.keystore
 
       - name: Locate APK
         id: apk

@@ -189,8 +189,19 @@ immédiatement depuis la barre de navigation en bas.
 gh workflow run build-mobile.yml
 ```
 
-Secrets requis sur le dépôt : `CAMILLE_KEYSTORE_BASE64`,
-`CAMILLE_STORE_PASSWORD`, `CAMILLE_KEY_PASSWORD`.
+Secrets requis sur le dépôt (Settings → Secrets → Actions) :
+
+| Secret | Contenu |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | le keystore encodé : `base64 -w0 camille-release.keystore` |
+| `ANDROID_KEYSTORE_PASSWORD` | mot de passe du keystore |
+| `ANDROID_KEY_ALIAS` | alias de la clé (défaut `camille`) |
+| `ANDROID_KEY_PASSWORD` | mot de passe de la clé (défaut : celui du keystore) |
+
+Sans `ANDROID_KEYSTORE_BASE64`, le build ne s'arrête pas : il retombe sur la
+clé de debug et **ne produit aucun AAB**. C'est voulu — un fork ne doit pas
+casser — mais cela veut dire qu'un AAB absent signifie « secret manquant »,
+pas « build cassé ».
 
 Vérifications avant envoi :
 
