@@ -66,8 +66,31 @@ export async function GET(req: NextRequest) {
       return out;
     });
 
+    // Coordonnées du marchand : sans elles, le site du client doit coder en
+    // dur un numéro WhatsApp, qui devient faux dès que le marchand en change.
+    // C'est l'agent qui fait autorité, pas le site.
+    let merchant: Record<string, unknown> = {};
+    try {
+      const m = await query(
+        `SELECT business_name, whatsapp_number, location, website_url, sector
+           FROM camille.agents WHERE id = $1`,
+        [auth.key.agent_id]
+      );
+      const a = m.rows[0] || {};
+      merchant = {
+        name: a.business_name || null,
+        whatsapp: a.whatsapp_number || null,
+        location: a.location || null,
+        website: a.website_url || null,
+        sector: a.sector || null,
+      };
+    } catch {
+      // Le catalogue reste utile même si ce complément échoue.
+    }
+
     return json({
       products,
+      merchant,
       total: countRes.rows[0]?.n ?? r.rows.length,
       limit,
       offset,
