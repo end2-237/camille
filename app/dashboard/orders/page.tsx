@@ -70,6 +70,7 @@ export default function OrdersPage() {
   const [tab, setTab] = useState("nouvelle");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [diag, setDiag] = useState<{ ready: boolean; checks: { ok: boolean; label: string; detail?: string; fix?: string }[] } | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true); setErr("");
@@ -132,6 +133,17 @@ export default function OrdersPage() {
               border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-ink)" }}>
             {busy ? "…" : "Actualiser"}
           </button>
+          <button
+            onClick={() => {
+              setDiag(null);
+              fetch("/api/orders/doc-diagnostic", { headers: { ...authHeaders() } })
+                .then((r) => r.json()).then(setDiag)
+                .catch((e) => setDiag({ ready: false, checks: [{ ok: false, label: "Diagnostic", detail: e.message }] }));
+            }}
+            style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
+              border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-sub)" }}>
+            Vérifier le bon de commande
+          </button>
         </div>
       </div>
       <p style={{ fontSize: 13, color: "var(--cl-sub)", marginBottom: 20 }}>
@@ -142,6 +154,27 @@ export default function OrdersPage() {
       {err && (
         <div style={{ padding: 16, borderRadius: 12, background: "#FDECEC", color: "#c0392b", fontSize: 13.5, marginBottom: 18 }}>
           {err}
+        </div>
+      )}
+
+      {diag && (
+        <div style={{ padding: 16, borderRadius: 12, marginBottom: 18, fontSize: 13,
+          border: `1px solid ${diag.ready ? "#B7E4C7" : "#F3D5A5"}`,
+          background: diag.ready ? "#E4F8EC" : "#FDF7E7" }}>
+          <strong style={{ display: "block", marginBottom: 8 }}>
+            {diag.ready
+              ? "Tout est prêt — le bon de commande partira au client."
+              : "Configuration incomplète — voici ce qui manque :"}
+          </strong>
+          {diag.checks.map((c, i) => (
+            <div key={i} style={{ marginBottom: 4 }}>
+              {c.ok ? "✅" : "❌"} {c.label}
+              {c.detail && <span style={{ color: "var(--cl-sub)" }}> — {c.detail}</span>}
+              {!c.ok && c.fix && (
+                <div style={{ marginLeft: 20, color: "#8A5A00", fontSize: 12 }}>→ {c.fix}</div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
