@@ -85,6 +85,30 @@ jobs:
             ./gradlew assembleRelease --no-daemon
           fi
 
+
+      # Le Play Store n'accepte QUE des .aab. On produit les deux : l'APK pour
+      # l'installation directe et les tests, l'AAB pour la publication.
+      - name: Gradle bundle (AAB pour le Play Store)
+        if: steps.signing.outputs.signed == 'true'
+        working-directory: mobile/android
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew bundleRelease --no-daemon \
+            -PCAMILLE_STORE_FILE=camille-release.keystore \
+            -PCAMILLE_STORE_PASSWORD="$STORE_PASSWORD" \
+            -PCAMILLE_KEY_ALIAS="${KEY_ALIAS:-camille}" \
+            -PCAMILLE_KEY_PASSWORD="${KEY_PASSWORD:-$STORE_PASSWORD}"
+
+      - name: Upload AAB artifact
+        if: steps.signing.outputs.signed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: camille-aab
+          path: mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
       # La cle ne doit pas survivre au job, meme en cas d'echec plus loin.
       - name: Effacer la cle
         if: always()
