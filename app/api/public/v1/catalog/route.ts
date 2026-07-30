@@ -44,18 +44,30 @@ export async function GET(req: NextRequest) {
     const countRes = await query(`SELECT COUNT(*)::int AS n FROM camille.products ${where}`, params);
     params.push(limit, offset);
 
+    // SELECT * puis filtrage en JS : le schema des produits a evolue plusieurs
+    // fois (subcategory, variants, images n'existent pas partout). Figer une
+    // liste de colonnes ici, c'est casser l'API a la prochaine migration.
     const r = await query(
-      `SELECT id, name, description, price, price_max, currency, stock,
-              category, subcategory, image_url, images, variants, product_url, tags
-         FROM camille.products
+      `SELECT * FROM camille.products
          ${where}
-        ORDER BY created_at DESC
+        ORDER BY sort_order ASC, created_at DESC
         LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
 
+    const PUBLIC_FIELDS = [
+      "id", "name", "description", "price", "price_max", "currency", "stock",
+      "category", "subcategory", "image_url", "images", "variants",
+      "product_url", "tags", "min_order", "rating",
+    ];
+    const products = r.rows.map((row: Record<string, unknown>) => {
+      const out: Record<string, unknown> = {};
+      for (const k of PUBLIC_FIELDS) if (k in row) out[k] = row[k];
+      return out;
+    });
+
     return json({
-      products: r.rows,
+      products,
       total: countRes.rows[0]?.n ?? r.rows.length,
       limit,
       offset,
