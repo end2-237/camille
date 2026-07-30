@@ -140,7 +140,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ agent: rowToAgent(result.rows[0]) }, { status: 201 });
   } catch (err) {
+    // « Erreur serveur » seul n'apprend rien à l'appelant : une colonne
+    // obligatoire manquante et une base injoignable donnaient le même message,
+    // impossible à distinguer sans accès aux logs du serveur.
     console.error("[POST /api/agents]", err);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Création impossible", detail: (err as Error).message },
+      { status: 500 }
+    );
   }
 }

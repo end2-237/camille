@@ -88,9 +88,9 @@ BUYTICLE ETS — Douala, Cameroun
 
 | Élément | Format | État |
 |---|---|---|
-| Icône | 512×512 PNG, sans transparence | `assets/icon.png` — vérifier la taille |
-| Bannière | 1024×500 PNG | **à produire** |
-| Captures téléphone | 2 minimum, 16:9 ou 9:16, min 320 px | **à produire** |
+| Icône | 512×512 PNG, sans transparence | ✅ `mobile/store/icon-512.png` |
+| Bannière | 1024×500 PNG | ✅ `mobile/store/feature-graphic-1024x500.png` |
+| Captures téléphone | 2 minimum, 16:9 ou 9:16, min 320 px | **à prendre sur ton téléphone** |
 
 Captures suggérées, dans cet ordre : le tableau de bord avec le chiffre
 d'affaires, la liste des commandes, le détail d'une commande avec l'itinéraire,
@@ -130,10 +130,44 @@ Cocher également :
 ## 6. Accès pour les relecteurs
 
 L'application exige une connexion : sans identifiants, Google rejette pour
-« impossible d'évaluer l'application ». Dans **Contenu de l'app → Accès à
-l'application**, fournir un compte de démonstration avec au moins un agent
-configuré et quelques produits, et préciser que la connexion WhatsApp n'est pas
-nécessaire pour parcourir l'application.
+« impossible d'évaluer l'application ».
+
+Le compte de démonstration se monte en une commande, depuis la racine du dépôt :
+
+```bash
+node scripts/seed-demo-account.mjs
+```
+
+Le script crée le compte, un restaurant de démonstration (« Chez Mado »),
+7 produits et 3 commandes, puis affiche les identifiants. Il est rejouable :
+relancé, il complète ce qui manque au lieu d'échouer.
+
+**À saisir dans Play Console → Contenu de l'app → Accès à l'application :**
+
+| Champ | Valeur |
+|---|---|
+| Nom d'utilisateur | `demo.play@buyticle.com` |
+| Mot de passe | `CamilleDemo2026!` |
+
+**Instructions pour le relecteur** (à recopier dans le champ prévu) :
+
+```
+Se connecter avec les identifiants fournis. Le compte contient un restaurant
+de démonstration, son catalogue et des commandes.
+
+La connexion d'un compte WhatsApp n'est PAS nécessaire pour évaluer
+l'application. Les écrans Commandes et Catalogue sont consultables
+immédiatement depuis la barre de navigation en bas.
+```
+
+> Le tableau de bord affiche les statistiques de messages, qui restent à zéro
+> tant qu'aucun WhatsApp n'est connecté. C'est pourquoi les instructions
+> ci-dessus orientent le relecteur vers **Commandes** et **Catalogue**, qui
+> sont peuplés.
+
+> Ce compte ne contient aucune donnée réelle et son mot de passe est destiné à
+> être communiqué à Google. Ne jamais y mettre de vraies commandes, et ne pas
+> réutiliser ce mot de passe ailleurs.
 
 ---
 
