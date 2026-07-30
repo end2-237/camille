@@ -203,6 +203,34 @@ clé de debug et **ne produit aucun AAB**. C'est voulu — un fork ne doit pas
 casser — mais cela veut dire qu'un AAB absent signifie « secret manquant »,
 pas « build cassé ».
 
+### Empreintes du certificat de signature
+
+Utiles pour Firebase (Google Sign-In, App Check) et pour vérifier qu'un APK
+sort bien de la bonne clé. Ce sont des données publiques, lisibles dans tout
+APK signé — contrairement au keystore et à son mot de passe, qui ne doivent
+jamais entrer dans ce dépôt.
+
+```
+Alias      : camille
+Sujet      : CN=Camille, OU=Developpement, O=ETS BUYTICLE, L=Douala, ST=Littoral, C=CM
+Algorithme : RSA 4096 bits
+Validité   : 30 juillet 2026 → 15 décembre 2053
+
+SHA-1   : AD:8E:61:8F:2A:A5:11:34:A7:63:06:07:78:95:52:08:C8:B1:73:21
+SHA-256 : 69:25:5C:34:55:3F:48:DA:D6:BA:05:90:95:2B:88:D3:E8:60:B5:F7:07:72:8C:8A:AC:67:E9:D8:6B:42:11:16
+```
+
+Pour vérifier qu'un AAB téléchargé vient bien de cette clé :
+
+```bash
+keytool -printcert -jarfile app-release.aab | grep SHA256
+```
+
+> Si tu actives **Play App Signing** (recommandé, et par défaut désormais),
+> Google resigne l'application avec sa propre clé. Celle-ci devient alors ta
+> clé d'*upload* : elle sert à prouver que l'envoi vient de toi, et l'empreinte
+> vue par les utilisateurs sera celle de Google. Les deux sont à conserver.
+
 Vérifications avant envoi :
 
 - `versionCode` = 1 pour la première release, à incrémenter à chaque envoi
