@@ -79,6 +79,8 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "latitude", "longitude",
   // ── Médias de prospection (flyers, galeries, fiches services) ──
   "media",
+  // ── Livraison & carte du menu ──
+  "delivery_enabled", "delivery_fee", "delivery_zones", "menu_image_url",
 ]);
 
 type RouteContext = { params: Promise<{ agentId: string }> };

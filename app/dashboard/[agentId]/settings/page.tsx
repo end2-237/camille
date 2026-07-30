@@ -16,6 +16,12 @@ interface Cfg {
   website_url: string | null;
   latitude: number | null;
   longitude: number | null;
+  sector: string;
+  delivery_enabled: boolean;
+  delivery_fee: number;
+  /** Barème saisi en texte : "Bonaberi = 2000" par ligne. */
+  delivery_zones_text: string;
+  menu_image_url: string | null;
 }
 
 const LEVELS = [
@@ -24,12 +30,36 @@ const LEVELS = [
   { v: 3, label: "Niveau 3 — Closing",   desc: "Vente + paiement Monetbil (bientôt).",                  icon: CreditCard },
 ];
 
+/** "Bonaberi = 2000" par ligne → [{zone, fee}]. Les lignes vides sont ignorées. */
+function parseZones(text: string): { zone: string; fee: number }[] {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const m = l.match(/^(.+?)\s*[=:]\s*(\d+)/);
+      return m ? { zone: m[1].trim(), fee: Number(m[2]) } : null;
+    })
+    .filter((x): x is { zone: string; fee: number } => !!x && !!x.zone);
+}
+
+/** Inverse de parseZones, pour réafficher le barème. */
+function zonesToText(zones: unknown): string {
+  let arr: { zone?: string; name?: string; fee?: number; price?: number }[] = [];
+  try { arr = Array.isArray(zones) ? zones : JSON.parse(String(zones || "[]")); } catch { arr = []; }
+  return arr.map((z) => `${z.zone ?? z.name ?? ""} = ${z.fee ?? z.price ?? 0}`).join("\n");
+}
+
 export default function AgentSettingsPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [regen, setRegen] = useState(false);
+
+  // La carte du menu est propre à la restauration.
+  const isResto = /resto|restaurant|food|cuisine|snack|fast|pizz|traiteur|patisser|boulanger|glacier/i
+    .test(String(cfg?.sector ?? ""));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,6 +76,13 @@ export default function AgentSettingsPage() {
         website_url: ag.business_context?.website_url ?? ag.website_url ?? "",
         latitude: ag.latitude ?? null,
         longitude: ag.longitude ?? null,
+        sector: ag.business_context?.sector ?? ag.sector ?? "",
+        delivery_enabled: ag.delivery_enabled !== false,
+        delivery_fee: ag.delivery_fee ?? 1000,
+        // Le barème est stocké en JSON mais s'édite en texte : une ligne par
+        // quartier est plus rapide à saisir qu'un tableau de champs.
+        delivery_zones_text: zonesToText(ag.delivery_zones),
+        menu_image_url: ag.menu_image_url ?? "",
       });
     } catch { toast.error("Erreur de chargement"); }
     finally { setLoading(false); }
@@ -69,6 +106,10 @@ export default function AgentSettingsPage() {
           latitude: cfg.latitude === null || cfg.latitude === undefined ? null : Number(cfg.latitude),
           longitude: cfg.longitude === null || cfg.longitude === undefined ? null : Number(cfg.longitude),
           business_context: { website_url: (cfg.website_url ?? "").trim() },
+          delivery_enabled: cfg.delivery_enabled !== false,
+          delivery_fee: Number(cfg.delivery_fee ?? 1000) || 0,
+          delivery_zones: parseZones(cfg.delivery_zones_text ?? ""),
+          menu_image_url: (cfg.menu_image_url ?? "").trim() || null,
         }),
       });
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || "Échec"); }
@@ -194,6 +235,58 @@ export default function AgentSettingsPage() {
           Coordonnées de la boutique (pour l&apos;envoi de la localisation sur WhatsApp).
         </p>
       </Section>
+
+      {/* Livraison */}
+      <Section title="Livraison" icon={MapPin}>
+        <label className="flex items-center gap-2 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+          <input type="checkbox" checked={cfg.delivery_enabled !== false}
+            onChange={(e) => setCfg({ ...cfg, delivery_enabled: e.target.checked })} />
+          Facturer des frais de livraison
+        </label>
+
+        <div className="mt-3">
+          <label className="mb-1 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+            Frais par défaut (XAF)
+          </label>
+          <input className="input-midnight" type="number" min="0" step="50"
+            value={cfg.delivery_fee ?? 1000}
+            onChange={(e) => setCfg({ ...cfg, delivery_fee: e.target.value === "" ? 0 : Number(e.target.value) })} />
+        </div>
+
+        <div className="mt-3">
+          <label className="mb-1 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+            Tarifs par quartier — une ligne par zone
+          </label>
+          <textarea className="input-midnight" rows={5}
+            value={cfg.delivery_zones_text ?? ""}
+            onChange={(e) => setCfg({ ...cfg, delivery_zones_text: e.target.value })}
+            placeholder={"Bonaberi = 2000\nAkwa = 500\nBonamoussadi = 1500"} />
+          <p className="mt-2 text-[11px]" style={{ color: "var(--text-disabled)" }}>
+            Le quartier est cherché dans l&apos;adresse du client. Sans correspondance,
+            les frais par défaut s&apos;appliquent. Aucun frais sur place ou à emporter.
+          </p>
+        </div>
+      </Section>
+
+      {/* Carte du menu — restauration uniquement */}
+      {isResto && (
+        <Section title="Carte du menu" icon={MapPin}>
+          <label className="mb-1 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+            Image de la carte (URL)
+          </label>
+          <input className="input-midnight" value={cfg.menu_image_url ?? ""}
+            onChange={(e) => setCfg({ ...cfg, menu_image_url: e.target.value })}
+            placeholder="https://…/carte.jpg" />
+          {cfg.menu_image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cfg.menu_image_url} alt="Carte du menu" className="mt-3 w-full rounded-lg"
+              style={{ maxHeight: 260, objectFit: "cover" }} />
+          ) : null}
+          <p className="mt-2 text-[11px]" style={{ color: "var(--text-disabled)" }}>
+            Envoyée au client juste après les premiers plats, quand il demande le menu.
+          </p>
+        </Section>
+      )}
 
       {/* Actions */}
       <div className="mt-8 flex flex-wrap items-center gap-3">
