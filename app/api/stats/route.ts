@@ -352,6 +352,27 @@ export async function GET(req: NextRequest) {
       })
     );
 
+    // ── Chiffre d'affaires genere par les commandes ───────────────────────────
+    // Preuve de valeur : ce que Camille a concretement rapporte. On distingue
+    // l'encaisse (livree) du potentiel (en cours) — melanger les deux gonflerait
+    // artificiellement le chiffre.
+    const revRes = await safe(
+      `SELECT
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'livree'), 0)                         AS ca_livre,
+         COUNT(*)              FILTER (WHERE o.status = 'livree')                             AS n_livre,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status IN ('nouvelle','en_traitement','traitee')), 0) AS ca_en_cours,
+         COUNT(*)              FILTER (WHERE o.status IN ('nouvelle','en_traitement','traitee'))     AS n_en_cours,
+         COUNT(*)                                                                             AS n_total,
+         MAX(o.currency)                                                                      AS currency
+       FROM camille.orders o
+       WHERE o.agent_id = ANY($1::uuid[])
+         AND o.created_at >= $2 AND o.created_at <= $3`,
+      [agentIds, from, to]
+    );
+    const rev = revRes.rows[0] ?? {};
+    const caLivre  = Number(rev.ca_livre ?? 0);
+    const caEnCours = Number(rev.ca_en_cours ?? 0);
+
     // ── Response ──────────────────────────────────────────────────────────────
     return NextResponse.json({
       period: periodParam,
@@ -377,6 +398,19 @@ export async function GET(req: NextRequest) {
         peak_day_messages:  peakDay?.messages ?? 0,
         peak_hour:          peakHour?.hour ?? null,
         peak_hour_count:    peakHour?.count ?? 0,
+      },
+
+      // Ce que les commandes ont rapporte sur la periode
+      revenue: {
+        delivered:        caLivre,
+        delivered_count:  Number(rev.n_livre ?? 0),
+        pending:          caEnCours,
+        pending_count:    Number(rev.n_en_cours ?? 0),
+        total:            caLivre + caEnCours,
+        orders_count:     Number(rev.n_total ?? 0),
+        avg_basket:       Number(rev.n_total ?? 0) > 0
+          ? Math.round((caLivre + caEnCours) / Number(rev.n_total)) : 0,
+        currency:         rev.currency ?? "XAF",
       },
 
       // Quota de tokens du mois en cours (agrégé sur les agents du compte)

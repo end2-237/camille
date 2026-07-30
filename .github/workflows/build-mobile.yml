@@ -52,11 +52,43 @@ jobs:
           fi
           grep -n "splashscreen_background" "$F" || echo "WARN: color still missing"
 
+      # Cle de signature de production. Sans le secret, le build continue et
+      # retombe sur la cle de debug : un fork ou un test ne doit pas casser.
+      - name: Restaurer la cle de signature
+        id: signing
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KS" ]; then
+            echo "Aucun secret ANDROID_KEYSTORE_BASE64 — build signe avec la cle de DEBUG."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KS" | base64 -d > mobile/android/app/camille-release.keystore
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
       - name: Gradle build (assembleRelease)
         working-directory: mobile/android
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon \
+              -PCAMILLE_STORE_FILE=camille-release.keystore \
+              -PCAMILLE_STORE_PASSWORD="$STORE_PASSWORD" \
+              -PCAMILLE_KEY_ALIAS="${KEY_ALIAS:-camille}" \
+              -PCAMILLE_KEY_PASSWORD="${KEY_PASSWORD:-$STORE_PASSWORD}"
+          else
+            ./gradlew assembleRelease --no-daemon
+          fi
+
+      # La cle ne doit pas survivre au job, meme en cas d'echec plus loin.
+      - name: Effacer la cle
+        if: always()
+        run: rm -f mobile/android/app/camille-release.keystore
 
       - name: Locate APK
         id: apk

@@ -5,3 +5,7 @@ android/
 ios/
 *.log
 .DS_Store
+
+# Cle de signature : ne doit JAMAIS entrer dans le depot.
+*.keystore
+*.jks

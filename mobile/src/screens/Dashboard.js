@@ -14,6 +14,7 @@ const AD2 = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=f
 
 export default function Dashboard({ stats, user, refreshing, onRefresh }) {
   const ov = stats?.overview || {};
+  const rev = stats?.revenue || {};
   const messages = Number(ov.total_messages || 0);
   const leads = Number(ov.total_leads || 0);
   const contacts = Number(ov.unique_contacts || 0);
@@ -123,6 +124,10 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
         url={`${WEB}`}
       />
 
+      {/* Preuve de valeur : ce que Camille a concretement rapporte.
+          On separe l'encaisse du potentiel — les melanger gonflerait le chiffre. */}
+      <RevenueCard rev={rev} />
+
       {/* Messages reçus (source Camille Core) + traités par l'IA */}
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
         <StatMini label="Messages reçus" value={received.toLocaleString("fr-FR")} />
@@ -230,4 +235,68 @@ function Legend({ color, label, val }) {
 function fmtK(n) {
   if (n >= 1000) return (n / 1000).toFixed(0) + "k";
   return String(n);
+}
+
+
+// ── Chiffre d'affaires genere par les commandes ─────────────────────────────
+function RevenueCard({ rev }) {
+  const cur = rev.currency || "XAF";
+  const money = (n) => Number(n || 0).toLocaleString("fr-FR");
+  const delivered = Number(rev.delivered || 0);
+  const pending = Number(rev.pending || 0);
+  const orders = Number(rev.orders_count || 0);
+
+  if (!orders) {
+    return (
+      <View style={{ backgroundColor: C.white, borderRadius: R.lg, borderWidth: 1, borderColor: C.line,
+        padding: S.md, marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#F3F7E4",
+          alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="trending-up" size={20} color="#4A6B00" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: C.ink, fontWeight: "700", fontSize: 14 }}>Chiffre d&apos;affaires</Text>
+          <Text style={{ color: C.sub, fontSize: 12, marginTop: 2 }}>
+            Aucune commande sur la période — il apparaîtra ici.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ backgroundColor: C.ink, borderRadius: R.lg, padding: S.md, marginBottom: 10, overflow: "hidden" }}>
+      <View style={{ position: "absolute", right: -24, top: -24, width: 110, height: 110, borderRadius: 55,
+        backgroundColor: "rgba(198,242,78,0.10)" }} />
+
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ color: C.subDark, fontSize: 11, fontWeight: "700", letterSpacing: 0.4 }}>
+          GÉNÉRÉ PAR CAMILLE
+        </Text>
+        <Ionicons name="trending-up" size={16} color={C.lime} />
+      </View>
+
+      <Text style={{ color: C.lime, fontWeight: "800", fontSize: 30, letterSpacing: -0.8, marginTop: 8 }}>
+        {money(delivered)} <Text style={{ fontSize: 15, color: C.subDark, fontWeight: "700" }}>{cur}</Text>
+      </Text>
+      <Text style={{ color: C.subDark, fontSize: 12, marginTop: 1 }}>
+        encaissé sur {rev.delivered_count || 0} commande{(rev.delivered_count || 0) > 1 ? "s" : ""} livrée{(rev.delivered_count || 0) > 1 ? "s" : ""}
+      </Text>
+
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
+        <RevBit label="En cours" value={`${money(pending)} ${cur}`} hint={`${rev.pending_count || 0} commande(s)`} />
+        <RevBit label="Panier moyen" value={`${money(rev.avg_basket)} ${cur}`} hint={`${orders} au total`} />
+      </View>
+    </View>
+  );
+}
+
+function RevBit({ label, value, hint }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.07)", borderRadius: 14, padding: 11 }}>
+      <Text style={{ color: C.subDark, fontSize: 10.5, fontWeight: "700" }}>{label.toUpperCase()}</Text>
+      <Text style={{ color: C.white, fontSize: 15, fontWeight: "800", marginTop: 3 }}>{value}</Text>
+      <Text style={{ color: C.subDark, fontSize: 10, marginTop: 1 }}>{hint}</Text>
+    </View>
+  );
 }

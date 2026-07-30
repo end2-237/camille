@@ -36,7 +36,8 @@
           "color": "#101012",
           "defaultChannel": "commandes"
         }
-      ]
+      ],
+      "./plugins/withReleaseSigning"
     ],
     "android": {
       "package": "com.camille.mobile",
