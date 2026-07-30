@@ -567,6 +567,11 @@ function ApiKeysSection({ agentId }: { agentId: string }) {
         </div>
       )}
 
+      <a href="/docs" target="_blank" rel="noreferrer"
+        className="mt-4 inline-block text-[12.5px] font-semibold underline" style={{ color: "var(--cl-ink)" }}>
+        Documentation complète et testeur en direct →
+      </a>
+
       <details className="mt-4">
         <summary className="cursor-pointer text-[12.5px] font-semibold" style={{ color: "var(--cl-ink)" }}>
           Exemples de code
