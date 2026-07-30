@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { query } from "@/lib/db";
 
-const BUYFACT_URL = (process.env.BUYFACT_URL ?? "https://buyfacturation.vercel.app").replace(/\/$/, "");
+const BUYFACT_URL = (process.env.BUYFACT_URL ?? "https://buyfacturation-jdbf.vercel.app").replace(/\/$/, "");
 const BUYFACT_KEY = process.env.BUYFACT_API_KEY ?? "";
 const CORE_URL = (process.env.CAMILLE_CORE_URL ?? "https://camille-core.vps.buyticle.com").replace(/\/$/, "");
 const CORE_KEY = process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
@@ -95,7 +95,20 @@ export async function sendOrderDocument(orderId: string): Promise<SendResult> {
       }),
     });
     doc = await res.json().catch(() => ({}));
-    if (!res.ok || !doc?.id) {
+
+    // Si buyfacturation ne gère pas encore l'idempotence (branche non déployée),
+    // un réessai se heurte à l'index unique sur external_ref. Le document existe
+    // pourtant : on le récupère par son numéro plutôt que d'échouer.
+    if (!res.ok && /duplicate key|external_ref/i.test(String(doc?.error || ""))) {
+      const found = await fetch(
+        `${BUYFACT_URL}/api/invoices?search=${encodeURIComponent(number)}&limit=1`,
+        { headers: BUYFACT_KEY ? { "X-Api-Key": BUYFACT_KEY } : {} }
+      ).then((r) => r.json()).catch(() => null);
+      const hit = found?.invoices?.find((x: { number?: string }) => x.number === number);
+      if (hit?.id) doc = hit;
+    }
+
+    if (!doc?.id) {
       return { ok: false, reason: doc?.error || `buyfacturation a répondu ${res.status}` };
     }
   } catch (e) {
