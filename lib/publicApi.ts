@@ -54,15 +54,17 @@ export async function authenticate(
     return { error: json({ error: "Clé manquante. Envoie l'en-tête X-Camille-Key." }, 401, req) };
   }
 
-  let row: ApiKeyRow | undefined;
+  // On ramène le statut plutôt que de filtrer dessus : un message qui confond
+  // « clé inconnue », « clé révoquée » et « agent suspendu » envoie le marchand
+  // régénérer des clés pendant des heures alors que le problème est ailleurs.
+  let row: (ApiKeyRow & { revoked_at: string | null; agent_status: string }) | undefined;
   try {
     const r = await query(
-      `SELECT k.id, k.agent_id, k.user_id, k.kind, k.origins
+      `SELECT k.id, k.agent_id, k.user_id, k.kind, k.origins, k.revoked_at,
+              a.status AS agent_status
          FROM camille.api_keys k
          JOIN camille.agents a ON a.id = k.agent_id
-        WHERE k.key_hash = $1
-          AND k.revoked_at IS NULL
-          AND a.status = 'active'`,
+        WHERE k.key_hash = $1`,
       [hashKey(raw)]
     );
     row = r.rows[0];
@@ -75,7 +77,23 @@ export async function authenticate(
     };
   }
 
-  if (!row) return { error: json({ error: "Clé invalide, révoquée, ou agent inactif." }, 401, req) };
+  if (!row) {
+    return { error: json({ error: "Clé inconnue. Vérifie qu'elle a été copiée entièrement." }, 401, req) };
+  }
+  if (row.revoked_at) {
+    return { error: json({ error: "Clé révoquée. Génère-en une nouvelle depuis Intégrations." }, 401, req) };
+  }
+  if (row.agent_status !== "active") {
+    return {
+      error: json(
+        {
+          error: `Agent inactif (statut : ${row.agent_status}). La clé est bonne — c'est l'agent qu'il faut réactiver.`,
+          agent_status: row.agent_status,
+        },
+        403, req
+      ),
+    };
+  }
 
   // Une clé publique ne doit pas pouvoir créer de commande.
   if (need === "secret" && row.kind !== "secret") {
