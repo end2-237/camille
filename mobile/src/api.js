@@ -117,6 +117,16 @@ export const getItinerary = (orderId) => req(`/api/orders/${orderId}/itinerary`)
 export const registerPushToken = (token, platform) =>
   req(`/api/push/register`, { method: "POST", body: JSON.stringify({ token, platform }) });
 
+// ── Centre de notifications ─────────────────────────────────────────────────
+export const getNotifications = (limit = 60) => req(`/api/notifications?limit=${limit}`);
+export const markNotification = (id) => req(`/api/notifications`, { method: "PATCH", body: JSON.stringify({ id }) });
+export const markAllNotifications = () => req(`/api/notifications`, { method: "PATCH", body: JSON.stringify({ all: true }) });
+
+// ── Version minimale exigee (mise a jour obligatoire) ───────────────────────
+// Pas d'authentification : la verification precede la connexion.
+export const checkAppVersion = (version, platform = "android") =>
+  req(`/api/app/version?platform=${platform}&version=${encodeURIComponent(version)}`);
+
 // Diagnostic : quel maillon de la chaine push est casse
 export const pushDiagnostic = () => req(`/api/push/diagnostic`);
 export const pushTest = () => req(`/api/push/diagnostic`, { method: "POST" });

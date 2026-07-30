@@ -2,6 +2,10 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { View, Text, SafeAreaView, StatusBar, Platform, Animated, AppState } from "react-native";
 import * as Updates from "expo-updates";
 import { registerForPush, listenPush, clearBadge } from "./src/push";
+import Notifications from "./src/screens/Notifications";
+import ForceUpdate from "./src/screens/ForceUpdate";
+import { getNotifications, checkAppVersion } from "./src/api";
+import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { C } from "./src/theme";
 import { Header, BottomNav, ScreenTitle } from "./src/components/ui";
@@ -24,6 +28,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const [gate, setGate] = useState(null); // mise a jour obligatoire
 
   const load = useCallback(async () => {
     const [s, a, m] = await Promise.allSettled([getStats("30d"), getAgents(), getMe()]);
@@ -47,6 +53,10 @@ export default function App() {
     }
     setStats(st);
     if (m.status === "fulfilled") setUser(m.value?.user || null);
+
+    // Compteur de la cloche. Silencieux : une erreur ici ne doit pas
+    // empecher le reste du tableau de bord de s'afficher.
+    getNotifications(1).then((d) => setUnread(Number(d?.unread || 0))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -61,6 +71,16 @@ export default function App() {
     })();
   }, [load]);
 
+  // ── Mise a jour obligatoire ────────────────────────────────────────────────
+  // Verifiee AVANT toute autre chose : si la version installee est trop
+  // ancienne, l'app est inutilisable. Une panne reseau ne bloque jamais.
+  useEffect(() => {
+    const v = Constants.expoConfig?.version || "0.0.0";
+    checkAppVersion(v, Platform.OS)
+      .then((d) => { if (d?.blocking) setGate({ ...d, current: v }); })
+      .catch(() => {});
+  }, []);
+
   // ── Notifications push ─────────────────────────────────────────────────────
   // Enregistrement une fois connecté (le jeton est rattaché au compte), puis
   // écoute : bandeau si l'app est ouverte, rafraîchissement au tap.
@@ -68,7 +88,7 @@ export default function App() {
     if (!user) return undefined;
     registerForPush();
     const stop = listenPush(
-      () => { load().catch(() => {}); },              // reçue app ouverte
+      () => { load().catch(() => {}); setUnread((n) => n + 1); },  // reçue app ouverte
       (data) => {                                     // l'utilisateur a tapé dessus
         clearBadge();
         load().catch(() => {});
@@ -146,10 +166,14 @@ export default function App() {
 
   const common = { stats, query, refreshing, onRefresh };
   let Body;
+  // Le blocage passe avant tout : ni onglets, ni en-tete, ni contenu.
+  if (gate) return <ForceUpdate info={gate} />;
+
   if (tab === "dash") Body = <Dashboard {...common} user={user} />;
   else if (tab === "agents") Body = <Agents {...common} onAgentChanged={onAgentChanged} onRefreshData={load} />;
   else if (tab === "convos") Body = <Conversations {...common} />;
   else if (tab === "analytics") Body = <Analytics {...common} user={user} />;
+  else if (tab === "notifs") Body = <Notifications onOpenOrders={() => setTab("agents")} />;
   else Body = <Profile user={user} setUser={setUser} onAuthChange={onAuthChange} agents={stats?.agents || []} />;
 
   return (
@@ -161,6 +185,8 @@ export default function App() {
           setQuery={setQuery}
           initials={initials}
           onProfile={() => setTab("profile")}
+          onNotifications={() => { setTab("notifs"); setUnread(0); clearBadge(); }}
+          unread={unread}
         />
         {tab === "dash" || tab === "agents" || tab === "analytics" ? <ScreenTitle tab={tab} /> : null}
       </View>

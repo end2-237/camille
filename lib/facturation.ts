@@ -158,3 +158,61 @@ export async function sendOrderDocument(orderId: string): Promise<SendResult> {
 
   return { ok: true, number: doc.number || number, pdfUrl };
 }
+
+
+/**
+ * Remerciement envoyé au client quand la commande est marquée livrée.
+ * Idempotent : `thanked_at` empêche un second envoi si le vendeur repasse
+ * par ce statut. Ne lève jamais.
+ */
+export async function sendThankYou(orderId: string): Promise<SendResult> {
+  let o: Record<string, unknown>;
+  try {
+    const r = await query(
+      `SELECT o.*, a.business_name
+         FROM camille.orders o
+         JOIN camille.agents a ON a.id = o.agent_id
+        WHERE o.id = $1`,
+      [orderId]
+    );
+    if (!r.rows.length) return { ok: false, reason: "commande introuvable" };
+    o = r.rows[0];
+  } catch (e) {
+    return { ok: false, reason: (e as Error).message };
+  }
+
+  if (o.thanked_at) return { ok: false, reason: "remerciement déjà envoyé" };
+
+  const chatId = String(o.contact_phone || "").trim();
+  if (!chatId) return { ok: false, reason: "aucun contact pour cette commande" };
+
+  const prenom = String(o.customer_name || "").trim().split(/\s+/)[0] || "";
+  const shop = (o.business_name as string) || "Nous";
+  const text =
+    `Merci ${prenom} 🙏\n\n` +
+    `Ta commande n° ${o.ref} est livrée. ${shop} te remercie pour ta confiance.\n\n` +
+    `Si tout s'est bien passé, ça nous ferait vraiment plaisir que tu parles de nous autour de toi 😊\n` +
+    `Et au moindre souci, écris-moi ici — on répond toujours.\n\n` +
+    `À très vite ! 👋`;
+
+  try {
+    const res = await fetch(`${CORE_URL}/api/sendText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Api-Key": CORE_KEY },
+      body: JSON.stringify({ chatId, session: o.session_name || "default", text }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j?.success === false) {
+      return { ok: false, reason: j?.error || `envoi refusé (${res.status})` };
+    }
+  } catch (e) {
+    return { ok: false, reason: `camille-core injoignable : ${(e as Error).message}` };
+  }
+
+  // Marque APRES l'envoi : un echec doit pouvoir etre reessaye.
+  try {
+    await query("UPDATE camille.orders SET thanked_at = NOW() WHERE id = $1", [orderId]);
+  } catch { /* colonne absente : le message est parti, c'est l'essentiel */ }
+
+  return { ok: true };
+}

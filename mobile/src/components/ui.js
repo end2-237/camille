@@ -11,7 +11,7 @@ const TITLES = {
   profile: "Profil",
 };
 
-export function Header({ query, setQuery, onProfile, initials }) {
+export function Header({ query, setQuery, onProfile, onNotifications, unread = 0, initials }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: S.md, paddingTop: 8, gap: 10 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -21,7 +21,7 @@ export function Header({ query, setQuery, onProfile, initials }) {
         <Text style={{ fontWeight: "800", fontSize: 17, color: C.ink, letterSpacing: -0.3 }}>Camille</Text>
       </View>
       <View style={{ flex: 1 }} />
-      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.white, borderRadius: R.pill, paddingHorizontal: 12, height: 38, flex: 1, maxWidth: 160 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.white, borderRadius: R.pill, paddingHorizontal: 12, height: 38, flex: 1, maxWidth: 130 }}>
         <Ionicons name="search" size={15} color={C.sub} />
         <TextInput
           value={query}
@@ -36,6 +36,19 @@ export function Header({ query, setQuery, onProfile, initials }) {
           </TouchableOpacity>
         ) : null}
       </View>
+      {/* Cloche : plus lisible qu'un 6e onglet dans une barre deja pleine. */}
+      <TouchableOpacity onPress={onNotifications}
+        style={{ width: 38, height: 38, borderRadius: R.pill, backgroundColor: C.white,
+          borderWidth: 1, borderColor: C.line, alignItems: "center", justifyContent: "center" }}>
+        <Ionicons name={unread > 0 ? "notifications" : "notifications-outline"} size={18} color={C.ink} />
+        {unread > 0 && (
+          <View style={{ position: "absolute", top: -2, right: -2, minWidth: 17, height: 17, borderRadius: 9,
+            paddingHorizontal: 4, backgroundColor: C.red, alignItems: "center", justifyContent: "center",
+            borderWidth: 1.5, borderColor: C.bg }}>
+            <Text style={{ color: C.white, fontSize: 9.5, fontWeight: "800" }}>{unread > 9 ? "9+" : unread}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
       <TouchableOpacity onPress={onProfile}
         style={{ width: 38, height: 38, borderRadius: R.pill, backgroundColor: C.ink, alignItems: "center", justifyContent: "center" }}>
         <Text style={{ color: C.lime, fontWeight: "800", fontSize: 13 }}>{initials || "👤"}</Text>

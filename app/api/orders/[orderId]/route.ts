@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
-import { sendOrderDocument } from "@/lib/facturation";
+import { sendOrderDocument, sendThankYou } from "@/lib/facturation";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 const ALLOWED = ["nouvelle", "en_traitement", "livree", "traitee", "annulee"];
@@ -86,5 +86,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     doc = await sendOrderDocument(orderId);
   }
 
-  return NextResponse.json({ order, ...(doc ? { doc } : {}) });
+  // Livree = fin de parcours : on remercie le client. sendThankYou refuse
+  // d'elle-meme un second envoi (thanked_at).
+  let thanks: Awaited<ReturnType<typeof sendThankYou>> | undefined;
+  if (status === "livree") {
+    thanks = await sendThankYou(orderId);
+  }
+
+  return NextResponse.json({ order, ...(doc ? { doc } : {}), ...(thanks ? { thanks } : {}) });
 }

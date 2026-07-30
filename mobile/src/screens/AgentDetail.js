@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert, Switch } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert, Switch, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import Avatar from "../components/Avatar";
@@ -60,6 +60,11 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
   }
 
   const convMode = full?.conversion_mode || "whatsapp";
+
+  // La carte du menu n'a de sens qu'en restauration : ailleurs, on ne
+  // propose meme pas le reglage.
+  const isResto = /resto|restaurant|food|cuisine|snack|fast|pizz|traiteur|patisser|boulanger|glacier/i
+    .test(String(full?.business_context?.sector || full?.sector || agent?.sector || ""));
 
   async function setConv(mode) {
     setCatBusy(true);
@@ -219,6 +224,37 @@ export default function AgentDetail({ agent, onClose, onChanged }) {
                 </View>
               ))}
             </View>
+          </Section>
+        )}
+
+        <Section title="Livraison">
+          <Row label="Frais par défaut" value={`${Number(full?.delivery_fee ?? 1000).toLocaleString("fr-FR")} XAF`} />
+          <Row label="Quartiers tarifés" value={`${(full?.delivery_zones || []).length} zone(s)`} />
+          <Action icon="pricetag-outline" label="Modifier les frais"
+            onPress={() => Linking.openURL(`${WEB}/dashboard/${agent.agent_id}/settings`)} />
+        </Section>
+
+        {isResto && (
+          <Section title="Carte du menu">
+            {full?.menu_image_url ? (
+              <View style={{ padding: 12 }}>
+                <Image source={{ uri: full.menu_image_url }}
+                  style={{ width: "100%", height: 170, borderRadius: 10, backgroundColor: "#F2F2F2" }}
+                  resizeMode="cover" />
+                <Text style={{ color: C.sub, fontSize: 11.5, marginTop: 8 }}>
+                  Envoyée au client quand il demande le menu, juste après les premiers plats.
+                </Text>
+              </View>
+            ) : (
+              <View style={{ padding: 12 }}>
+                <Text style={{ color: C.sub, fontSize: 12.5 }}>
+                  Aucune carte enregistrée. Ajoute-la pour que Camille l&apos;envoie automatiquement
+                  quand un client demande le menu.
+                </Text>
+              </View>
+            )}
+            <Action icon="image-outline" label={full?.menu_image_url ? "Remplacer la carte" : "Ajouter la carte"}
+              onPress={() => Linking.openURL(`${WEB}/dashboard/${agent.agent_id}/settings`)} />
           </Section>
         )}
 

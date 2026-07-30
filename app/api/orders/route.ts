@@ -64,7 +64,11 @@ export async function POST(req: NextRequest) {
     if (!items.length) return NextResponse.json({ ok: false, error: "panier vide" });
 
     const currency = items.find((i) => i.currency)?.currency || "XAF";
-    const total = items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 1), 0);
+    const subtotal = items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 1), 0);
+    // Les frais sont figes sur la commande : changer le bareme plus tard ne
+    // doit pas reecrire l'historique.
+    const deliveryFee = Math.max(0, Number(b.deliveryFee) || 0);
+    const total = subtotal + deliveryFee;
 
     // Référence unique (quelques tentatives en cas de collision improbable)
     let ref = makeRef();
@@ -95,11 +99,11 @@ export async function POST(req: NextRequest) {
     const ins = await query(
       `INSERT INTO camille.orders
          (ref, agent_id, session_name, contact_phone, items, total, currency, note,
-          customer_name, address, lat, lng, place_label)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13)
+          customer_name, address, lat, lng, place_label, delivery_fee)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING id`,
       [ref, agentId, b.session ?? null, b.phone ?? null, JSON.stringify(items), total, currency,
-       note || null, customerName || null, address || null, lat, lng, placeLabel || null]
+       note || null, customerName || null, address || null, lat, lng, placeLabel || null, deliveryFee]
     );
 
     const orderId = ins.rows[0]?.id ?? null;
@@ -118,6 +122,7 @@ export async function POST(req: NextRequest) {
     // Message destiné au CLIENT (accusé de réception)
     const clientText =
       `✅ Commande enregistrée — n° ${ref}\n\n${lignes}\n\n` +
+      (deliveryFee > 0 ? `Sous-total : ${money(subtotal, currency)}\nLivraison : ${money(deliveryFee, currency)}\n` : "") +
       `Total : ${money(total, currency)}\n` +
       `Statut : En traitement 🔄\n` +
       (note ? `Mode : ${note}\n` : "") +
@@ -136,6 +141,7 @@ export async function POST(req: NextRequest) {
     // Message destiné au COMMERÇANT
     const ownerText =
       `🛎️ NOUVELLE COMMANDE — n° ${ref}\n\n${lignes}\n\n` +
+      (deliveryFee > 0 ? `Sous-total : ${money(subtotal, currency)}\nLivraison : ${money(deliveryFee, currency)}\n` : "") +
       `Total : ${money(total, currency)}\n` +
       (note ? `Service : ${note}\n` : "") +
       (customerName ? `Client : ${customerName}\n` : "") +
