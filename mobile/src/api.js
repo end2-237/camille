@@ -125,6 +125,10 @@ export const setOrderStatus = (orderId, status) =>
 export const getItinerary = (orderId) => req(`/api/orders/${orderId}/itinerary`);
 
 /** Réclamations remontées par l'agent depuis les conversations WhatsApp. */
+/** Supprime les jetons refusés par Firebase (anciennes installations). */
+export const purgePushTokens = () =>
+  req("/api/push/diagnostic", { method: "DELETE" });
+
 export const getComplaints = (status) =>
   req(`/api/complaints${status ? `?status=${status}` : ""}`);
 

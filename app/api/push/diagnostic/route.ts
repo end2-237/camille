@@ -109,12 +109,23 @@ export async function GET(req: NextRequest) {
       : "Réinstalle l'APK (expo-notifications est un module natif, l'OTA ne suffit pas) puis reconnecte-toi et accepte les notifications.",
   });
 
+  // Chaque reinstallation de l'app produit un NOUVEAU jeton ; l'ancien reste en
+  // base jusqu'a ce qu'un envoi le refuse. Les compter comme une panne rendait
+  // l'ecran rouge a vie, meme avec un appareil qui reçoit parfaitement — et
+  // detournait de la vraie cause.
   const rejected = tokens.filter((t) => !t.active && t.last_error);
   if (rejected.length) {
     checks.push({
-      ok: false,
-      label: "Jetons refusés par Firebase",
-      detail: `${rejected.length} — ${String(rejected[0].last_error).slice(0, 120)}`,
+      ok: active.length > 0,
+      label: "Anciens appareils",
+      detail:
+        active.length > 0
+          ? `${rejected.length} jeton(s) d'installations precedentes, sans effet`
+          : `${rejected.length} refuse(s) — ${String(rejected[0].last_error).slice(0, 100)}`,
+      fix:
+        active.length > 0
+          ? undefined
+          : "Desinstalle completement l'app, reinstalle le dernier APK, puis reconnecte-toi : un jeton n'est valable que pour l'installation qui l'a obtenu.",
     });
   }
 
@@ -170,4 +181,22 @@ export async function POST(req: NextRequest) {
     ok: r.sent > 0,
     reason: r.sent > 0 ? undefined : (r.errors?.[0] || r.skipped || "aucun appareil joignable"),
   });
+}
+
+// ── Purge ────────────────────────────────────────────────────────────────────
+// Supprime les jetons refuses. Utile apres plusieurs reinstallations : ils ne
+// servent plus a rien et brouillent le diagnostic a chaque test.
+export async function DELETE(req: NextRequest) {
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+  try {
+    const r = await query(
+      "DELETE FROM camille.push_tokens WHERE user_id = $1 AND active = FALSE",
+      [user.id]
+    );
+    return NextResponse.json({ ok: true, removed: r.rowCount ?? 0 });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
+  }
 }

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Alert, Tex
 import { Ionicons } from "@expo/vector-icons";
 import * as Updates from "expo-updates";
 import { C, R, S } from "../theme";
-import { logout, pushDiagnostic, pushTest, deleteAccount } from "../api";
+import { logout, pushDiagnostic, pushTest, deleteAccount, purgePushTokens } from "../api";
 import { BottomDrawer } from "../components/Drawer";
 import Plans from "./Plans";
 
@@ -137,7 +137,30 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
           ? `📨 Test envoye a ${t.sent} appareil(s)`
           : `❌ Envoi du test : ${t.reason || t.skipped || "echec"}`);
       }
-      Alert.alert(d.ready ? "Notifications prêtes" : "Notifications incomplètes", lines.join("\n"));
+      // Des jetons morts d'anciennes installations brouillent chaque test :
+      // on propose de les retirer plutôt que de laisser l'écran alarmer à vie.
+      const dead = (d.checks || []).find((c) => c.label === "Anciens appareils");
+      const buttons = dead
+        ? [
+            { text: "Fermer", style: "cancel" },
+            {
+              text: "Nettoyer",
+              onPress: async () => {
+                try {
+                  const r = await purgePushTokens();
+                  Alert.alert("Notifications", `${r.removed || 0} ancien(s) jeton(s) retiré(s).`);
+                } catch (e) {
+                  Alert.alert("Notifications", e?.message || "Nettoyage impossible");
+                }
+              },
+            },
+          ]
+        : undefined;
+      Alert.alert(
+        d.ready ? "Notifications prêtes" : "Notifications incomplètes",
+        lines.join("\n"),
+        buttons
+      );
     } catch (e) {
       Alert.alert("Notifications", e?.message || "Diagnostic impossible");
     } finally { setPushing(false); }
