@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { sendOrderDocument, sendThankYou } from "@/lib/facturation";
+import { restoreStock } from "@/lib/orders";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 const ALLOWED = ["nouvelle", "en_traitement", "livree", "traitee", "annulee"];
@@ -44,6 +45,20 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
      WHERE o.agent_id = a.id AND a.user_id = $3 AND o.id = $4
      RETURNING o.*`;
 
+  // Statut AVANT la mise à jour : c'est lui qui dit si l'on entre dans
+  // l'annulation, ou si la commande y était déjà. Sans cette distinction, un
+  // second passage recréditerait le stock une deuxième fois.
+  let before: { status?: string; items?: unknown; agent_id?: string } = {};
+  try {
+    const b = await query(
+      `SELECT o.status, o.items, o.agent_id
+         FROM camille.orders o JOIN camille.agents a ON a.id = o.agent_id
+        WHERE o.id = $1 AND a.user_id = $2`,
+      [orderId, user.id]
+    );
+    before = b.rows[0] || {};
+  } catch { /* la mise à jour dira elle-même si la commande est introuvable */ }
+
   const args = [status, body.note ?? null, user.id, orderId];
 
   let r;
@@ -77,6 +92,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   if (!r.rows.length) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 });
 
   const order = r.rows[0];
+
+  // Annulation : la marchandise retourne en rayon.
+  if (status === "annulee" && before.status && before.status !== "annulee") {
+    const its = Array.isArray(before.items)
+      ? before.items
+      : (() => { try { return JSON.parse(String(before.items || "[]")); } catch { return []; } })();
+    await restoreStock(String(before.agent_id), its).catch(() => {});
+  }
 
   // Passage en traitement = accuse de reception : on envoie le bon de commande
   // en PDF au client. On ATTEND le resultat pour pouvoir le remonter dans l'app,

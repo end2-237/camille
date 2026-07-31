@@ -12,6 +12,8 @@ import { notifyUser } from "@/lib/fcm";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export type NewOrderItem = {
+  /** Identifiant catalogue, quand la ligne en vient. Sert à décompter le stock. */
+  productId?: string;
   name?: string;
   variant?: string;
   qty?: number;
@@ -93,6 +95,97 @@ function coord(v: unknown, max: number): number | null {
   return n;
 }
 
+
+/** En dessous de ce seuil, on prévient le commerçant. */
+const LOW_STOCK = Number(process.env.LOW_STOCK_THRESHOLD || 5);
+
+type LowLine = { name: string; stock: number };
+
+/**
+ * Retire du stock ce que la commande emporte.
+ *
+ * Le décompte se fait à la création : c'est le moment où la marchandise est
+ * réellement engagée. Une ligne sans identifiant catalogue (article saisi
+ * librement) est rapprochée par son nom ; si rien ne correspond, on ne touche
+ * à rien plutôt que de décompter le mauvais produit.
+ *
+ * Ne lève jamais : une commande ne doit pas échouer parce que le stock n'a pas
+ * pu être mis à jour.
+ *
+ * @returns les articles passés au seuil bas lors de CETTE commande
+ */
+async function applyStock(agentId: string, items: NewOrderItem[]): Promise<LowLine[]> {
+  const low: LowLine[] = [];
+
+  for (const it of items) {
+    const qty = Math.max(1, Number(it.qty) || 1);
+    try {
+      // GREATEST(0, …) : un stock ne descend pas sous zéro, même si deux
+      // commandes se croisent sur le dernier article.
+      const r = it.productId
+        ? await query(
+            `UPDATE camille.products
+                SET stock = GREATEST(0, stock - $1), updated_at = NOW()
+              WHERE id = $2 AND agent_id = $3 AND stock IS NOT NULL
+            RETURNING name, stock`,
+            [qty, it.productId, agentId]
+          )
+        : await query(
+            `UPDATE camille.products
+                SET stock = GREATEST(0, stock - $1), updated_at = NOW()
+              WHERE agent_id = $2 AND lower(name) = lower($3) AND stock IS NOT NULL
+            RETURNING name, stock`,
+            [qty, agentId, String(it.name || "")]
+          );
+
+      const row = r.rows[0];
+      if (!row) continue;
+
+      // On ne prévient qu'au FRANCHISSEMENT du seuil : sans cela, chaque
+      // commande d'un article déjà bas rejouerait la même alerte.
+      const before = Number(row.stock) + qty;
+      if (Number(row.stock) <= LOW_STOCK && before > LOW_STOCK) {
+        low.push({ name: row.name, stock: Number(row.stock) });
+      }
+    } catch {
+      // colonne stock absente, ou produit supprimé : sans conséquence ici.
+    }
+  }
+
+  return low;
+}
+
+/**
+ * Remet en rayon ce qu'une commande annulée avait emporté.
+ *
+ * Sans cela, le stock sortait à la commande et ne revenait jamais : quelques
+ * annulations suffisaient à faire disparaître du catalogue des articles
+ * pourtant disponibles.
+ *
+ * L'appelant doit garantir que la commande n'était PAS déjà annulée, sinon la
+ * marchandise serait recréditée deux fois.
+ */
+export async function restoreStock(agentId: string, items: NewOrderItem[]) {
+  for (const it of items) {
+    const qty = Math.max(1, Number(it.qty) || 1);
+    try {
+      if (it.productId) {
+        await query(
+          `UPDATE camille.products SET stock = stock + $1, updated_at = NOW()
+            WHERE id = $2 AND agent_id = $3 AND stock IS NOT NULL`,
+          [qty, it.productId, agentId]
+        );
+      } else {
+        await query(
+          `UPDATE camille.products SET stock = stock + $1, updated_at = NOW()
+            WHERE agent_id = $2 AND lower(name) = lower($3) AND stock IS NOT NULL`,
+          [qty, agentId, String(it.name || "")]
+        );
+      }
+    } catch { /* produit supprimé depuis : rien à recréditer */ }
+  }
+}
+
 export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok: false; error: string }> {
   const items = Array.isArray(input.items) ? input.items : [];
   if (!items.length) return { ok: false, error: "panier vide" };
@@ -153,6 +246,12 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
     }
   }
 
+  // ── Stock ────────────────────────────────────────────────────────────────
+  // Une commande enregistrée sort la marchandise : sans ce décompte, le
+  // catalogue annonçait indéfiniment des quantités déjà vendues, et l'agent
+  // continuait de proposer des articles épuisés.
+  const lowStock = await applyStock(input.agentId, items);
+
   const ag = await query(
     "SELECT name, business_name, whatsapp_number, location, user_id FROM camille.agents WHERE id = $1",
     [input.agentId]
@@ -209,6 +308,23 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
       data: { type: "order", ref, orderId: String(orderId || ""), agentId: String(input.agentId), source },
       channel: "commandes",
     }).catch(() => {});
+
+    // Alerte de stock, séparée de la commande : elle n'appelle pas la même
+    // action et ne doit pas se perdre dans la joie d'une vente. Un seul
+    // message pour tous les articles concernés — trois alertes d'affilée pour
+    // une même commande se lisent comme du bruit.
+    if (lowStock.length) {
+      const epuises = lowStock.filter((l) => l.stock === 0);
+      const detail = lowStock.map((l) => `${l.name} : ${l.stock}`).join(" · ");
+      notifyUser(shop.user_id, "alerte", {
+        title: epuises.length
+          ? `Rupture de stock — ${epuises.map((l) => l.name).join(", ")}`.slice(0, 90)
+          : `Stock faible — ${lowStock.length} article${lowStock.length > 1 ? "s" : ""}`,
+        body: detail.slice(0, 160),
+        data: { type: "stock", agentId: String(input.agentId) },
+        channel: "commandes",
+      }).catch(() => {});
+    }
   }
 
   return { ok: true, id: orderId, ref, subtotal, deliveryFee, total, currency, clientText, ownerText, ownerChatId };

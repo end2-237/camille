@@ -52,6 +52,9 @@ export async function POST(req: NextRequest) {
       const p = r.rows[0];
       if (!p) return json({ error: `Produit introuvable dans ce catalogue : ${it.id}` }, 400, req);
       items.push({
+        // L'identifiant permet de décompter le bon produit, même si deux
+        // articles portent un nom voisin.
+        productId: String(it.id),
         name: p.name,
         variant: String(it.variant || ""),
         qty,
