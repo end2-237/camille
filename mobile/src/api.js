@@ -124,6 +124,16 @@ export const setOrderStatus = (orderId, status) =>
 // Trajet boutique -> client (distance, duree, trace)
 export const getItinerary = (orderId) => req(`/api/orders/${orderId}/itinerary`);
 
+/**
+ * Produit le bon de commande, ou renvoie celui qui existe déjà.
+ * @param {boolean} send  true pour le renvoyer aussi au client sur WhatsApp.
+ */
+export const buildOrderDocument = (orderId, send = false) =>
+  req(`/api/orders/${orderId}/document`, {
+    method: "POST",
+    body: JSON.stringify({ send }),
+  });
+
 // ── Upload d'image (carte du menu, photos produit) ──────────────────────────
 // multipart : on ne passe PAS par req() qui force application/json.
 export async function uploadImage(agentId, uri, name = "carte.jpg") {

@@ -31,10 +31,19 @@ function docNumber(ref: string) {
 }
 
 /**
- * Crée le bon de commande et l'envoie au client sur WhatsApp.
+ * Crée le bon de commande, et l'envoie au client sur WhatsApp si demandé.
  * Ne lève jamais — renvoie toujours un résultat exploitable.
+ *
+ * @param opts.send  false pour seulement produire le document. Le vendeur qui
+ *   veut consulter ou récupérer un bon déjà envoyé ne doit pas le renvoyer au
+ *   client à chaque fois : recevoir trois fois le même PDF inquiète plus qu'il
+ *   ne rassure.
  */
-export async function sendOrderDocument(orderId: string): Promise<SendResult> {
+export async function sendOrderDocument(
+  orderId: string,
+  opts: { send?: boolean } = {}
+): Promise<SendResult> {
+  const notifyClient = opts.send !== false;
   let o: Record<string, unknown>;
   try {
     const r = await query(
@@ -53,7 +62,7 @@ export async function sendOrderDocument(orderId: string): Promise<SendResult> {
   // contact_phone est le vrai numero du client (camille-core resout les LID).
   // toJid() cote core y ajoute @s.whatsapp.net s'il n'y a pas de domaine.
   const chatId = String(o.contact_phone || "").trim();
-  if (!chatId) return { ok: false, reason: "aucun contact pour cette commande" };
+  if (!chatId && notifyClient) return { ok: false, reason: "aucun contact pour cette commande" };
 
   const items: OrderItem[] = Array.isArray(o.items)
     ? (o.items as OrderItem[])
@@ -125,6 +134,9 @@ export async function sendOrderDocument(orderId: string): Promise<SendResult> {
       [doc.number || number, pdfUrl, orderId]
     );
   } catch { /* colonnes absentes : la migration n'est pas passée, on continue */ }
+
+  // Génération seule : le document existe et son URL est mémorisée, on s'arrête.
+  if (!notifyClient) return { ok: true, number: doc.number || number, pdfUrl };
 
   const caption =
     `📄 Ton bon de commande n° ${doc.number || number}\n\n` +

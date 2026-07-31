@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import { EmptyHint } from "../components/ui";
 import { BottomDrawer } from "../components/Drawer";
-import { getOrders, setOrderStatus, getItinerary, getProducts } from "../api";
+import { getOrders, setOrderStatus, getItinerary, getProducts, buildOrderDocument } from "../api";
 import Svg, { Polyline } from "react-native-svg";
 
 // Cycle de vie : à traiter → en traitement → livrée. "traitee" est l'ancien
@@ -363,6 +363,104 @@ function Actions({ order: o, onChange, compact }) {
 }
 
 // Suivi horizontal : pastilles reliées par une barre qui se remplit.
+/**
+ * Bon de commande, côté vendeur.
+ *
+ * Le document n'était produit qu'au passage en traitement, et jamais réessayé :
+ * une panne de buyfacturation à cet instant laissait la commande sans bon, sans
+ * rien pour le dire ni le rattraper. Le bloc est donc toujours visible, et sait
+ * produire le document à la demande.
+ */
+function OrderDocument({ order: o, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [doc, setDoc] = useState({ url: o.doc_url || "", number: o.doc_number || "" });
+
+  // Le parent recharge la liste après changement de statut : on suit.
+  useEffect(() => {
+    setDoc({ url: o.doc_url || "", number: o.doc_number || "" });
+  }, [o.doc_url, o.doc_number]);
+
+  async function build(send) {
+    setBusy(true);
+    try {
+      const r = await buildOrderDocument(o.id, send);
+      setDoc({ url: r.doc_url || "", number: r.doc_number || "" });
+      if (send) {
+        Alert.alert(
+          r.sent ? "Bon de commande envoyé" : "Document prêt",
+          r.sent
+            ? `Le client a reçu le n° ${r.doc_number || ""} sur WhatsApp.`
+            : `Le document existe, mais l'envoi WhatsApp a échoué : ${r.warning || "raison inconnue"}.\n\n` +
+              "Tu peux l'ouvrir et le transmettre toi-même."
+        );
+      }
+      onChange?.();
+    } catch (e) {
+      Alert.alert("Bon de commande", e?.message || "Génération impossible pour le moment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!doc.url) {
+    return (
+      <View>
+        <Text style={{ color: C.sub, fontSize: 12.5, lineHeight: 18, marginBottom: 10 }}>
+          Aucun bon n'a encore été produit pour cette commande. Il part
+          automatiquement au client à la mise en traitement — tu peux aussi le
+          créer maintenant.
+        </Text>
+        <TouchableOpacity
+          onPress={() => build(false)}
+          disabled={busy}
+          style={{ height: 44, borderRadius: R.pill, borderWidth: 1, borderColor: C.line,
+            backgroundColor: C.white, alignItems: "center", justifyContent: "center",
+            flexDirection: "row", gap: 8, opacity: busy ? 0.6 : 1 }}>
+          {busy ? <ActivityIndicator size="small" color={C.ink} /> : (
+            <>
+              <Ionicons name="document-text-outline" size={17} color={C.ink} />
+              <Text style={{ color: C.ink, fontWeight: "700", fontSize: 14 }}>Créer le bon de commande</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <TouchableOpacity
+        onPress={() => Linking.openURL(doc.url)}
+        activeOpacity={0.8}
+        style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#FCF1E8",
+          alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="document-text" size={20} color="#DD5509" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: C.ink, fontSize: 14, fontWeight: "700" }}>{doc.number || "Document"}</Text>
+          <Text style={{ color: C.sub, fontSize: 11.5, marginTop: 1 }}>PDF · toucher pour ouvrir et télécharger</Text>
+        </View>
+        <Ionicons name="download-outline" size={18} color={C.sub} />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => build(true)}
+        disabled={busy}
+        style={{ marginTop: 10, height: 40, borderRadius: R.pill, borderWidth: 1, borderColor: C.line,
+          alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7,
+          opacity: busy ? 0.6 : 1 }}>
+        {busy ? <ActivityIndicator size="small" color={C.sub} /> : (
+          <>
+            <Ionicons name="paper-plane-outline" size={15} color={C.sub} />
+            <Text style={{ color: C.sub, fontWeight: "600", fontSize: 13 }}>Renvoyer au client</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function Tracking({ order: o }) {
   const cancelled = o.status === "annulee";
   const steps = [
@@ -581,22 +679,9 @@ function OrderDetail({ order: o, onChange, onClose }) {
           </Block>
         ) : null}
 
-        {o.doc_url ? (
-          <Block title="Bon de commande">
-            <TouchableOpacity onPress={() => Linking.openURL(o.doc_url)} activeOpacity={0.8}
-              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#FCF1E8",
-                alignItems: "center", justifyContent: "center" }}>
-                <Ionicons name="document-text" size={20} color="#DD5509" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: C.ink, fontSize: 14, fontWeight: "700" }}>{o.doc_number || "Document"}</Text>
-                <Text style={{ color: C.sub, fontSize: 11.5, marginTop: 1 }}>Envoyé au client · toucher pour ouvrir</Text>
-              </View>
-              <Ionicons name="download-outline" size={18} color={C.sub} />
-            </TouchableOpacity>
-          </Block>
-        ) : null}
+        <Block title="Bon de commande">
+          <OrderDocument order={o} onChange={onChange} />
+        </Block>
 
         <Block title="Suivi">
           <Tracking order={o} />
