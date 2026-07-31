@@ -95,7 +95,7 @@ export async function notifyUser(
   userId: string,
   kind: "commande" | "alerte" | "systeme",
   p: PushPayload
-): Promise<{ sent: number; skipped?: string }> {
+): Promise<{ sent: number; skipped?: string; errors?: string[] }> {
   // Journal in-app d'abord : il doit exister même sans configuration FCM.
   try {
     await query(
@@ -127,6 +127,7 @@ export async function notifyUser(
 
   const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
   let sent = 0;
+  const errors: string[] = [];
 
   await Promise.all(tokens.map(async (token) => {
     try {
@@ -165,6 +166,11 @@ export async function notifyUser(
       // seul envoi malformé, et sans que personne puisse le deviner.
       if (res.status === 404) {
         const detail = await res.text().catch(() => "");
+        errors.push(
+          "404 UNREGISTERED — ce jeton n'appartient pas au projet Firebase " +
+          `« ${sa.project_id} ». Le plus souvent : le google-services.json de ` +
+          "l'app et le compte de service viennent de deux projets différents."
+        );
         await query(
           "UPDATE camille.push_tokens SET active = FALSE, last_error = $1, updated_at = NOW() WHERE token = $2",
           [detail.slice(0, 300), token]
@@ -173,15 +179,17 @@ export async function notifyUser(
       if (res.status === 400) {
         const detail = await res.text().catch(() => "");
         console.error("[fcm] message refusé (jeton conservé) :", detail.slice(0, 300));
+        errors.push(`400 — message refusé : ${detail.slice(0, 160)}`);
         await query(
           "UPDATE camille.push_tokens SET last_error = $1, updated_at = NOW() WHERE token = $2",
           [detail.slice(0, 300), token]
         ).catch(() => {});
       }
-    } catch {
+    } catch (e) {
       // réseau : on réessaiera à la prochaine notification
+      errors.push(`réseau : ${(e as Error).message}`);
     }
   }));
 
-  return { sent };
+  return { sent, ...(errors.length ? { errors } : {}) };
 }

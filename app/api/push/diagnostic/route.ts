@@ -123,6 +123,30 @@ export async function GET(req: NextRequest) {
   checks.push(sa);
   if (sa.ok) checks.push(await checkFirebaseAuth());
 
+  // 5. Le compte de service et l'application doivent viser le MEME projet.
+  // Un jeton obtenu par l'app n'est valable que pour le projet de son
+  // google-services.json : si le compte de service vient d'ailleurs, chaque
+  // envoi repond 404 UNREGISTERED, et rien dans les verifications precedentes
+  // ne permettait de le soupçonner.
+  const APP_PROJECT = process.env.FIREBASE_APP_PROJECT_ID || "buyticle-bce3f";
+  // serviceAccount() est la MEME lecture que celle de l'envoi : un diagnostic
+  // qui parse autrement finirait par mentir.
+  const saProject = serviceAccount()?.project_id || "";
+
+  if (saProject) {
+    const same = saProject === APP_PROJECT;
+    checks.push({
+      ok: same,
+      label: "Projet Firebase",
+      detail: same
+        ? `compte de service et application sur « ${saProject} »`
+        : `compte de service sur « ${saProject} », application sur « ${APP_PROJECT} »`,
+      fix: same
+        ? undefined
+        : `Prends le compte de service du projet ${APP_PROJECT} (Firebase → Paramètres → Comptes de service → Générer une clé privée), ou reconstruis l'app avec le google-services.json de ${saProject}.`,
+    });
+  }
+
   return NextResponse.json({
     ready: checks.every((c) => c.ok),
     checks,
@@ -140,5 +164,10 @@ export async function POST(req: NextRequest) {
     data: { type: "test" },
     channel: "commandes",
   });
-  return NextResponse.json({ ...r, ok: r.sent > 0 });
+  // « 0 envoyé » sans raison ne sert à rien : on remonte ce que Firebase a dit.
+  return NextResponse.json({
+    ...r,
+    ok: r.sent > 0,
+    reason: r.sent > 0 ? undefined : (r.errors?.[0] || r.skipped || "aucun appareil joignable"),
+  });
 }

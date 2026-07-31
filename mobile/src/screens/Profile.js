@@ -130,7 +130,12 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
       const lines = (d.checks || []).map((c) => `${c.ok ? "✅" : "❌"} ${c.label}${c.detail ? `\n     ${c.detail}` : ""}${c.fix ? `\n     → ${c.fix}` : ""}`);
       if (d.ready) {
         const t = await pushTest().catch((e) => ({ ok: false, skipped: e.message }));
-        lines.push("", t.ok ? `📨 Test envoye a ${t.sent} appareil(s)` : `❌ Envoi du test : ${t.skipped || "echec"}`);
+        // `skipped` ne couvrait pas le refus de Firebase : un envoi rejeté
+        // affichait « echec » sans dire pourquoi, alors que le serveur connaît
+        // la cause exacte.
+        lines.push("", t.ok
+          ? `📨 Test envoye a ${t.sent} appareil(s)`
+          : `❌ Envoi du test : ${t.reason || t.skipped || "echec"}`);
       }
       Alert.alert(d.ready ? "Notifications prêtes" : "Notifications incomplètes", lines.join("\n"));
     } catch (e) {
