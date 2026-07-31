@@ -24,8 +24,14 @@ export async function GET(req: NextRequest) {
         LIMIT $2`,
       [user.id, limit]
     );
-    const unread = r.rows.filter((n: { read_at: string | null }) => !n.read_at).length;
-    return NextResponse.json({ notifications: r.rows, unread });
+    // Le compte doit porter sur TOUTES les notifications, pas sur la page
+    // renvoyee : l'app demandait limit=1 pour n'avoir que le compteur, et
+    // recevait donc 0 ou 1, jamais davantage. Le badge restait bloque sur 1.
+    const c = await query(
+      "SELECT COUNT(*)::int AS n FROM camille.notifications WHERE user_id = $1 AND read_at IS NULL",
+      [user.id]
+    );
+    return NextResponse.json({ notifications: r.rows, unread: c.rows[0]?.n ?? 0 });
   } catch (e) {
     return NextResponse.json({
       notifications: [],

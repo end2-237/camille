@@ -137,7 +137,12 @@ export async function notifyUser(
           message: {
             token,
             notification: { title: p.title, body: p.body },
-            data: p.data || {},
+            // FCM v1 refuse toute valeur non textuelle dans data, avec un 400
+            // qui ne dit pas laquelle. On convertit plutôt que de risquer un
+            // envoi perdu à cause d'un nombre oublié quelque part.
+            data: Object.fromEntries(
+              Object.entries(p.data || {}).map(([k, v]) => [k, String(v ?? "")])
+            ),
             android: {
               priority: "HIGH",
               notification: {
@@ -152,12 +157,24 @@ export async function notifyUser(
       });
       if (res.ok) { sent++; return; }
 
-      // 404 UNREGISTERED / 400 INVALID_ARGUMENT : l'appareil ne recevra plus
-      // jamais rien, on désactive le jeton pour ne pas réessayer indéfiniment.
-      if (res.status === 404 || res.status === 400) {
+      // 404 UNREGISTERED : l'application a été désinstallée, ce jeton est mort.
+      //
+      // 400 en revanche dit que le MESSAGE est invalide, pas l'appareil — une
+      // valeur non textuelle dans data suffit. Désactiver le jeton dans ce cas
+      // coupait les notifications de ce téléphone pour toujours, à cause d'un
+      // seul envoi malformé, et sans que personne puisse le deviner.
+      if (res.status === 404) {
         const detail = await res.text().catch(() => "");
         await query(
           "UPDATE camille.push_tokens SET active = FALSE, last_error = $1, updated_at = NOW() WHERE token = $2",
+          [detail.slice(0, 300), token]
+        ).catch(() => {});
+      }
+      if (res.status === 400) {
+        const detail = await res.text().catch(() => "");
+        console.error("[fcm] message refusé (jeton conservé) :", detail.slice(0, 300));
+        await query(
+          "UPDATE camille.push_tokens SET last_error = $1, updated_at = NOW() WHERE token = $2",
           [detail.slice(0, 300), token]
         ).catch(() => {});
       }
