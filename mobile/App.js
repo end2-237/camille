@@ -5,7 +5,7 @@ import { registerForPush, listenPush, clearBadge } from "./src/push";
 import Notifications from "./src/screens/Notifications";
 import Complaints from "./src/screens/Complaints";
 import ForceUpdate from "./src/screens/ForceUpdate";
-import { getNotifications, checkAppVersion } from "./src/api";
+import { getNotifications, checkAppVersion, getComplaints } from "./src/api";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { C } from "./src/theme";
@@ -30,6 +30,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [sav, setSav] = useState(0);
   const [gate, setGate] = useState(null); // mise a jour obligatoire
 
   const load = useCallback(async () => {
@@ -58,6 +59,11 @@ export default function App() {
     // Compteur de la cloche. Silencieux : une erreur ici ne doit pas
     // empecher le reste du tableau de bord de s'afficher.
     getNotifications(1).then((d) => setUnread(Number(d?.unread || 0))).catch(() => {});
+    // Réclamations ouvertes : la pastille de l'onglet doit être juste sans
+    // qu'on ait besoin d'ouvrir l'écran.
+    getComplaints("active")
+      .then((d) => setSav(Array.isArray(d?.complaints) ? d.complaints.length : 0))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -175,7 +181,7 @@ export default function App() {
   else if (tab === "convos") Body = <Conversations {...common} />;
   else if (tab === "analytics") Body = <Analytics {...common} user={user} />;
   else if (tab === "notifs") Body = <Notifications onOpenOrders={() => setTab("agents")} />;
-  else if (tab === "sav") Body = <Complaints />;
+  else if (tab === "sav") Body = <Complaints onCountChange={setSav} />;
   else Body = <Profile user={user} setUser={setUser} onAuthChange={onAuthChange} agents={stats?.agents || []} />;
 
   return (
@@ -198,7 +204,7 @@ export default function App() {
         </View>
       )}
       <AnimatedScreen tabKey={tab}>{Body}</AnimatedScreen>
-      <BottomNav tab={tab} setTab={setTab} />
+      <BottomNav tab={tab} setTab={setTab} savCount={sav} />
     </SafeAreaView>
   );
 }

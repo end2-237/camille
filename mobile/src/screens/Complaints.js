@@ -6,7 +6,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import { EmptyHint } from "../components/ui";
-import { getComplaints, resolveComplaint } from "../api";
+import { getComplaints, resolveComplaint, setComplaintTakeover } from "../api";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Réclamations.
@@ -39,7 +39,7 @@ function since(iso) {
   return j === 1 ? "hier" : `il y a ${j} jours`;
 }
 
-export default function Complaints() {
+export default function Complaints({ onCountChange }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,11 +63,37 @@ export default function Complaints() {
   const shown = items.filter((c) => (tab === "done" ? c.status === "done" : c.status !== "done"));
   const openCount = items.filter((c) => c.status !== "done").length;
 
+  // La pastille de l'onglet suit les clôtures sans attendre un rechargement.
+  useEffect(() => { onCountChange?.(openCount); }, [openCount, onCountChange]);
+
+  // Faire taire l'agent, ou le remettre en service, pour ce client précis.
+  // Le geste est explicite : le commerçant qui reprend une conversation ne veut
+  // pas que l'agent réponde par-dessus lui, et lui seul sait quand il a fini.
+  async function toggleTakeover(c) {
+    const next = !c.human_takeover;
+    setBusy(c.id);
+    try {
+      await setComplaintTakeover(c.id, next);
+      setItems((prev) => prev.map((x) => (x.id === c.id ? { ...x, human_takeover: next } : x)));
+    } catch (e) {
+      Alert.alert("Réclamations", e?.message || "Changement impossible.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function setStatus(c, status) {
     setBusy(c.id);
     try {
       await resolveComplaint(c.id, status);
-      setItems((prev) => prev.map((x) => (x.id === c.id ? { ...x, status } : x)));
+      // Clôturer rend la parole à l'agent — l'écran doit le montrer aussitôt.
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === c.id
+            ? { ...x, status, human_takeover: status === "done" ? false : x.human_takeover }
+            : x
+        )
+      );
     } catch (e) {
       Alert.alert("Réclamations", e?.message || "Mise à jour impossible.");
     } finally {
@@ -184,7 +210,32 @@ export default function Complaints() {
                 </Text>
               </View>
 
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
+              <TouchableOpacity
+                onPress={() => toggleTakeover(c)}
+                disabled={busy === c.id}
+                style={{ flexDirection: "row", alignItems: "center", gap: 9, marginTop: 12,
+                  paddingVertical: 10, paddingHorizontal: 12, borderRadius: R.md,
+                  backgroundColor: c.human_takeover ? "#FDF1DC" : C.bg,
+                  borderWidth: 1, borderColor: c.human_takeover ? "#F0D9A8" : C.line }}>
+                <Ionicons
+                  name={c.human_takeover ? "mic-off" : "chatbubble-ellipses-outline"}
+                  size={16}
+                  color={c.human_takeover ? "#8A5A00" : C.sub}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: c.human_takeover ? "#8A5A00" : C.ink, fontSize: 13, fontWeight: "700" }}>
+                    {c.human_takeover ? "Agent en pause" : "Agent actif"}
+                  </Text>
+                  <Text style={{ color: C.sub, fontSize: 11.5, marginTop: 1 }}>
+                    {c.human_takeover
+                      ? "Tu réponds toi-même. Touche pour lui rendre la main."
+                      : "Il répond à ce client. Touche pour le faire taire."}
+                  </Text>
+                </View>
+                {busy === c.id ? <ActivityIndicator size="small" color={C.sub} /> : null}
+              </TouchableOpacity>
+
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                 <TouchableOpacity
                   onPress={() => answer(c)}
                   style={{ flex: 1, height: 44, borderRadius: R.pill, backgroundColor: C.ink,

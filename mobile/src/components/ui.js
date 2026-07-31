@@ -9,6 +9,7 @@ const TITLES = {
   convos: "Conversations",
   analytics: "Analytics",
   profile: "Profil",
+  sav: "Réclamations",
 };
 
 export function Header({ query, setQuery, onProfile, onNotifications, unread = 0, initials }) {
@@ -73,12 +74,12 @@ export function Card({ children, style, dark = true }) {
   );
 }
 
-export function BottomNav({ tab, setTab }) {
+export function BottomNav({ tab, setTab, savCount = 0 }) {
   const items = [
     { key: "dash", icon: "grid" },
     { key: "agents", icon: "cube-outline" },
     { key: "convos", icon: "chatbubble-outline" },
-    { key: "sav", icon: "alert-circle-outline" },
+    { key: "sav", icon: "alert-circle-outline", badge: savCount },
     { key: "analytics", icon: "stats-chart" },
     { key: "profile", icon: "person-outline" },
   ];
@@ -92,6 +93,15 @@ export function BottomNav({ tab, setTab }) {
               style={{ width: 46, height: 44, borderRadius: R.pill, alignItems: "center", justifyContent: "center",
                 backgroundColor: on ? C.lime : "transparent" }}>
               <Ionicons name={it.icon} size={20} color={on ? C.ink : "rgba(255,255,255,0.6)"} />
+              {it.badge > 0 && (
+                <View style={{ position: "absolute", top: 4, right: 6, minWidth: 16, height: 16,
+                  borderRadius: 8, paddingHorizontal: 4, backgroundColor: C.red,
+                  alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: C.white, fontSize: 9.5, fontWeight: "800" }}>
+                    {it.badge > 9 ? "9+" : it.badge}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           );
         })}

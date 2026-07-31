@@ -131,6 +131,10 @@ export const getComplaints = (status) =>
 export const resolveComplaint = (id, status = "done") =>
   req("/api/complaints", { method: "PATCH", body: JSON.stringify({ id, status }) });
 
+/** Faire taire l'agent pour ce client, ou lui rendre la parole. */
+export const setComplaintTakeover = (id, takeover) =>
+  req("/api/complaints", { method: "PATCH", body: JSON.stringify({ id, takeover }) });
+
 /**
  * Produit le bon de commande, ou renvoie celui qui existe déjà.
  * @param {boolean} send  true pour le renvoyer aussi au client sur WhatsApp.

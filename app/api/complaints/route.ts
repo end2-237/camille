@@ -114,10 +114,15 @@ export async function GET(req: NextRequest) {
 
   try {
     const r = await query(
+      // LEFT JOIN : un contact peut ne pas exister (client jamais enregistré),
+      // et la réclamation doit rester visible malgré tout.
       `SELECT t.id, t.phone, t.title, t.content, t.status, t.created_at,
-              a.id AS agent_id, a.business_name
+              a.id AS agent_id, a.business_name,
+              COALESCE(c.human_takeover, false) AS human_takeover
          FROM camille.owner_tasks t
          JOIN camille.agents a ON a.id = t.agent_id
+         LEFT JOIN camille.contacts c
+                ON c.agent_id = t.agent_id AND c.phone = t.phone
          ${where}
         ORDER BY t.created_at DESC
         LIMIT 200`,
@@ -138,20 +143,65 @@ export async function PATCH(req: NextRequest) {
 
   const b = await req.json().catch(() => ({} as Record<string, unknown>));
   const id = String(b.id || "");
-  const status = b.status === "active" ? "active" : "done";
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 });
 
+  // Deux gestes distincts sur la même réclamation :
+  //   { takeover: true|false }  faire taire l'agent, ou lui rendre la parole
+  //   { status: ... }           classer la réclamation
+  // Les séparer permet de garder la main sur un client sans clore son dossier,
+  // et de clore un dossier sans laisser l'agent muet pour toujours.
+  const onlyTakeover = typeof b.takeover === "boolean" && b.status === undefined;
+  const status = b.status === "active" ? "active" : "done";
+
   try {
+    // Basculement seul : on ne touche pas au statut de la réclamation.
+    if (onlyTakeover) {
+      const own = await query(
+        `SELECT t.agent_id, t.phone
+           FROM camille.owner_tasks t
+           JOIN camille.agents a ON a.id = t.agent_id
+          WHERE t.id = $1 AND a.user_id = $2`,
+        [id, user.id]
+      );
+      const t = own.rows[0];
+      if (!t) return NextResponse.json({ error: "Réclamation introuvable" }, { status: 404 });
+      if (!t.phone) return NextResponse.json({ error: "Ce client n'a pas de numéro." }, { status: 400 });
+
+      await query(
+        `INSERT INTO camille.contacts (agent_id, phone, human_takeover, created_at, updated_at)
+         VALUES ($1, $2, $3, NOW(), NOW())
+         ON CONFLICT (agent_id, phone)
+         DO UPDATE SET human_takeover = $3, updated_at = NOW()`,
+        [t.agent_id, t.phone, b.takeover === true]
+      );
+      return NextResponse.json({ ok: true, human_takeover: b.takeover === true });
+    }
+
     const r = await query(
       `UPDATE camille.owner_tasks t
           SET status = $1
          FROM camille.agents a
         WHERE t.id = $2 AND t.agent_id = a.id AND a.user_id = $3
-      RETURNING t.id, t.status`,
+      RETURNING t.id, t.status, t.agent_id, t.phone`,
       [status, id, user.id]
     );
     if (!r.rows.length) return NextResponse.json({ error: "Réclamation introuvable" }, { status: 404 });
-    return NextResponse.json({ ok: true, complaint: r.rows[0] });
+
+    const row = r.rows[0];
+
+    // Une réclamation ouverte a fait taire l'agent pour ce client, le temps
+    // qu'un humain règle le problème. La clôturer lui rend la parole — sans
+    // quoi ce client ne serait plus jamais servi automatiquement.
+    if (status === "done" && row.phone) {
+      await query(
+        `UPDATE camille.contacts
+            SET human_takeover = false, updated_at = NOW()
+          WHERE agent_id = $1 AND phone = $2`,
+        [row.agent_id, row.phone]
+      ).catch(() => {});
+    }
+
+    return NextResponse.json({ ok: true, complaint: { id: row.id, status: row.status } });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
