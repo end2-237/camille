@@ -45,12 +45,28 @@ import { Platform, StatusBar, Dimensions } from "react-native";
 export const TOP_INSET =
   Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 4 : 0;
 
+// Hauteur d'une barre a trois boutons sur la plupart des telephones.
+const NAV_BAR_3_BOUTONS = 48;
+
 export const BOTTOM_INSET = (() => {
   if (Platform.OS !== "android") return 0;
+
   const screen = Dimensions.get("screen").height;
   const win = Dimensions.get("window").height;
   const diff = Math.round(screen - win - (StatusBar.currentHeight || 0));
-  // Bornes : 0 en navigation par gestes (rien a eviter), 56 au maximum pour
-  // qu'une mesure aberrante ne repousse pas la barre au milieu de l'ecran.
-  return Math.max(0, Math.min(56, diff));
+
+  // diff > 0 : la fenetre s'arrete avant les barres systeme, la mesure est
+  // juste. On la borne a 56 pour qu'un telephone exotique ne repousse pas la
+  // barre au milieu de l'ecran.
+  if (diff > 0) return Math.min(56, diff);
+
+  // diff <= 0 : la fenetre occupe TOUT l'ecran. C'est le cas depuis qu'on
+  // declare targetSdk 35 — Android 15 impose le bord-a-bord — et plus rien
+  // n'est mesurable en JavaScript seul.
+  //
+  // Dans le doute on reserve la place d'une barre a trois boutons. Sur un
+  // telephone en navigation par gestes cela laisse un peu de vide : c'est
+  // desagreable. L'inverse rend les boutons du telephone inutilisables : c'est
+  // bloquant. On choisit le desagrement.
+  return NAV_BAR_3_BOUTONS;
 })();
