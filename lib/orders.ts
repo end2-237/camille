@@ -186,6 +186,41 @@ export async function restoreStock(agentId: string, items: NewOrderItem[]) {
   }
 }
 
+/**
+ * Ce qu'il faut dire à un client qui commande alors que la boutique est fermée.
+ *
+ * `business_hours` est un champ libre : on n'en tire une plage que si elle y
+ * est écrite noir sur blanc. Sans certitude on ne dit rien — annoncer une
+ * heure d'ouverture inventée vaut moins que le silence, et se retourne contre
+ * le commerçant quand personne ne répond à l'heure promise.
+ *
+ * @param hours   texte saisi par le commerçant
+ * @param offset  décalage horaire du commerce (Cameroun : +1)
+ */
+export function closedNotice(hours?: string | null, offset = 1): string {
+  const t = String(hours || "").toLowerCase().replace(/\s+/g, " ");
+  if (/24\s*\/\s*24|non.?stop/.test(t)) return "";
+
+  const m = t.match(/(\d{1,2})\s*h(?:\s*(\d{2}))?\s*(?:[-—–a à ]+)\s*(\d{1,2})\s*h(?:\s*(\d{2}))?/);
+  if (!m) return "";
+
+  const open = Number(m[1]) + Number(m[2] || 0) / 60;
+  const close = Number(m[3]) + Number(m[4] || 0) / 60;
+  if (!(open >= 0 && open <= 24 && close >= 0 && close <= 24) || open === close) return "";
+
+  const now = new Date();
+  const h = ((((now.getUTCHours() + offset) % 24) + 24) % 24) + now.getUTCMinutes() / 60;
+  const ouvert = open < close ? h >= open && h < close : h >= open || h < close;
+  if (ouvert) return "";
+
+  const lbl = (x: number) => {
+    const n = Math.floor(x);
+    const mn = Math.round((x - n) * 60);
+    return `${n}h${mn ? String(mn).padStart(2, "0") : ""}`;
+  };
+  return `\n\n😴 On est fermé pour le moment. Ta commande est bien enregistrée et sera prise en charge dès l'ouverture, à ${lbl(open)}.`;
+}
+
 export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok: false; error: string }> {
   const items = Array.isArray(input.items) ? input.items : [];
   if (!items.length) return { ok: false, error: "panier vide" };
@@ -253,7 +288,12 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
   const lowStock = await applyStock(input.agentId, items);
 
   const ag = await query(
-    "SELECT name, business_name, whatsapp_number, location, user_id FROM camille.agents WHERE id = $1",
+    // business_hours sert à ne pas promettre un rappel immédiat la nuit.
+    // to_jsonb : utc_offset n'existe pas partout, et son absence ne doit pas
+    // faire échouer la lecture de l'agent.
+    `SELECT name, business_name, whatsapp_number, location, user_id, business_hours,
+            (to_jsonb(a)->>'utc_offset')::numeric AS utc_offset
+       FROM camille.agents a WHERE id = $1`,
     [input.agentId]
   );
   const shop = ag.rows[0] ?? {};
@@ -273,7 +313,11 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
     `Statut : En traitement 🔄\n` +
     (note ? `Mode : ${note}\n` : "") +
     (placeLabel || address ? `Livraison : ${placeLabel || address}\n` : "") +
-    `\nOn te contacte tout de suite pour confirmer 📞`;
+    // Promettre un contact « tout de suite » à 2h du matin, c'est promettre ce
+    // qu'on ne tiendra pas. Quand la boutique est fermée, on le dit.
+    (closedNotice(shop.business_hours as string, Number(shop.utc_offset ?? 1))
+      ? `\nOn te recontacte dès l'ouverture 📞` + closedNotice(shop.business_hours as string, Number(shop.utc_offset ?? 1))
+      : `\nOn te contacte tout de suite pour confirmer 📞`);
 
   const lieu =
     lat != null && lng != null
