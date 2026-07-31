@@ -46,11 +46,25 @@ export async function POST(req: NextRequest) {
 
     if (it.id) {
       const r = await query(
-        "SELECT name, price, currency, image_url FROM camille.products WHERE id = $1 AND agent_id = $2",
+        "SELECT name, price, currency, image_url, stock FROM camille.products WHERE id = $1 AND agent_id = $2",
         [it.id, auth.key.agent_id]
       ).catch(() => ({ rows: [] as any[] }));
       const p = r.rows[0];
       if (!p) return json({ error: `Produit introuvable dans ce catalogue : ${it.id}` }, 400, req);
+
+      // Le stock était décompté mais jamais vérifié : on continuait de vendre
+      // des articles épuisés, et le commerçant découvrait la commande sans
+      // avoir la marchandise. Un stock à null signifie « non suivi » et reste
+      // vendable ; zéro signifie épuisé.
+      if (p.stock != null && Number(p.stock) <= 0) {
+        return json({ error: `${p.name} est épuisé.`, product: p.name, available: 0 }, 409, req);
+      }
+      if (p.stock != null && Number(p.stock) < qty) {
+        return json(
+          { error: `Il ne reste que ${p.stock} × ${p.name}.`, product: p.name, available: Number(p.stock) },
+          409, req
+        );
+      }
       items.push({
         // L'identifiant permet de décompter le bon produit, même si deux
         // articles portent un nom voisin.

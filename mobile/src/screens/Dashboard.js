@@ -39,6 +39,26 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
     <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 + BOTTOM_INSET }} showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
 
+      {/* Un zéro peut vouloir dire « aucune activité » ou « impossible à
+          lire ». Les confondre fait chercher un problème commercial là où il
+          y a un problème technique. */}
+      {Array.isArray(stats?.degraded) && stats.degraded.length > 0 && (
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12,
+          borderRadius: R.md, backgroundColor: "#FDF1DC", borderWidth: 1, borderColor: "#F0D9A8",
+          marginBottom: S.md }}>
+          <Ionicons name="warning-outline" size={17} color="#8A5A00" style={{ marginTop: 1 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: "#8A5A00", fontWeight: "700", fontSize: 13 }}>
+              Statistiques incomplètes
+            </Text>
+            <Text style={{ color: "#8A5A00", fontSize: 12, marginTop: 2, lineHeight: 17 }}>
+              Certaines données n'ont pas pu être lues — les chiffres ci-dessous
+              ne sont pas fiables. Applique migration_all.sql sur la base.
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* ── HERO façon carte immobilière : image + titre + CTA + bandeau ── */}
       <View style={{ borderRadius: 22, overflow: "hidden", marginBottom: S.md, backgroundColor: "#8FC0EF" }}>
         <ImageBackground source={require("../../assets/dash-hero.png")} style={{ width: "100%", minHeight: 430 }} resizeMode="cover">

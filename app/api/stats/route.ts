@@ -38,9 +38,19 @@ function dateRange(days: number): { from: string; to: string } {
 // Exécute une requête en tolérant les dérives de schéma (colonne/table absente) :
 // renvoie des lignes vides au lieu de faire planter toute la page de stats.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// Les échecs sont collectés plutôt que simplement journalisés : afficher 0
+// message et 0 chiffre d'affaires parce qu'une table manque, sans rien dire,
+// laisse croire que l'activité est nulle. Mieux vaut l'avouer.
+const failures: string[] = [];
+
 async function safe(sql: string, params: unknown[]): Promise<{ rows: any[] }> {
   try { return (await query(sql, params)) as any; }
-  catch (e) { console.error("[stats] requête ignorée:", (e as Error).message); return { rows: [] }; }
+  catch (e) {
+    const m = (e as Error).message;
+    console.error("[stats] requête ignorée:", m);
+    if (!failures.includes(m)) failures.push(m);
+    return { rows: [] };
+  }
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -50,6 +60,7 @@ export async function GET(req: NextRequest) {
     const user = await getUserFromRequest(req);
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
+    failures.length = 0;
     const params      = req.nextUrl.searchParams;
     const agentIdParam = params.get("agentId");
     const periodParam  = params.get("period") ?? "30d";
@@ -378,6 +389,11 @@ export async function GET(req: NextRequest) {
       period: periodParam,
       from,
       to,
+
+      // Ce qui n'a pas pu être lu. Vide en fonctionnement normal ; renseigné
+      // quand une table manque, pour que l'app dise « statistiques
+      // indisponibles » au lieu d'afficher un zéro qui a l'air d'un fait.
+      ...(failures.length ? { degraded: failures } : {}),
 
       // Global KPIs
       overview: {

@@ -18,6 +18,31 @@ import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { notifyUser } from "@/lib/fcm";
 
+const CORE_URL = (process.env.CAMILLE_CORE_URL ?? "https://camille-core.vps.buyticle.com").replace(/\/$/, "");
+const CORE_KEY = process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
+
+/**
+ * Prévient le client sur WhatsApp.
+ *
+ * Le commerçant prenait sa réclamation en charge, et le client n'en savait
+ * rien : il attendait sans savoir si quelqu'un l'avait lu. Ne lève jamais —
+ * un message qui ne part pas ne doit pas empêcher de traiter le dossier.
+ */
+async function tellClient(agentId: string, phone: string, text: string) {
+  if (!phone) return;
+  try {
+    const s = await query(
+      "SELECT session_name FROM camille.whatsapp_sessions WHERE agent_id = $1 LIMIT 1",
+      [agentId]
+    );
+    await fetch(`${CORE_URL}/api/sendText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Api-Key": CORE_KEY },
+      body: JSON.stringify({ chatId: phone, session: s.rows[0]?.session_name || "default", text }),
+    });
+  } catch { /* le client sera prévenu par le commerçant lui-même */ }
+}
+
 /** Libellés lisibles : le workflow envoie une intention, pas une phrase. */
 const KINDS: Record<string, string> = {
   complaint: "Réclamation",
@@ -174,6 +199,19 @@ export async function PATCH(req: NextRequest) {
          DO UPDATE SET human_takeover = $3, updated_at = NOW()`,
         [t.agent_id, t.phone, b.takeover === true]
       );
+      // Le client doit savoir qu'un humain s'occupe de lui — c'est toute la
+      // différence entre attendre et être ignoré.
+      if (b.takeover === true) {
+        const who = await query(
+          "SELECT business_name FROM camille.agents WHERE id = $1", [t.agent_id]
+        ).catch(() => ({ rows: [] }));
+        const nom = who.rows[0]?.business_name || "L'équipe";
+        await tellClient(
+          String(t.agent_id),
+          String(t.phone),
+          `${nom} a bien pris ton message en charge 🙌 Un conseiller te répond ici même, dans cette conversation.`
+        );
+      }
       return NextResponse.json({ ok: true, human_takeover: b.takeover === true });
     }
 
@@ -199,6 +237,17 @@ export async function PATCH(req: NextRequest) {
           WHERE agent_id = $1 AND phone = $2`,
         [row.agent_id, row.phone]
       ).catch(() => {});
+
+      // Clôturer sans rien dire laisse le client persuadé qu'on l'a oublié.
+      const who = await query(
+        "SELECT business_name FROM camille.agents WHERE id = $1", [row.agent_id]
+      ).catch(() => ({ rows: [] }));
+      const nom = who.rows[0]?.business_name || "L'équipe";
+      await tellClient(
+        String(row.agent_id),
+        String(row.phone),
+        `${nom} a traité ta demande ✅ Si quelque chose reste en suspens, écris-nous ici, on reprend tout de suite.`
+      );
     }
 
     return NextResponse.json({ ok: true, complaint: { id: row.id, status: row.status } });
