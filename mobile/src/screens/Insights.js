@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 import { Card, EmptyHint } from "../components/ui";
 import { getConversationAnalytics } from "../api";
 
@@ -51,7 +51,7 @@ export default function Insights({ refreshing, onRefresh }) {
   const maxConv = Math.max(1, ...funnel.map((f) => f.conversations));
 
   return (
-    <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
+    <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 + BOTTOM_INSET }} showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={!!refreshing || busy} onRefresh={() => { load(); onRefresh && onRefresh(); }} tintColor={C.ink} />}>
 
       {/* Résumé */}

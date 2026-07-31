@@ -4,7 +4,7 @@ import {
   RefreshControl, Alert, Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 import { EmptyHint } from "../components/ui";
 import { getComplaints, resolveComplaint, setComplaintTakeover } from "../api";
 
@@ -123,7 +123,7 @@ export default function Complaints({ onCountChange }) {
 
   return (
     <ScrollView
-      contentContainerStyle={{ padding: S.md, paddingBottom: 110 }}
+      contentContainerStyle={{ padding: S.md, paddingBottom: 110 + BOTTOM_INSET }}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.ink} />
       }

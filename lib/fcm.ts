@@ -158,6 +158,18 @@ export async function notifyUser(
       });
       if (res.ok) { sent++; return; }
 
+      if (res.status === 403) {
+        const detail = await res.text().catch(() => "");
+        errors.push(
+          `403 · jeton …${token.slice(-8)} · ${detail.replace(/\s+/g, " ").slice(0, 220)}`
+        );
+        await query(
+          "UPDATE camille.push_tokens SET last_error = $1, updated_at = NOW() WHERE token = $2",
+          [detail.slice(0, 300), token]
+        ).catch(() => {});
+        return;
+      }
+
       // 404 UNREGISTERED : l'application a été désinstallée, ce jeton est mort.
       //
       // 400 en revanche dit que le MESSAGE est invalide, pas l'appareil — une
@@ -166,10 +178,11 @@ export async function notifyUser(
       // seul envoi malformé, et sans que personne puisse le deviner.
       if (res.status === 404) {
         const detail = await res.text().catch(() => "");
+        let code = "";
+        try { code = JSON.parse(detail)?.error?.details?.[0]?.errorCode || ""; } catch {}
         errors.push(
-          "404 UNREGISTERED — ce jeton n'appartient pas au projet Firebase " +
-          `« ${sa.project_id} ». Le plus souvent : le google-services.json de ` +
-          "l'app et le compte de service viennent de deux projets différents."
+          `404 ${code || "UNREGISTERED"} · jeton …${token.slice(-8)} (${token.length} car.) ` +
+          `· projet ${sa.project_id} · ${detail.replace(/\s+/g, " ").slice(0, 220)}`
         );
         await query(
           "UPDATE camille.push_tokens SET active = FALSE, last_error = $1, updated_at = NOW() WHERE token = $2",
@@ -179,7 +192,7 @@ export async function notifyUser(
       if (res.status === 400) {
         const detail = await res.text().catch(() => "");
         console.error("[fcm] message refusé (jeton conservé) :", detail.slice(0, 300));
-        errors.push(`400 — message refusé : ${detail.slice(0, 160)}`);
+        errors.push(`400 · jeton …${token.slice(-8)} · ${detail.replace(/\s+/g, " ").slice(0, 220)}`);
         await query(
           "UPDATE camille.push_tokens SET last_error = $1, updated_at = NOW() WHERE token = $2",
           [detail.slice(0, 300), token]

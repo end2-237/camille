@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 import { Card, StatMini, EmptyHint } from "../components/ui";
 import Avatar from "../components/Avatar";
 import { BottomDrawer } from "../components/Drawer";
@@ -29,7 +29,7 @@ export default function Agents({ stats, query, refreshing, onRefresh, onAgentCha
 
   return (
     <>
-      <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
+      <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 + BOTTOM_INSET }} showsVerticalScrollIndicator={false}
         refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
 
         <View style={{ backgroundColor: C.lime, borderRadius: R.lg, padding: S.md, marginBottom: S.md, overflow: "hidden" }}>

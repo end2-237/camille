@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 import { Card, StatMini, EmptyHint } from "../components/ui";
 import { BarChart } from "../components/charts";
 import Avatar from "../components/Avatar";
@@ -71,7 +71,7 @@ export default function Analytics({ stats, refreshing, onRefresh, user }) {
   return (
     <View style={{ flex: 1 }}>
       {Switcher}
-    <ScrollView contentContainerStyle={{ padding: S.md, paddingTop: 0, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
+    <ScrollView contentContainerStyle={{ padding: S.md, paddingTop: 0, paddingBottom: 92 + BOTTOM_INSET }} showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
 
       {/* ── Messages : reçus / envoyés ────────────────────────────────── */}

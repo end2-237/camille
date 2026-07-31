@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 import { EmptyHint } from "../components/ui";
 import { getNotifications, markNotification, markAllNotifications } from "../api";
 
@@ -86,7 +86,7 @@ export default function Notifications({ onOpenOrders }) {
       {!list ? (
         <ActivityIndicator color={C.ink} style={{ marginTop: 30 }} />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: S.md, paddingBottom: 92 }}
+        <ScrollView contentContainerStyle={{ paddingHorizontal: S.md, paddingBottom: 92 + BOTTOM_INSET }}
           refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.ink} />}>
           {list.map((n) => {
             const k = kindOf(n.kind);

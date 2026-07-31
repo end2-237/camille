@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 
 const TITLES = {
   dash: "Tableau de bord",
@@ -84,7 +84,11 @@ export function BottomNav({ tab, setTab, savCount = 0 }) {
     { key: "profile", icon: "person-outline" },
   ];
   return (
-    <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center", paddingBottom: 22 }}>
+    // La barre flotte AU-DESSUS des boutons systeme : sans BOTTOM_INSET, les
+    // 22 points fixes suffisaient en navigation par gestes, mais laissaient la
+    // barre sous les boutons retour/accueil des telephones a trois touches.
+    <View style={{ position: "absolute", left: 0, right: 0, bottom: 0,
+      alignItems: "center", paddingBottom: 14 + BOTTOM_INSET }}>
       <View style={{ flexDirection: "row", backgroundColor: C.ink, borderRadius: R.pill, padding: 6, gap: 4 }}>
         {items.map((it) => {
           const on = tab === it.key;

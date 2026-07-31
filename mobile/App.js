@@ -8,7 +8,7 @@ import ForceUpdate from "./src/screens/ForceUpdate";
 import { getNotifications, checkAppVersion, getComplaints } from "./src/api";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { C } from "./src/theme";
+import { C, TOP_INSET } from "./src/theme";
 import { Header, BottomNav, ScreenTitle } from "./src/components/ui";
 import Splash from "./src/screens/Splash";
 import Onboarding from "./src/screens/Onboarding";
@@ -19,15 +19,6 @@ import Conversations from "./src/screens/Conversations";
 import Analytics from "./src/screens/Analytics";
 import Profile from "./src/screens/Profile";
 import { loadToken, getStats, getAgents, getMe } from "./src/api";
-
-// SafeAreaView de react-native ne fait RIEN sur Android : c'est un composant
-// iOS. Le paddingTop de 12 qui le compensait etait arbitraire, et bien inferieur
-// a la hauteur reelle d'une barre d'etat (24 a 48 points, davantage avec une
-// encoche) : l'app demarrait sous l'heure et le reseau.
-// StatusBar.currentHeight donne la vraie valeur, sans module natif — donc
-// corrigeable par OTA.
-const TOP_INSET =
-  Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 4 : 0;
 
 export default function App() {
   const [booting, setBooting] = useState(true);

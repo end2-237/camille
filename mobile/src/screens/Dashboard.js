@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, ScrollView, RefreshControl, ImageBackground, TouchableOpacity, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 import { Card, EmptyHint } from "../components/ui";
 import { BarChart, Gauge } from "../components/charts";
 import { AdCard, PlanCard } from "../components/promo";
@@ -36,7 +36,7 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
   const tokPct = unlimited || !tokLimit ? 0 : Math.min(100, Math.round((tokUsed / tokLimit) * 100));
 
   return (
-    <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }} showsVerticalScrollIndicator={false}
+    <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 + BOTTOM_INSET }} showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
 
       {/* ── HERO façon carte immobilière : image + titre + CTA + bandeau ── */}

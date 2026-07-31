@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Updates from "expo-updates";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 import { logout, pushDiagnostic, pushTest, deleteAccount, purgePushTokens } from "../api";
 import { BottomDrawer } from "../components/Drawer";
 import Plans from "./Plans";
@@ -133,9 +133,17 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
         // `skipped` ne couvrait pas le refus de Firebase : un envoi rejeté
         // affichait « echec » sans dire pourquoi, alors que le serveur connaît
         // la cause exacte.
-        lines.push("", t.ok
-          ? `📨 Test envoye a ${t.sent} appareil(s)`
-          : `❌ Envoi du test : ${t.reason || t.skipped || "echec"}`);
+        if (t.ok) {
+          lines.push("", `📨 Test envoye a ${t.sent} appareil(s)`);
+        } else {
+          // Une cause par appareil : avec plusieurs jetons, un message unique
+          // masque lequel echoue et pourquoi.
+          lines.push("", "❌ Envoi du test :");
+          const causes = Array.isArray(t.errors) && t.errors.length
+            ? t.errors
+            : [t.reason || t.skipped || "echec"];
+          causes.forEach((c) => lines.push(`  • ${c}`));
+        }
       }
       // Des jetons morts d'anciennes installations brouillent chaque test :
       // on propose de les retirer plutôt que de laisser l'écran alarmer à vie.
@@ -168,7 +176,7 @@ export default function Profile({ user, setUser, onAuthChange, agents = [] }) {
 
   return (
     <>
-      <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 }}>
+      <ScrollView contentContainerStyle={{ padding: S.md, paddingBottom: 92 + BOTTOM_INSET }}>
         <View style={{ alignItems: "center", marginTop: 16, marginBottom: 22 }}>
           <View style={{ width: 84, height: 84, borderRadius: R.pill, backgroundColor: C.ink, alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: C.lime, fontWeight: "800", fontSize: 30 }}>{initials}</Text>

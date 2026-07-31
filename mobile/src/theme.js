@@ -27,3 +27,30 @@ export const F = {
   body: { fontSize: 14, color: C.ink },
   sub: { fontSize: 12, color: C.sub },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Marges systeme Android.
+//
+// react-native-safe-area-context n'est pas installe, et l'ajouter imposerait un
+// nouveau build. Or les deux valeurs se deduisent de l'ecran, en JavaScript pur
+// — donc corrigeables par OTA.
+//
+//   screen  = dalle physique entiere
+//   window  = ce que l'app peut peindre
+// La difference, c'est le systeme : barre d'etat en haut, barre de navigation
+// en bas. On soustrait la premiere pour obtenir la seconde.
+// ─────────────────────────────────────────────────────────────────────────────
+import { Platform, StatusBar, Dimensions } from "react-native";
+
+export const TOP_INSET =
+  Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 4 : 0;
+
+export const BOTTOM_INSET = (() => {
+  if (Platform.OS !== "android") return 0;
+  const screen = Dimensions.get("screen").height;
+  const win = Dimensions.get("window").height;
+  const diff = Math.round(screen - win - (StatusBar.currentHeight || 0));
+  // Bornes : 0 en navigation par gestes (rien a eviter), 56 au maximum pour
+  // qu'une mesure aberrante ne repousse pas la barre au milieu de l'ecran.
+  return Math.max(0, Math.min(56, diff));
+})();

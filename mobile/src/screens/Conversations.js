@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, R, S } from "../theme";
+import { C, R, S, BOTTOM_INSET } from "../theme";
 import { EmptyHint } from "../components/ui";
 import { Spark } from "../components/charts";
 import Avatar from "../components/Avatar";
@@ -58,7 +58,7 @@ export default function Conversations({ stats, query, refreshing, onRefresh }) {
 
   return (
     <>
-      <ScrollView contentContainerStyle={{ paddingBottom: 92 }} showsVerticalScrollIndicator={false}
+      <ScrollView contentContainerStyle={{ paddingBottom: 92 + BOTTOM_INSET }} showsVerticalScrollIndicator={false}
         refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
 
         {/* ── Hero sombre : volume + activité ─────────────────────────── */}
