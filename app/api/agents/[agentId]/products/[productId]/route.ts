@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { coerce } from "@/lib/productFields";
 
 type RouteContext = { params: Promise<{ agentId: string; productId: string }> };
 
@@ -34,15 +35,23 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   if (!entries.length) return NextResponse.json({ error: "Aucun champ valide" }, { status: 400 });
 
   const set = entries.map(([k], i) => `"${k}" = $${i + 3}`).join(", ");
-  const vals = entries.map(([k, v]) =>
-    ["tags", "variants", "images"].includes(k) ? JSON.stringify(Array.isArray(v) ? v : []) : v
-  );
+  const vals = entries.map(([k, v]) => coerce(k, v));
 
-  const r = await query(
-    `UPDATE camille.products SET ${set}, updated_at = NOW()
-     WHERE id = $1 AND agent_id = $2 RETURNING *`,
-    [productId, agentId, ...vals]
-  );
+  let r;
+  try {
+    r = await query(
+      `UPDATE camille.products SET ${set}, updated_at = NOW()
+       WHERE id = $1 AND agent_id = $2 RETURNING *`,
+      [productId, agentId, ...vals]
+    );
+  } catch (e) {
+    // Un 500 nu ne dit rien au commerçant ni à celui qui débogue : on rend la
+    // raison exacte, c'est elle qui permet de corriger.
+    return NextResponse.json(
+      { error: "Enregistrement impossible", detail: (e as Error).message },
+      { status: 500 }
+    );
+  }
   if (!r.rows.length) return NextResponse.json({ error: "Produit introuvable" }, { status: 404 });
   return NextResponse.json({ product: r.rows[0] });
 }
