@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { View, Text, SafeAreaView, StatusBar, Platform, Animated, AppState } from "react-native";
+import { View, Text, SafeAreaView, StatusBar, Platform, Animated, AppState, BackHandler } from "react-native";
 import * as Updates from "expo-updates";
 import { registerForPush, listenPush, clearBadge } from "./src/push";
 import Notifications from "./src/screens/Notifications";
@@ -20,10 +20,36 @@ import Analytics from "./src/screens/Analytics";
 import Profile from "./src/screens/Profile";
 import { loadToken, getStats, getAgents, getMe } from "./src/api";
 
+// SafeAreaView de react-native ne fait RIEN sur Android : c'est un composant
+// iOS. Le paddingTop de 12 qui le compensait etait arbitraire, et bien inferieur
+// a la hauteur reelle d'une barre d'etat (24 a 48 points, davantage avec une
+// encoche) : l'app demarrait sous l'heure et le reseau.
+// StatusBar.currentHeight donne la vraie valeur, sans module natif — donc
+// corrigeable par OTA.
+const TOP_INSET =
+  Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 4 : 0;
+
 export default function App() {
   const [booting, setBooting] = useState(true);
   const [onboard, setOnboard] = useState(false);
   const [tab, setTab] = useState("dash");
+
+  // Bouton retour du telephone. Sans gestionnaire, Android le laisse fermer
+  // l'app depuis n'importe quel ecran : on perdait sa place au lieu de revenir
+  // en arriere. On ramene donc au tableau de bord, et c'est seulement depuis
+  // le tableau de bord que le retour ferme l'app — comportement attendu par
+  // tout le monde sur Android.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (tab !== "dash") {
+        setTab("dash");
+        return true; // on a traite l'evenement : l'app ne se ferme pas
+      }
+      return false; // depuis l'accueil, on laisse Android fermer l'app
+    });
+    return () => sub.remove();
+  }, [tab]);
   const [query, setQuery] = useState("");
   const [stats, setStats] = useState(null);
   const [user, setUser] = useState(null);
@@ -99,7 +125,14 @@ export default function App() {
       (data) => {                                     // l'utilisateur a tapé dessus
         clearBadge();
         load().catch(() => {});
-        if (data?.type === "order") setTab("agents");
+        // Une notification touchée doit ouvrir l'endroit où on la traite.
+        // Elle n'aiguillait que les commandes : une réclamation ouvrait le
+        // tableau de bord, et il fallait la chercher soi-même.
+        const t = String(data?.type || "");
+        if (t === "order") setTab("agents");
+        else if (t === "complaint" || t === "after_sales" || t === "talk_to_human") setTab("sav");
+        else setTab("notifs");
+        setUnread(0);
       }
     );
     return stop;
@@ -137,6 +170,31 @@ export default function App() {
     });
     return () => sub.remove();
   }, []);
+
+  // ── Rafraichissement automatique ──────────────────────────────────────────
+  // AppState ne servait qu'a chercher une mise a jour OTA : les donnees, elles,
+  // ne bougeaient jamais sans tirer l'ecran vers le bas. Un commerçant qui
+  // rouvre son app veut voir ses commandes du moment, pas celles d'il y a
+  // deux heures.
+  useEffect(() => {
+    if (!user) return undefined;
+
+    const refresh = () => { load().catch(() => {}); };
+
+    // au retour au premier plan
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") refresh();
+    });
+
+    // puis regulierement tant que l'app est ouverte. 60 secondes : assez court
+    // pour qu'une commande apparaisse d'elle-meme, assez long pour ne pas
+    // manger le forfait data d'un telephone reste allume toute la journee.
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") refresh();
+    }, 60000);
+
+    return () => { sub.remove(); clearInterval(timer); };
+  }, [user, load]);
 
   const finishOnboarding = useCallback(async () => {
     try { await AsyncStorage.setItem("camille_onboarded", "1"); } catch {}
@@ -187,7 +245,7 @@ export default function App() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
-      <View style={{ paddingTop: Platform.OS === "android" ? 12 : 0 }}>
+      <View style={{ paddingTop: TOP_INSET }}>
         <Header
           query={query}
           setQuery={setQuery}

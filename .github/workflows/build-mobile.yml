@@ -38,6 +38,14 @@ jobs:
       - name: Install dependencies (locked)
         run: npm ci --no-audit --no-fund
 
+      # Publiee AVANT le build natif : une correction JavaScript doit atteindre
+      # les telephones en une minute, pas attendre dix minutes de Gradle — ni
+      # etre annulee par un echec de compilation Android qui ne la concerne pas.
+      - name: Publier la mise a jour OTA (EAS Update)
+        if: env.EXPO_TOKEN != ''
+        continue-on-error: true
+        run: npx eas-cli@latest update --branch production --message "${{ github.sha }}" --non-interactive
+
       - name: Expo prebuild (generate android/)
         run: npx expo prebuild --platform android --clean
         env:
@@ -158,11 +166,3 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # L'OTA ne transporte que le bundle JavaScript : elle n'a aucune raison
-      # d'attendre le build natif, ni d'echouer avec lui. always() garantit
-      # qu'une correction JS part meme si Gradle refuse de compiler.
-      - name: Publier la mise a jour OTA (EAS Update)
-        if: always() && env.EXPO_TOKEN != ''
-        continue-on-error: true
-        working-directory: mobile
-        run: npx eas-cli@latest update --branch production --message "build ${{ github.sha }}" --non-interactive
