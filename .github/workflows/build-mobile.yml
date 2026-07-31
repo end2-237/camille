@@ -158,10 +158,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Publie la mise a jour OTA APRES l'upload de l'APK : meme si cette etape
-      # echoue (secret absent, reseau), l'APK reste disponible en artifact.
+      # L'OTA ne transporte que le bundle JavaScript : elle n'a aucune raison
+      # d'attendre le build natif, ni d'echouer avec lui. always() garantit
+      # qu'une correction JS part meme si Gradle refuse de compiler.
       - name: Publier la mise a jour OTA (EAS Update)
-        if: env.EXPO_TOKEN != ''
+        if: always() && env.EXPO_TOKEN != ''
         continue-on-error: true
         working-directory: mobile
         run: npx eas-cli@latest update --branch production --message "build ${{ github.sha }}" --non-interactive

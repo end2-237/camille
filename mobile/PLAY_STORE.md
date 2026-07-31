@@ -234,7 +234,14 @@ keytool -printcert -jarfile app-release.aab | grep SHA256
 Vérifications avant envoi :
 
 - `versionCode` = 1 pour la première release, à incrémenter à chaque envoi
-- `targetSdkVersion` = 35 (configuré via `expo-build-properties`)
+- `targetSdkVersion` = 35, mais **`compileSdkVersion` = 34** — Expo SDK 51
+  (React Native 0.74) ne compile pas contre Android 15 : `expo-modules-core`
+  échoue sur `PermissionsService.kt`, dont la signature est devenue nullable.
+  Compiler contre 34 en déclarant 35 est accepté par AGP et par le Play Store,
+  mais l'application ne bénéficie pas des comportements Android 15 pour
+  lesquels il faudrait recompiler — notamment l'affichage bord à bord imposé.
+  **À corriger en montant à Expo SDK 52 ou plus**, avant que Google n'exige
+  un niveau que ce compromis ne permettra plus d'atteindre.
 - **Confirmer le niveau exigé dans la Play Console** : Google le relève chaque
   année en août. Si la console réclame 36, changer la valeur dans `app.json`.
 - Conserver le keystore **et** ses mots de passe hors du dépôt : perdus, la mise
