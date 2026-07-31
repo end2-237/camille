@@ -124,6 +124,13 @@ export const setOrderStatus = (orderId, status) =>
 // Trajet boutique -> client (distance, duree, trace)
 export const getItinerary = (orderId) => req(`/api/orders/${orderId}/itinerary`);
 
+/** Réclamations remontées par l'agent depuis les conversations WhatsApp. */
+export const getComplaints = (status) =>
+  req(`/api/complaints${status ? `?status=${status}` : ""}`);
+
+export const resolveComplaint = (id, status = "done") =>
+  req("/api/complaints", { method: "PATCH", body: JSON.stringify({ id, status }) });
+
 /**
  * Produit le bon de commande, ou renvoie celui qui existe déjà.
  * @param {boolean} send  true pour le renvoyer aussi au client sur WhatsApp.

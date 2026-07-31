@@ -3,6 +3,7 @@ import { View, Text, SafeAreaView, StatusBar, Platform, Animated, AppState } fro
 import * as Updates from "expo-updates";
 import { registerForPush, listenPush, clearBadge } from "./src/push";
 import Notifications from "./src/screens/Notifications";
+import Complaints from "./src/screens/Complaints";
 import ForceUpdate from "./src/screens/ForceUpdate";
 import { getNotifications, checkAppVersion } from "./src/api";
 import Constants from "expo-constants";
@@ -174,6 +175,7 @@ export default function App() {
   else if (tab === "convos") Body = <Conversations {...common} />;
   else if (tab === "analytics") Body = <Analytics {...common} user={user} />;
   else if (tab === "notifs") Body = <Notifications onOpenOrders={() => setTab("agents")} />;
+  else if (tab === "sav") Body = <Complaints />;
   else Body = <Profile user={user} setUser={setUser} onAuthChange={onAuthChange} agents={stats?.agents || []} />;
 
   return (

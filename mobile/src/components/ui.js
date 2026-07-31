@@ -78,6 +78,7 @@ export function BottomNav({ tab, setTab }) {
     { key: "dash", icon: "grid" },
     { key: "agents", icon: "cube-outline" },
     { key: "convos", icon: "chatbubble-outline" },
+    { key: "sav", icon: "alert-circle-outline" },
     { key: "analytics", icon: "stats-chart" },
     { key: "profile", icon: "person-outline" },
   ];
@@ -88,7 +89,7 @@ export function BottomNav({ tab, setTab }) {
           const on = tab === it.key;
           return (
             <TouchableOpacity key={it.key} onPress={() => setTab(it.key)} activeOpacity={0.7}
-              style={{ width: 52, height: 44, borderRadius: R.pill, alignItems: "center", justifyContent: "center",
+              style={{ width: 46, height: 44, borderRadius: R.pill, alignItems: "center", justifyContent: "center",
                 backgroundColor: on ? C.lime : "transparent" }}>
               <Ionicons name={it.icon} size={20} color={on ? C.ink : "rgba(255,255,255,0.6)"} />
             </TouchableOpacity>
