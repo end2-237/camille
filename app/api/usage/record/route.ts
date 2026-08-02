@@ -44,18 +44,31 @@ export async function POST(req: NextRequest) {
     const ct = Number(completion_tokens) || 0;
     const tt = Number(total_tokens)      || 0;
 
+    // Les deux écritures sont indépendantes. Elles étaient enchaînées : quand
+    // l'upsert des tokens échouait (contrainte d'unicité absente sur
+    // (agent_id, period)), l'analytics du jour n'était jamais atteinte et
+    // l'accueil affichait 0 message en plus de 0 token. Une panne d'un côté ne
+    // doit plus effacer la mesure de l'autre.
+    const warnings: string[] = [];
+
     // Upsert : crée l'entrée si inexistante, sinon additionne les tokens
-    await query(
-      `INSERT INTO camille.token_usage
-         (agent_id, period, prompt_tokens, completion_tokens, total_tokens)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (agent_id, period)
-       DO UPDATE SET
-         prompt_tokens     = camille.token_usage.prompt_tokens     + EXCLUDED.prompt_tokens,
-         completion_tokens = camille.token_usage.completion_tokens + EXCLUDED.completion_tokens,
-         total_tokens      = camille.token_usage.total_tokens      + EXCLUDED.total_tokens`,
-      [agentId, period, pt, ct, tt]
-    );
+    try {
+      await query(
+        `INSERT INTO camille.token_usage
+           (agent_id, period, prompt_tokens, completion_tokens, total_tokens)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (agent_id, period)
+         DO UPDATE SET
+           prompt_tokens     = camille.token_usage.prompt_tokens     + EXCLUDED.prompt_tokens,
+           completion_tokens = camille.token_usage.completion_tokens + EXCLUDED.completion_tokens,
+           total_tokens      = camille.token_usage.total_tokens      + EXCLUDED.total_tokens`,
+        [agentId, period, pt, ct, tt]
+      );
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      console.error("[usage/record token_usage]", m);
+      warnings.push(`token_usage: ${m}`);
+    }
 
     // Analytics du jour : +1 message, + tokens (alimente les Statistiques et l'accueil)
     try {
@@ -69,10 +82,17 @@ export async function POST(req: NextRequest) {
         [agentId, tt]
       );
     } catch (e) {
-      console.error("[usage/record analytics]", e); // n'empêche jamais l'enregistrement des tokens
+      const m = e instanceof Error ? e.message : String(e);
+      console.error("[usage/record analytics]", m);
+      warnings.push(`agent_analytics: ${m}`);
     }
 
-    return NextResponse.json({ recorded: true, period, total_tokens: tt });
+    return NextResponse.json({
+      recorded: warnings.length === 0,
+      period,
+      total_tokens: tt,
+      ...(warnings.length ? { warnings } : {}),
+    });
   } catch (err) {
     console.error("[POST /api/usage/record]", err);
     const msg = err instanceof Error ? err.message : String(err);

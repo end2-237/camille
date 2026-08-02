@@ -11,6 +11,7 @@ import { query }                                      from "@/lib/db";
 import { currentPeriod }                              from "@/lib/plans";
 import { getPlanLimitDB, isUnlimitedTokens }          from "@/lib/plans-db";
 import { wahaAnalytics }                              from "@/lib/waha";
+import { AGENT_STATS_COLUMNS }                        from "@/lib/stats-agents";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,12 @@ function dateRange(days: number): { from: string; to: string } {
 // laisse croire que l'activité est nulle. Mieux vaut l'avouer.
 const failures: string[] = [];
 
+function parseCaps(val: any): Record<string, boolean> {
+  if (!val) return {};
+  if (typeof val === "object") return val as Record<string, boolean>;
+  try { return JSON.parse(val) ?? {}; } catch { return {}; }
+}
+
 async function safe(sql: string, params: unknown[]): Promise<{ rows: any[] }> {
   try { return (await query(sql, params)) as any; }
   catch (e) {
@@ -68,8 +75,13 @@ export async function GET(req: NextRequest) {
     const { from, to } = dateRange(days);
 
     // ── 1. Fetch agents belonging to user ─────────────────────────────────────
+    // L'identite et le contexte metier sont des colonnes plates depuis la
+    // refonte du schema : il n'y a jamais eu de colonnes « identity » ni
+    // « business_context » en base — les autres routes les reconstruisent en
+    // JavaScript. Les demander en SQL faisait echouer cette requete, et donc
+    // toute la page de statistiques.
     const agentsRes = await safe(
-      `SELECT id, plan, status, capabilities, identity, business_context, created_at
+      `SELECT ${AGENT_STATS_COLUMNS}
        FROM camille.agents
        WHERE user_id = $1
        ORDER BY created_at DESC`,
@@ -78,7 +90,14 @@ export async function GET(req: NextRequest) {
 
     const allAgents = agentsRes.rows;
     if (allAgents.length === 0) {
-      return NextResponse.json({ empty: true, agents: [] });
+      // Un compte sans agent et un compte dont la lecture a echoue ne se
+      // ressemblent pas : sans « degraded », l'app affiche un zero qui a l'air
+      // d'un fait alors que la requete n'a jamais abouti.
+      return NextResponse.json({
+        empty: true,
+        agents: [],
+        ...(failures.length ? { degraded: failures } : {}),
+      });
     }
 
     // Validate agentId ownership
@@ -336,16 +355,18 @@ export async function GET(req: NextRequest) {
         const unlimited = isUnlimitedTokens(limit);
         const used      = tokenByAgent[a.id] ?? 0;
         const percent   = unlimited ? 0 : Math.min(100, Math.round((used / limit) * 100));
-        const caps      = (a.capabilities ?? {}) as Record<string, boolean>;
+        // capabilities est stocke en texte : sans parsing, Object.values()
+        // enumere les caracteres de la chaine et compte n'importe quoi.
+        const caps      = parseCaps(a.capabilities);
         const activeCapsCount = Object.values(caps).filter(Boolean).length;
 
         return {
           id:               a.id,
-          name:             (a.identity as Record<string, string>)?.name ?? "Agent",
-          emoji:            (a.identity as Record<string, string>)?.avatar_emoji ?? "🤖",
+          name:             a.name || "Agent",
+          emoji:            a.avatar_emoji || "🤖",
           status:           a.status,
           plan:             planId,
-          sector:           (a.business_context as Record<string, string>)?.sector ?? "",
+          sector:           a.sector ?? "",
           activeCaps:       activeCapsCount,
           created_at:       a.created_at,
           period_messages:  agg ? Number(agg.total_messages)      : 0,

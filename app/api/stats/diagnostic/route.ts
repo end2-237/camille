@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { AGENT_STATS_COLUMNS } from "@/lib/stats-agents";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 async function probe(sql: string, params: unknown[]): Promise<{ ok: boolean; rows: any[]; error?: string }> {
@@ -23,11 +24,26 @@ export async function GET(req: NextRequest) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
+  // Exactement les colonnes que /api/stats demande : si une seule a disparu du
+  // schema, l'echec doit apparaitre ici plutot que de se traduire en zeros.
   const agents = await probe(
-    `SELECT id, status FROM camille.agents WHERE user_id = $1`,
+    `SELECT ${AGENT_STATS_COLUMNS} FROM camille.agents WHERE user_id = $1`,
     [user.id]
   );
   const agentIds = agents.rows.map((a) => a.id);
+
+  // ON CONFLICT (agent_id, period) exige un index unique. Sans lui, chaque
+  // POST /api/usage/record echoue et n'ecrit ni tokens ni analytics.
+  const tokenUnique = await probe(
+    `SELECT 1
+       FROM pg_indexes
+      WHERE schemaname = 'camille'
+        AND tablename  = 'token_usage'
+        AND indexdef ILIKE '%UNIQUE%'
+        AND indexdef ILIKE '%agent_id%'
+        AND indexdef ILIKE '%period%'`,
+    []
+  );
 
   const sessions = await probe(
     `SELECT agent_id, session_name, status FROM camille.whatsapp_sessions WHERE user_id = $1`,
@@ -75,7 +91,15 @@ export async function GET(req: NextRequest) {
   );
 
   const problems: string[] = [];
-  if (!agentIds.length) problems.push("Aucun agent sur ce compte.");
+  if (!agents.ok)
+    problems.push(
+      `Lecture des agents impossible : ${agents.error} — /api/stats renvoie alors « aucun agent » et tout s'affiche à 0.`
+    );
+  else if (!agentIds.length) problems.push("Aucun agent sur ce compte.");
+  if (tokenUnique.ok && tokenUnique.rows.length === 0)
+    problems.push(
+      "token_usage n'a pas d'index unique sur (agent_id, period) : POST /api/usage/record échoue, donc ni les tokens ni les messages du jour ne sont enregistrés — applique migration_token_usage_unique.sql"
+    );
   if (sessions.ok && sessions.rows.length === 0)
     problems.push("Aucune session WhatsApp liée : les conversations ne peuvent pas être rattachées à un agent (connecte WhatsApp).");
   if (!conversations.ok)
@@ -96,7 +120,12 @@ export async function GET(req: NextRequest) {
     sessions: { count: sessions.rows.length, ok: sessions.ok, error: sessions.error, list: sessions.rows },
     conversations: { ok: conversations.ok, error: conversations.error, ...(conversations.rows[0] ?? {}) },
     analytics: { ok: analytics.ok, error: analytics.error, ...(analytics.rows[0] ?? {}) },
-    token_usage: { ok: tokens.ok, error: tokens.error, ...(tokens.rows[0] ?? {}) },
+    token_usage: {
+      ok: tokens.ok,
+      error: tokens.error,
+      unique_index: tokenUnique.ok ? tokenUnique.rows.length > 0 : null,
+      ...(tokens.rows[0] ?? {}),
+    },
     orphan_sessions: orphans.rows.map((r) => r.session_name),
     problems: problems.length ? problems : ["Aucun problème détecté : les données devraient s'afficher."],
   });
