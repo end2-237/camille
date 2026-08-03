@@ -302,6 +302,15 @@ export interface Agent {
   target_model: AgentModel;
   plan: "free" | "starter" | "pro" | "enterprise";
 
+  /**
+   * Fin d'abonnement, et sa conséquence. Exposés dans la liste des agents pour
+   * que le dashboard puisse annoncer un agent à l'arrêt sans requête
+   * supplémentaire — un agent muet affiché « actif » est pire qu'une panne,
+   * parce que personne ne la cherche.
+   */
+  plan_expires_at?: ISODateString | null;
+  plan_expired?: boolean;
+
   /** Google Calendar OAuth — email shown in dashboard when connected */
   google_calendar_email?: string | null;
 

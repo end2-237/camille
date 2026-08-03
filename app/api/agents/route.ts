@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth-server";
+import { subscriptionState } from "@/lib/subscription";
 import type {
   Agent, AgentFormData, SystemPromptConfig,
   AgentIdentity, BusinessContext, KnowledgeBase, AgentCapabilities,
@@ -58,6 +59,10 @@ function rowToAgent(row: Record<string, any>): Agent {
     status: row.status as AgentStatus,
     target_model: row.target_model as AgentModel,
     plan: (row.plan ?? "free") as Agent["plan"],
+    // Meme regle que le garde-fou qui bloque les reponses : l'ecran et le
+    // moteur ne doivent jamais dire deux choses differentes.
+    plan_expires_at: row.plan_expires_at ?? null,
+    plan_expired: subscriptionState(row.plan, row.plan_expires_at).expired,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
