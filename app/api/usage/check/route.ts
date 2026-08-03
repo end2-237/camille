@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query }           from "@/lib/db";
 import { currentPeriod }   from "@/lib/plans";
 import { getPlanLimitDB, isUnlimitedTokens } from "@/lib/plans-db";
+import { subscriptionState } from "@/lib/subscription";
 
 export async function GET(req: NextRequest) {
   const sessionName = req.nextUrl.searchParams.get("session");
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
   try {
     // Récupère agent_id + plan via la session Waha
     const agentRes = await query(
-      `SELECT a.id, a.plan
+      `SELECT a.id, a.plan, a.plan_expires_at
        FROM camille.whatsapp_sessions ws
        JOIN camille.agents a ON a.id = ws.agent_id
        WHERE ws.session_name = $1 AND a.status = 'active'`,
@@ -28,7 +29,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ allowed: true, reason: "no_agent" });
     }
 
-    const { id: agentId, plan } = agentRes.rows[0];
+    const { id: agentId, plan, plan_expires_at } = agentRes.rows[0];
+
+    // Abonnement termine : l'agent se tait jusqu'au reabonnement. Ce controle
+    // passe avant celui des tokens — il ne sert a rien de compter le carburant
+    // d'un vehicule dont le contrat de location a expire.
+    //
+    // enterprise n'est jamais concerne : ces comptes ne doivent en aucun cas
+    // etre desactives par un automatisme.
+    const sub = subscriptionState(plan, plan_expires_at);
+    if (sub.expired) {
+      return NextResponse.json({
+        allowed: false,
+        reason: "subscription_expired",
+        plan,
+        expired_at: sub.expiresAt,
+        // Message destine au client final. « Reessayez dans un instant » serait
+        // un mensonge ici : sans reabonnement, l'attente ne finit jamais.
+        message:
+          "Ce service est momentanement indisponible. Merci de contacter directement le commerçant.",
+      });
+    }
+
     const period = currentPeriod();
 
     // Récupère la limite depuis la DB (avec cache 5 min)
@@ -62,7 +84,18 @@ export async function GET(req: NextRequest) {
     const percent   = Math.min(100, Math.round((used / limit) * 100));
     const allowed   = used < limit;
 
-    return NextResponse.json({ allowed, plan, used, limit, remaining, percent });
+    return NextResponse.json({
+      allowed,
+      plan,
+      used,
+      limit,
+      remaining,
+      percent,
+      ...(allowed ? {} : {
+        reason: "quota_exceeded",
+        message: "Nous recevons beaucoup de messages en ce moment. Merci de reessayer dans un instant.",
+      }),
+    });
   } catch (err) {
     console.error("[GET /api/usage/check]", err);
     // En cas d'erreur DB, on laisse passer plutôt que de bloquer le bot

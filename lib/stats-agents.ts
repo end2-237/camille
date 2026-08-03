@@ -11,4 +11,4 @@
 // objets « identity » et « business_context » sont reconstruits en JavaScript
 // (voir rowToAgent dans app/api/agents/route.ts).
 export const AGENT_STATS_COLUMNS =
-  "id, plan, status, capabilities, name, avatar_emoji, sector, created_at";
+  "id, plan, plan_expires_at, status, capabilities, name, avatar_emoji, sector, created_at";
