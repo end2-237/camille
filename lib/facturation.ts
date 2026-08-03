@@ -93,23 +93,37 @@ export async function sendOrderDocument(
   // Identité imprimée sur le document. Ce que le vendeur a saisi l'emporte ;
   // à défaut on retombe sur ce qu'il a déjà renseigné pour son agent, plutôt
   // que de laisser le document sortir au nom d'une autre entreprise.
+  // Mixte : les champs d'identité sont du texte, `zebra` est un booléen.
   const reglages = (() => {
     const d = o.doc_settings;
-    if (!d) return {} as Record<string, string>;
-    if (typeof d === "object") return d as Record<string, string>;
-    try { return JSON.parse(String(d)) as Record<string, string>; } catch { return {}; }
+    if (!d) return {} as Record<string, unknown>;
+    if (typeof d === "object") return d as Record<string, unknown>;
+    try { return JSON.parse(String(d)) as Record<string, unknown>; } catch { return {}; }
   })();
+  const txt = (k: string) => (typeof reglages[k] === "string" ? (reglages[k] as string) : "");
 
   const vendeur = {
-    name:     reglages.name     || (o.business_name as string) || "",
-    tagline:  reglages.tagline  || "",
-    address:  reglages.address  || (o.location as string) || "",
-    phone:    reglages.phone    || (o.whatsapp_number as string) || "",
-    email:    reglages.email    || (o.owner_email as string) || "",
-    rccm:     reglages.rccm     || "",
-    niu:      reglages.niu      || "",
-    logo_url: reglages.logo_url || "",
-    color:    reglages.color    || "",
+    name:     txt("name")    || (o.business_name as string) || "",
+    tagline:  txt("tagline"),
+    address:  txt("address") || (o.location as string) || "",
+    phone:    txt("phone")   || (o.whatsapp_number as string) || "",
+    email:    txt("email")   || (o.owner_email as string) || "",
+    // Mentions légales : aucun repli possible. Un RCCM ou un NIU emprunté à
+    // quelqu'un d'autre n'est pas un défaut de mise en page, c'est l'identité
+    // légale d'une autre entreprise sur un document commercial.
+    rccm:     txt("rccm"),
+    niu:      txt("niu"),
+    logo_url: txt("logo_url"),
+    color:    txt("color"),
+  };
+
+  // Habillage du document. Les clés absentes retombent sur le modèle
+  // « classique » côté buyfacturation ; on n'envoie donc que ce qui est réglé.
+  const habillage = {
+    template:   txt("template"),
+    lines:      txt("lines"),
+    zebra:      typeof reglages.zebra === "boolean" ? reglages.zebra : undefined,
+    banner_url: txt("banner_url"),
   };
 
   let doc: { id?: string; number?: string; error?: string };
@@ -131,10 +145,14 @@ export async function sendOrderDocument(
         client_phone: String(o.contact_phone || "").replace(/@(c\.us|lid|s\.whatsapp\.net)$/, ""),
         client_address: lieu || null,
         items: docItems,
-        // Emetteur du document. Les clés vides sont écartées : côté
-        // buyfacturation, une chaîne vide laisserait un trou dans l'en-tête là
-        // où l'absence de clé retombe proprement sur la valeur par défaut.
+        // Emetteur du document. Les clés vides sont écartées, mais la présence
+        // de `seller` suffit à écarter toute identité par défaut côté
+        // buyfacturation : ce que le vendeur n'a pas rempli reste vide sur le
+        // document plutôt que d'emprunter les mentions légales de la plateforme.
         seller: Object.fromEntries(Object.entries(vendeur).filter(([, v]) => v)),
+        style: Object.fromEntries(
+          Object.entries(habillage).filter(([, v]) => v !== "" && v !== undefined)
+        ),
         status: "sent",
       }),
     });

@@ -1,5 +1,7 @@
 "use client";
 
+import { lienNotif } from "@/lib/notif-links";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Journal de notifications du compte, côté web.
 //
@@ -9,8 +11,8 @@
 // donc tout ; le navigateur, lui, affichait une liste écrite en dur. Ce hook
 // est le chaînon manquant : les mêmes notifications, à la même source.
 //
-// Le push navigateur n'est pas nécessaire ici : le compteur se rafraîchit
-// tout seul, et au retour sur l'onglet.
+// Ce hook alimente ce qui se voit DANS l'onglet, et se rafraîchit tout seul.
+// Hors de l'onglet, c'est lib/push-web qui prend le relais.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authHeaders } from "@/lib/auth-client";
@@ -29,23 +31,12 @@ export interface Notif {
 const POLL_MS = 60_000;
 
 /**
- * Destination d'une notification, déduite de son champ `data.type` — le même
- * aiguillage que l'application mobile, vers les écrans web équivalents.
- * `null` quand rien de pertinent n'existe côté web : la notification reste
- * alors lisible, simplement pas cliquable.
+ * Destination d'une notification. La table vit dans lib/notif-links, partagée
+ * avec le push web : un clic depuis la cloche et un clic depuis la notification
+ * système doivent emmener au même endroit.
  */
 export function notifHref(n: Notif): string | null {
-  const d = n.data ?? {};
-  const agentId = String(d.agentId ?? "").trim();
-  switch (String(d.type ?? "")) {
-    case "order":                 return "/dashboard/orders";
-    case "stock":                 return agentId ? `/dashboard/${agentId}/catalog` : null;
-    case "quota":
-    case "subscription":          return "/dashboard/billing";
-    case "whatsapp_disconnected":
-    case "whatsapp_connected":    return agentId ? `/dashboard/${agentId}/integrations` : null;
-    default:                      return null;
-  }
+  return lienNotif(n.data as Record<string, unknown> | null);
 }
 
 /** « il y a 5 min », « il y a 3 h », puis la date. Identique au mobile. */

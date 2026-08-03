@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import crypto from "crypto";
 import { query } from "@/lib/db";
+import { lienNotif } from "@/lib/notif-links";
 
 export type ServiceAccount = { client_email: string; private_key: string; project_id: string };
 
@@ -126,6 +127,12 @@ export async function notifyUser(
   if (!bearer) return { sent: 0, skipped: "authentification Firebase refusée" };
 
   const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
+  // Chemin absolu : FCM exige une URL complète pour `link`. NEXT_PUBLIC_APP_URL
+  // sert déjà de base publique ailleurs ; sans elle on n'envoie pas de lien
+  // plutôt qu'un lien cassé.
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const chemin = lienNotif(p.data as Record<string, unknown> | undefined);
+  const lienWeb = base && chemin ? `${base}${chemin}` : null;
   let sent = 0;
   const errors: string[] = [];
 
@@ -141,9 +148,16 @@ export async function notifyUser(
             // FCM v1 refuse toute valeur non textuelle dans data, avec un 400
             // qui ne dit pas laquelle. On convertit plutôt que de risquer un
             // envoi perdu à cause d'un nombre oublié quelque part.
-            data: Object.fromEntries(
-              Object.entries(p.data || {}).map(([k, v]) => [k, String(v ?? "")])
-            ),
+            data: {
+              ...Object.fromEntries(
+                Object.entries(p.data || {}).map(([k, v]) => [k, String(v ?? "")])
+              ),
+              // Le service worker définit son propre onBackgroundMessage, ce qui
+              // désactive l'affichage automatique de FCM — et donc l'usage de
+              // fcm_options.link. Le lien voyage donc aussi dans data, d'où le
+              // worker le lit au clic.
+              ...(lienWeb ? { href: lienWeb } : {}),
+            },
             android: {
               priority: "HIGH",
               notification: {
@@ -153,6 +167,13 @@ export async function notifyUser(
               },
             },
             apns: { payload: { aps: { sound: "default", badge: 1 } } },
+            // Navigateur : sans `link`, un clic sur la notification système
+            // ouvre la racine du site et laisse chercher ce qui vient
+            // d'arriver. La table de liens est partagée avec la cloche in-app.
+            webpush: {
+              notification: { icon: "/icon", badge: "/icon" },
+              fcm_options: lienWeb ? { link: lienWeb } : undefined,
+            },
           },
         }),
       });
