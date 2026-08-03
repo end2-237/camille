@@ -20,11 +20,14 @@ const STATUS = {
   archived: { label: "Archivé", color: C.red },
 };
 
-export default function AgentDetail({ agent, onClose, onChanged }) {
+// initialView : ouvre directement une sous-vue au lieu du menu. Sert a
+// l'aiguillage des notifications — une alerte « agent deconnecte » doit tomber
+// sur l'ecran de connexion WhatsApp, pas sur un menu ou il faut la rechercher.
+export default function AgentDetail({ agent, onClose, onChanged, initialView }) {
   const [full, setFull] = useState(null);
   const [status, setStatus] = useState(agent?.status || "active");
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState("menu");
+  const [view, setView] = useState(initialView || "menu");
   const [catBusy, setCatBusy] = useState(false);
 
   const back = () => setView("menu");

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S, BOTTOM_INSET } from "../theme";
@@ -8,12 +8,25 @@ import { BottomDrawer } from "../components/Drawer";
 import AgentDetail from "./AgentDetail";
 import AgentCreate from "./AgentCreate";
 
-export default function Agents({ stats, query, refreshing, onRefresh, onAgentChanged, onRefreshData }) {
+export default function Agents({ stats, query, refreshing, onRefresh, onAgentChanged, onRefreshData, deepLink, onDeepLinkDone }) {
   const all = stats?.agents || [];
   const ov = stats?.overview || {};
   const q = (query || "").trim().toLowerCase();
   const [sel, setSel] = useState(null);
+  const [selView, setSelView] = useState(null);
   const [creating, setCreating] = useState(false);
+
+  // Aiguillage depuis une notification : ouvrir l'agent concerne directement sur
+  // la bonne sous-vue. Une alerte qu'il faut ensuite chercher dans les menus ne
+  // vaut guere mieux que pas d'alerte du tout.
+  useEffect(() => {
+    if (!deepLink?.agentId) return;
+    const target = all.find((a) => a.agent_id === deepLink.agentId);
+    if (!target) return; // agent pas encore charge : on retentera au prochain rendu
+    setSel(target);
+    setSelView(deepLink.view || null);
+    onDeepLinkDone?.();
+  }, [deepLink, all, onDeepLinkDone]);
 
   const agents = useMemo(
     () => (q ? all.filter((a) => `${a.name || ""} ${a.business_name || ""} ${a.sector || ""}`.toLowerCase().includes(q)) : all),
@@ -125,8 +138,15 @@ export default function Agents({ stats, query, refreshing, onRefresh, onAgentCha
         {({ close }) => <AgentCreate onClose={close} onCreated={onRefreshData} />}
       </BottomDrawer>
 
-      <BottomDrawer visible={!!sel} onClose={() => setSel(null)}>
-        {({ close }) => sel && <AgentDetail agent={sel} onClose={close} onChanged={onAgentChanged} />}
+      <BottomDrawer visible={!!sel} onClose={() => { setSel(null); setSelView(null); }}>
+        {({ close }) => sel && (
+          <AgentDetail
+            agent={sel}
+            onClose={close}
+            onChanged={onAgentChanged}
+            initialView={selView}
+          />
+        )}
       </BottomDrawer>
     </>
   );
