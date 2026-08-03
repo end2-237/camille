@@ -12,6 +12,7 @@ import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
 import { ThemeToggle }  from "@/components/ui/ThemeToggle";
 import { CamilleIcon }  from "@/components/ui/CamilleIcon";
+import { NotificationBell } from "@/components/ui/NotificationBell";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_W   = 224;
@@ -131,6 +132,9 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
         <NavItem href="/dashboard/orders" label="Commandes"
           icon={<Receipt className="w-3.5 h-3.5" />}
           active={pathname === "/dashboard/orders"} collapsed={collapsed} />
+        <NavItem href="/dashboard/notifications" label="Notifications"
+          icon={<Bell className="w-3.5 h-3.5" />}
+          active={pathname === "/dashboard/notifications"} collapsed={collapsed} />
         <NavItem href="/dashboard/stats" label="Statistiques"
           icon={<BarChart2 className="w-3.5 h-3.5" />}
           active={pathname === "/dashboard/stats"} collapsed={collapsed} />
@@ -306,7 +310,6 @@ function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop
   const [mounted, setMounted]       = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [q, setQ]                   = useState("");
-  const [notifOpen, setNotifOpen]   = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setMounted(true), []);
@@ -318,7 +321,7 @@ function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop
         setSearchOpen((v) => !v);
         setTimeout(() => searchRef.current?.focus(), 80);
       }
-      if (e.key === "Escape") { setSearchOpen(false); setNotifOpen(false); }
+      if (e.key === "Escape") setSearchOpen(false);
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -329,16 +332,11 @@ function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop
     if (pathname === "/dashboard/orders")  return "Commandes";
     if (pathname === "/dashboard/stats")   return "Statistiques";
     if (pathname === "/dashboard/billing") return "Plans & Facturation";
+    if (pathname === "/dashboard/notifications") return "Notifications";
     const match = agents.find((a) => pathname.includes(a.id));
     if (match) return match.identity.name;
     return "Dashboard";
   })();
-
-  const NOTIFS = [
-    { id: 1, text: "Camille a traité 142 messages aujourd'hui", time: "Il y a 5 min", dot: "#34D399" },
-    { id: 2, text: "Votre plan Pro se renouvelle dans 7 jours",  time: "Il y a 2h",    dot: "#FBBF24" },
-    { id: 3, text: "Nouveau modèle Claude 3.7 disponible",       time: "Hier",         dot: "var(--color-gold)" },
-  ];
 
   const filtered = q.trim()
     ? agents.filter((a) => a.identity.name.toLowerCase().includes(q.toLowerCase()))
@@ -435,49 +433,7 @@ function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop
           Nouvel agent
         </button>
         <ThemeToggle />
-        <div className="relative">
-          <button onClick={() => setNotifOpen((v) => !v)} onBlur={() => setTimeout(() => setNotifOpen(false), 180)}
-            className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150"
-            style={{ color: "var(--text-disabled)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-subtle)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-disabled)"; }}>
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-gold)" }} />
-          </button>
-          <AnimatePresence>
-            {notifOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.18 }}
-                className="absolute right-0 top-full mt-2 w-72 rounded-xl overflow-hidden"
-                style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "0 16px 40px rgba(25,23,27,0.14)" }}
-              >
-                <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-                  <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>Notifications</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
-                    style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)" }}>
-                    {NOTIFS.length}
-                  </span>
-                </div>
-                {NOTIFS.map((n, i) => (
-                  <div key={n.id} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-gold)]"
-                    style={{ borderBottom: i < NOTIFS.length - 1 ? "1px solid var(--border-subtle)" : undefined }}>
-                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ background: n.dot }} />
-                    <div className="min-w-0">
-                      <p className="text-xs leading-snug" style={{ color: "var(--text-secondary)" }}>{n.text}</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>{n.time}</p>
-                    </div>
-                  </div>
-                ))}
-                <div className="px-4 py-2.5">
-                  <button className="w-full text-xs text-center transition-colors hover:opacity-70" style={{ color: "var(--text-disabled)" }}>
-                    Tout marquer comme lu
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <NotificationBell />
         <button title="Aide"
           className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150"
           style={{ color: "var(--text-disabled)" }}

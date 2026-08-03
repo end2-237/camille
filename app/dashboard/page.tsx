@@ -6,7 +6,7 @@ import { motion, AnimatePresence }      from "framer-motion";
 import {
   Plus, Bot, Search, Sparkles, Pause,
   MoreHorizontal, Settings, Trash2, Play,
-  ArrowUpRight,
+  ArrowUpRight, Lock,
 } from "lucide-react";
 import { toast }        from "sonner";
 import { useAuth }      from "@/hooks/useAuth";
@@ -218,6 +218,11 @@ export default function DashboardPage() {
     [agents, query]
   );
 
+  // Un agent dont l'abonnement est fini ne repond plus a personne. Tant que
+  // rien ne le disait, le vendeur croyait son agent actif et cherchait la panne
+  // du mauvais cote.
+  const expired = agents.filter((a) => a.plan_expired);
+
   const activeCount = agents.filter((a) => a.status === "active").length;
   const pausedCount = agents.filter((a) => a.status === "paused").length;
   const avgTokens   = agents.length
@@ -258,6 +263,27 @@ export default function DashboardPage() {
           Nouvel agent
         </button>
       </header>
+
+      {mounted && expired.length > 0 && (
+        <div className="flex items-start gap-2.5 px-7 py-3 flex-shrink-0"
+          style={{ background: "rgba(163,38,27,0.08)", borderBottom: "1px solid rgba(163,38,27,0.22)" }}>
+          <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#A3261B" }} />
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold" style={{ color: "#A3261B" }}>
+              {expired.length > 1
+                ? `${expired.length} agents à l'arrêt`
+                : `${expired[0].identity.name} est à l'arrêt`}
+            </p>
+            <p className="text-[11.5px] leading-snug mt-0.5" style={{ color: "#A3261B" }}>
+              L&apos;abonnement est terminé : plus aucune réponse n&apos;est envoyée à tes clients.{" "}
+              <button onClick={() => router.push("/dashboard/billing")} className="underline font-medium">
+                Se réabonner
+              </button>{" "}
+              pour le remettre en service.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
         {stats.map((s, i) => (

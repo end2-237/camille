@@ -2,10 +2,28 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Save, RefreshCw, Bot, ShoppingBag, CreditCard, MapPin, MessageSquare, Lock } from "lucide-react";
+import { Save, RefreshCw, Bot, ShoppingBag, CreditCard, MapPin, MessageSquare, Lock, FileText, LocateFixed, Check } from "lucide-react";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
 import { getMaxLevel } from "@/lib/plans";
+
+/**
+ * Identité imprimée en tête et en pied de chaque bon de commande.
+ * Les mêmes champs que l'écran mobile : un vendeur qui règle son document
+ * depuis son téléphone doit retrouver exactement ce réglage sur son ordinateur.
+ */
+interface DocSettings {
+  name: string; tagline: string; address: string; phone: string;
+  email: string; rccm: string; niu: string; logo_url: string; color: string;
+}
+
+const DOC_VIDE: DocSettings = {
+  name: "", tagline: "", address: "", phone: "",
+  email: "", rccm: "", niu: "", logo_url: "", color: "",
+};
+
+/** Raccourcis de teinte. N'importe quel code hexadécimal reste saisissable. */
+const TEINTES = ["#DD5509", "#101012", "#1D4ED8", "#047857", "#B91C1C", "#7C3AED"];
 
 interface Cfg {
   level: number;
@@ -22,6 +40,7 @@ interface Cfg {
   /** Barème saisi en texte : "Bonaberi = 2000" par ligne. */
   delivery_zones_text: string;
   menu_image_url: string | null;
+  doc: DocSettings;
 }
 
 const LEVELS = [
@@ -57,6 +76,11 @@ export default function AgentSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [regen, setRegen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  /** Modifie un seul champ du bon de commande. */
+  const setDoc = (k: keyof DocSettings, v: string) =>
+    setCfg((p) => (p ? { ...p, doc: { ...p.doc, [k]: v } } : p));
 
   // La carte du menu est propre à la restauration.
   const isResto = /resto|restaurant|food|cuisine|snack|fast|pizz|traiteur|patisser|boulanger|glacier/i
@@ -68,6 +92,8 @@ export default function AgentSettingsPage() {
       const r = await fetch(`/api/agents/${agentId}`, { headers: { ...authHeaders() } });
       const d = await r.json();
       const ag = d.agent ?? d;
+      const bc = ag.business_context ?? {};
+      const ds = (ag.doc_settings ?? {}) as Partial<DocSettings>;
       setCfg({
         level: ag.level ?? 1,
         plan: ag.plan ?? "free",
@@ -84,6 +110,16 @@ export default function AgentSettingsPage() {
         // quartier est plus rapide à saisir qu'un tableau de champs.
         delivery_zones_text: zonesToText(ag.delivery_zones),
         menu_image_url: ag.menu_image_url ?? "",
+        // Préremplissage : ce que le vendeur a déjà renseigné pour son agent
+        // vaut mieux qu'un formulaire vide qu'il faudrait ressaisir.
+        doc: {
+          ...DOC_VIDE,
+          ...ds,
+          name:    ds.name    || bc.business_name   || "",
+          address: ds.address || bc.location        || "",
+          phone:   ds.phone   || bc.whatsapp_number || "",
+          email:   ds.email   || bc.owner_email     || "",
+        },
       });
     } catch { toast.error("Erreur de chargement"); }
     finally { setLoading(false); }
@@ -132,12 +168,53 @@ export default function AgentSettingsPage() {
           delivery_fee: Number(cfg.delivery_fee ?? 1000) || 0,
           delivery_zones: parseZones(cfg.delivery_zones_text ?? ""),
           menu_image_url: (cfg.menu_image_url ?? "").trim() || null,
+          // Les champs vides ne sont pas enregistrés : côté document, l'absence
+          // d'une clé retombe sur une valeur par défaut là où une chaîne vide
+          // laisserait un trou dans l'en-tête.
+          doc_settings: Object.fromEntries(
+            Object.entries(cfg.doc).filter(([, v]) => String(v ?? "").trim() !== "")
+          ),
         }),
       });
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || "Échec"); }
       toast.success("Configuration enregistrée");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Échec de l'enregistrement"); }
     finally { setSaving(false); }
+  }
+
+  /**
+   * Relève la position depuis le navigateur, comme le bouton « Je suis dans ma
+   * boutique » du mobile. Pas de géocodage inverse ici : le navigateur n'en
+   * fournit pas, et l'adresse lisible se saisit juste au-dessus. Ce sont les
+   * coordonnées qui guident le client jusqu'à la porte.
+   */
+  function detecterPosition() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      toast.error("Ce navigateur ne sait pas relever la position.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCfg((p) => (p ? {
+          ...p,
+          latitude:  Number(pos.coords.latitude.toFixed(6)),
+          longitude: Number(pos.coords.longitude.toFixed(6)),
+        } : p));
+        setLocating(false);
+        toast.success("Position relevée — pense à enregistrer");
+      },
+      (err) => {
+        setLocating(false);
+        toast.error(
+          err.code === err.PERMISSION_DENIED
+            ? "Autorisation refusée. Tu peux saisir les coordonnées à la main."
+            : "Position introuvable. Réessaie depuis la boutique."
+        );
+      },
+      // Haute précision : on relève une devanture, pas une ville.
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   }
 
   async function regenerate() {
@@ -253,8 +330,21 @@ export default function AgentSettingsPage() {
             <input className="input-midnight" type="number" step="0.000001" value={cfg.longitude ?? ""} onChange={(e) => setCfg({ ...cfg, longitude: e.target.value === "" ? null : Number(e.target.value) })} placeholder="9.7679" />
           </div>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button type="button" onClick={detecterPosition} disabled={locating} className="btn-ghost disabled:opacity-60">
+            <LocateFixed className={"h-3.5 w-3.5 " + (locating ? "animate-pulse" : "")} />
+            {locating ? "Relevé en cours…" : "Je suis dans ma boutique"}
+          </button>
+          {cfg.latitude != null && cfg.longitude != null && (
+            <span className="inline-flex items-center gap-1.5 text-[11.5px]" style={{ color: "#1E7B32" }}>
+              <Check className="h-3.5 w-3.5" />
+              Position enregistrée · {cfg.latitude}, {cfg.longitude}
+            </span>
+          )}
+        </div>
         <p className="mt-2 text-[11px]" style={{ color: "var(--text-disabled)" }}>
-          Coordonnées de la boutique (pour l&apos;envoi de la localisation sur WhatsApp).
+          Coordonnées de la boutique : c&apos;est ce que l&apos;agent envoie au client
+          qui demande où te trouver, et l&apos;adresse du bon de commande.
         </p>
       </Section>
 
@@ -288,6 +378,64 @@ export default function AgentSettingsPage() {
             les frais par défaut s&apos;appliquent. Aucun frais sur place ou à emporter.
           </p>
         </div>
+      </Section>
+
+      {/* Mon bon de commande — mêmes champs que l'écran mobile.
+          Le document partait au nom d'une seule entreprise pour tout le monde :
+          chaque vendeur envoyait à SES clients un bon portant le nom et le RCCM
+          d'un tiers. */}
+      <Section title="Mon bon de commande" icon={FileText}>
+        <p className="mb-3 text-[12px] leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+          Ces informations s&apos;impriment en haut et en bas de chaque bon de commande
+          envoyé à tes clients. Les champs laissés vides sont simplement omis.
+        </p>
+
+        <SubTitle>Entreprise</SubTitle>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Nom de l'entreprise" value={cfg.doc.name} onChange={(v) => setDoc("name", v)} placeholder="Ex. Chez Mama Ngo" />
+          <Field label="Accroche (facultatif)" value={cfg.doc.tagline} onChange={(v) => setDoc("tagline", v)} placeholder="Ex. Restaurant traditionnel" />
+          <Field label="Adresse" value={cfg.doc.address} onChange={(v) => setDoc("address", v)} placeholder="Ex. Bonamoussadi, Douala" />
+          <Field label="Téléphone" value={cfg.doc.phone} onChange={(v) => setDoc("phone", v)} placeholder="Ex. (+237) 6 99 00 00 00" />
+          <Field label="Courriel (facultatif)" value={cfg.doc.email} onChange={(v) => setDoc("email", v)} type="email" placeholder="contact@exemple.cm" />
+        </div>
+
+        <SubTitle className="mt-4">Mentions légales</SubTitle>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="RCCM (facultatif)" value={cfg.doc.rccm} onChange={(v) => setDoc("rccm", v)} placeholder="RC/DLA/2020/B/1234" />
+          <Field label="NIU (facultatif)" value={cfg.doc.niu} onChange={(v) => setDoc("niu", v)} placeholder="M0123456789012A" />
+        </div>
+
+        <SubTitle className="mt-4">Apparence</SubTitle>
+        <Field label="Adresse du logo (facultatif)" value={cfg.doc.logo_url} onChange={(v) => setDoc("logo_url", v)} placeholder="https://…/logo.png" />
+
+        <label className="mb-1.5 mt-3 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+          Couleur du document
+        </label>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {TEINTES.map((t) => {
+            const choisie = cfg.doc.color.toLowerCase() === t.toLowerCase();
+            return (
+              <button
+                key={t} type="button"
+                aria-label={`Couleur ${t}`}
+                onClick={() => setDoc("color", choisie ? "" : t)}
+                className="flex h-8 w-8 items-center justify-center rounded-full transition-all"
+                style={{ background: t, border: choisie ? "3px solid var(--text-primary)" : "1px solid var(--border-default)" }}
+              >
+                {choisie && <Check className="h-3.5 w-3.5" style={{ color: "#fff" }} />}
+              </button>
+            );
+          })}
+          <input
+            className="input-midnight ml-1 w-[130px]"
+            value={cfg.doc.color}
+            onChange={(e) => setDoc("color", e.target.value)}
+            placeholder="#DD5509"
+          />
+        </div>
+        <p className="mt-2 text-[11px]" style={{ color: "var(--text-disabled)" }}>
+          La position du local se relève dans « Site &amp; localisation » ci-dessus.
+        </p>
       </Section>
 
       {/* Carte du menu — restauration uniquement */}
@@ -336,6 +484,26 @@ export default function AgentSettingsPage() {
           Régénère le cerveau de l&apos;agent selon le niveau et la config ci-dessus.
         </span>
       </div>
+    </div>
+  );
+}
+
+function SubTitle({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <p className={"mb-2 text-[11px] font-bold uppercase tracking-wider " + className} style={{ color: "var(--text-disabled)" }}>
+      {children}
+    </p>
+  );
+}
+
+function Field({ label, value, onChange, placeholder, type = "text" }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{label}</label>
+      <input className="input-midnight" type={type} value={value}
+        onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </div>
   );
 }
