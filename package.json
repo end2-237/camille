@@ -21,7 +21,6 @@
     "@supabase/supabase-js": "^2.43.4",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
-    "firebase": "^12.17.0",
     "framer-motion": "^11.11.9",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.447.0",
@@ -32,6 +31,7 @@
     "react-hook-form": "^7.53.0",
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
+    "web-push": "^3.6.7",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -42,6 +42,7 @@
     "@types/pg": "^8.11.10",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^8",
     "eslint-config-next": "15.3.1",

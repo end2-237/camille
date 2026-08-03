@@ -6,34 +6,25 @@
 // Le dashboard ne recevait ses alertes que dans l'onglet ouvert : fermé le soir,
 // on découvrait au matin une commande de la veille. Le mobile, lui, sonnait.
 //
-// On passe par FCM plutôt que par le Web Push nu : le serveur envoie déjà à des
-// jetons FCM (lib/fcm.ts) et `push_tokens` accepte déjà `platform = 'web'`. Un
-// jeton web s'y range sans second chemin d'envoi à maintenir.
+// Web Push standard plutôt que le SDK Firebase : une paire VAPID suffit, aucune
+// dépendance côté navigateur, aucun script chargé depuis un domaine tiers. Le
+// mobile continue de passer par FCM — les deux cohabitent dans push_tokens,
+// l'envoi choisit le bon chemin selon la forme du jeton.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { authHeaders } from "@/lib/auth-client";
 
-const CONFIG = {
-  apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "",
-  authDomain:        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",
-  projectId:         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
-  appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
-};
-const VAPID = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY ?? "";
+const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
 export type EtatPush =
-  | "non-configure"   // clés Firebase absentes du déploiement
+  | "non-configure"   // clé VAPID absente du déploiement
   | "non-supporte"    // navigateur sans service worker ou sans push
   | "refuse"          // l'utilisateur a dit non (ou le navigateur bloque)
   | "a-activer"       // possible, pas encore demandé
   | "actif";
 
-/** Clé de dernier jeton envoyé, pour ne pas réenregistrer à chaque visite. */
-const CLE_JETON = "camille.push.token";
-
 export function pushConfigure(): boolean {
-  return Boolean(CONFIG.projectId && CONFIG.apiKey && CONFIG.appId && VAPID);
+  return VAPID.length > 20;
 }
 
 export function pushSupporte(): boolean {
@@ -54,26 +45,25 @@ export function etatPush(): EtatPush {
 }
 
 /**
- * Enregistre le service worker en lui passant la configuration Firebase.
- *
- * La query string fait partie de l'identité du worker : changer une clé
- * enregistre un nouveau worker au lieu de laisser tourner l'ancien avec une
- * configuration périmée.
+ * La clé VAPID voyage en base64url ; `subscribe` attend des octets bruts.
+ * Sans cette conversion, le navigateur rejette la souscription avec une erreur
+ * qui ne dit rien de la vraie cause.
  */
-async function enregistrerWorker(): Promise<ServiceWorkerRegistration> {
-  const q = new URLSearchParams({
-    apiKey: CONFIG.apiKey,
-    authDomain: CONFIG.authDomain,
-    projectId: CONFIG.projectId,
-    messagingSenderId: CONFIG.messagingSenderId,
-    appId: CONFIG.appId,
-  });
-  return navigator.serviceWorker.register(`/firebase-messaging-sw.js?${q}`, { scope: "/" });
+function base64UrlVersOctets(base64: string): Uint8Array<ArrayBuffer> {
+  const bourrage = "=".repeat((4 - (base64.length % 4)) % 4);
+  const normal = (base64 + bourrage).replace(/-/g, "+").replace(/_/g, "/");
+  const brut = atob(normal);
+  // Tampon alloué explicitement : `Uint8Array.from` renvoie un ArrayBufferLike,
+  // que la signature de subscribe() refuse.
+  const octets = new Uint8Array(new ArrayBuffer(brut.length));
+  for (let i = 0; i < brut.length; i++) octets[i] = brut.charCodeAt(i);
+  return octets;
 }
 
 /**
- * Demande l'autorisation si besoin, récupère le jeton et l'enregistre côté
- * serveur. Ne lève pas : l'échec du push ne doit jamais casser la page.
+ * Demande l'autorisation si besoin, souscrit au push et enregistre la
+ * souscription côté serveur. Ne lève pas : l'échec du push ne doit jamais
+ * casser la page.
  *
  * @param demander false pour ne rien demander à l'utilisateur — sert au
  *   rattachement silencieux quand l'autorisation est déjà accordée.
@@ -90,50 +80,46 @@ export async function activerPushWeb(demander = true): Promise<EtatPush> {
     }
     if (Notification.permission !== "granted") return "refuse";
 
-    // Import dynamique : le SDK ne pèse sur le chargement que des visiteurs qui
-    // activent réellement les notifications.
-    const [{ initializeApp, getApps }, { getMessaging, getToken, isSupported }] = await Promise.all([
-      import("firebase/app"),
-      import("firebase/messaging"),
-    ]);
-    if (!(await isSupported())) return "non-supporte";
+    const reg = await navigator.serviceWorker.register("/push-sw.js", { scope: "/" });
+    await navigator.serviceWorker.ready;
 
-    const app = getApps().length ? getApps()[0] : initializeApp(CONFIG);
-    const registration = await enregistrerWorker();
-    const token = await getToken(getMessaging(app), {
-      vapidKey: VAPID,
-      serviceWorkerRegistration: registration,
+    // Une souscription existante est réutilisée : re-souscrire à chaque visite
+    // ferait tourner l'endpoint et laisserait des entrées mortes en base.
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlVersOctets(VAPID),
+      }));
+
+    const r = await fetch("/api/push/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
+      // Le serveur reconnaît une souscription web à sa forme JSON et l'envoie
+      // par Web Push ; un jeton FCM du mobile reste une chaîne opaque.
+      body: JSON.stringify({ token: JSON.stringify(sub), platform: "web" }),
     });
-    if (!token) return "a-activer";
-
-    // Réenregistrer un jeton inchangé à chaque visite ferait un appel inutile
-    // par chargement de page ; le serveur, lui, reste idempotent.
-    if (localStorage.getItem(CLE_JETON) !== token) {
-      const r = await fetch("/api/push/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        credentials: "include",
-        body: JSON.stringify({ token, platform: "web" }),
-      });
-      if (r.ok) localStorage.setItem(CLE_JETON, token);
-    }
+    if (!r.ok) return "a-activer";
     return "actif";
   } catch {
     return "a-activer";
   }
 }
 
-/** Désactive le jeton de ce navigateur. L'autorisation, elle, reste au navigateur. */
+/** Désactive ce navigateur. L'autorisation, elle, reste au navigateur. */
 export async function desactiverPushWeb(): Promise<void> {
-  const token = localStorage.getItem(CLE_JETON);
-  if (!token) return;
   try {
-    await fetch("/api/push/register", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
-      body: JSON.stringify({ token }),
-    });
-  } catch { /* le jeton restera actif au pire ; sans conséquence visible */ }
-  localStorage.removeItem(CLE_JETON);
+    const reg = await navigator.serviceWorker.getRegistration("/push-sw.js");
+    const sub = await reg?.pushManager.getSubscription();
+    if (sub) {
+      await fetch("/api/push/register", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        body: JSON.stringify({ token: JSON.stringify(sub) }),
+      }).catch(() => {});
+      await sub.unsubscribe().catch(() => {});
+    }
+  } catch { /* rien à désinscrire */ }
 }
