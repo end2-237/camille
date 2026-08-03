@@ -355,3 +355,45 @@ CREATE INDEX IF NOT EXISTS agent_conv_contact_idx        ON camille.agent_conver
 -- ── source catalogue par agent (multi-tenant : évite la fuite OFS) ────────────
 ALTER TABLE camille.agents ADD COLUMN IF NOT EXISTS catalog_source text DEFAULT 'camille';
 ALTER TABLE camille.agents ADD COLUMN IF NOT EXISTS ofs_vendor_id  text;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- CORRECTIF UNICITE token_usage  (migration_token_usage_unique.sql)
+--
+-- Le bloc ci-dessus tentait d'ajouter la contrainte (agent_id, period) mais
+-- avalait sa propre erreur : « EXCEPTION WHEN ... OR others THEN NULL ». Sur
+-- une base ou token_usage existait deja avec PRIMARY KEY (id), le CREATE TABLE
+-- IF NOT EXISTS ne changeait rien et la contrainte n'a jamais ete posee.
+--
+-- Resultat : POST /api/usage/record echouait sur son ON CONFLICT, et
+-- l'insertion dans agent_analytics qui suivait n'etait jamais atteinte.
+-- Tokens ET messages restaient a zero.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+BEGIN;
+
+ALTER TABLE camille.token_usage
+  ADD COLUMN IF NOT EXISTS tokens_used bigint NOT NULL DEFAULT 0;
+
+CREATE TEMP TABLE token_usage_merged AS
+  SELECT agent_id,
+         period,
+         SUM(prompt_tokens)     AS prompt_tokens,
+         SUM(completion_tokens) AS completion_tokens,
+         SUM(total_tokens)      AS total_tokens,
+         SUM(tokens_used)       AS tokens_used
+    FROM camille.token_usage
+   GROUP BY agent_id, period;
+
+DELETE FROM camille.token_usage;
+
+INSERT INTO camille.token_usage
+       (agent_id, period, prompt_tokens, completion_tokens, total_tokens, tokens_used)
+SELECT  agent_id, period, prompt_tokens, completion_tokens, total_tokens, tokens_used
+  FROM  token_usage_merged;
+
+DROP TABLE token_usage_merged;
+
+CREATE UNIQUE INDEX IF NOT EXISTS token_usage_agent_period_key
+    ON camille.token_usage (agent_id, period);
+
+COMMIT;
