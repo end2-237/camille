@@ -112,10 +112,22 @@ export async function POST(req: NextRequest) {
         [transactionId || null, paymentRef]
       );
 
-      // Upgrade the agent's plan
+      // Upgrade the agent's plan, et poser la date de fin.
+      //
+      // Sans cette date, l'agent restait actif indefiniment apres le mois paye :
+      // rien en base ne disait jusqu'a quand le paiement courait. On repart de
+      // la fin en cours quand elle est encore devant, pour qu'un renouvellement
+      // anticipe s'ajoute au lieu de raccourcir l'abonnement.
+      //
+      // free et enterprise n'ont pas de terme : le premier n'a rien a
+      // renouveler, le second ne doit jamais pouvoir etre desactive.
       await query(
         `UPDATE camille.agents
          SET plan = $1,
+             plan_expires_at = CASE
+               WHEN $1 IN ('free', 'enterprise') THEN NULL
+               ELSE GREATEST(COALESCE(plan_expires_at, NOW()), NOW()) + INTERVAL '1 month'
+             END,
              updated_at = NOW()
          WHERE id = $2`,
         [payment.plan_id, payment.agent_id]

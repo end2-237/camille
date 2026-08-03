@@ -12,6 +12,7 @@ import { currentPeriod }                              from "@/lib/plans";
 import { getPlanLimitDB, isUnlimitedTokens }          from "@/lib/plans-db";
 import { wahaAnalytics }                              from "@/lib/waha";
 import { AGENT_STATS_COLUMNS }                        from "@/lib/stats-agents";
+import { subscriptionState }                          from "@/lib/subscription";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -357,6 +358,7 @@ export async function GET(req: NextRequest) {
         const percent   = unlimited ? 0 : Math.min(100, Math.round((used / limit) * 100));
         // capabilities est stocke en texte : sans parsing, Object.values()
         // enumere les caracteres de la chaine et compte n'importe quoi.
+        const sub       = subscriptionState(planId, a.plan_expires_at);
         const caps      = parseCaps(a.capabilities);
         const activeCapsCount = Object.values(caps).filter(Boolean).length;
 
@@ -380,6 +382,13 @@ export async function GET(req: NextRequest) {
           token_limit:      limit,
           token_unlimited:  unlimited,
           token_percent:    percent,
+
+          // Abonnement : un agent muet parce que le mois est fini doit le dire.
+          // Sans ces champs, l'app affichait « actif » un agent qui ne
+          // repondait plus a personne.
+          plan_expires_at:  sub.expiresAt,
+          plan_expired:     sub.expired,
+          plan_days_left:   sub.daysLeft,
         };
       })
     );
@@ -459,6 +468,21 @@ export async function GET(req: NextRequest) {
           : agentDetails.reduce((s2, a) => s2 + Number(a.token_limit || 0), 0),
         unlimited:     agentDetails.some((a) => a.token_unlimited),
         plan:          allAgents[0]?.plan ?? "free",
+      },
+
+      // Abonnement, vu du compte : de quoi afficher un bandeau sans avoir a
+      // parcourir la liste des agents cote application.
+      subscription: {
+        expired_count: agentDetails.filter((a) => a.plan_expired).length,
+        expired_agents: agentDetails
+          .filter((a) => a.plan_expired)
+          .map((a) => ({ id: a.id, name: a.name })),
+        // Prochaine echeance parmi les agents encore valides : sert a prevenir
+        // avant la coupure plutot qu'apres.
+        next_expiry: agentDetails
+          .filter((a) => !a.plan_expired && a.plan_expires_at)
+          .map((a) => a.plan_expires_at as string)
+          .sort()[0] ?? null,
       },
 
       // Time series

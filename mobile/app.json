@@ -38,6 +38,12 @@
         }
       ],
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Camille relève la position de ta boutique pour l'indiquer à tes clients."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
@@ -60,7 +66,9 @@
       "permissions": [
         "POST_NOTIFICATIONS",
         "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED"
+        "RECEIVE_BOOT_COMPLETED",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "ios": {

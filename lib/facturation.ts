@@ -47,7 +47,8 @@ export async function sendOrderDocument(
   let o: Record<string, unknown>;
   try {
     const r = await query(
-      `SELECT o.*, a.business_name, a.location, a.whatsapp_number
+      `SELECT o.*, a.business_name, a.location, a.whatsapp_number,
+              a.owner_email, a.doc_settings
          FROM camille.orders o
          JOIN camille.agents a ON a.id = o.agent_id
         WHERE o.id = $1`,
@@ -78,8 +79,38 @@ export async function sendOrderDocument(
     price: Number(it.price) || 0,
   }));
 
+  // La livraison est facturée au client mais n'apparaissait nulle part sur le
+  // document : le total imprimé était donc inférieur à ce qu'on lui demandait
+  // de payer, et c'est au moment de payer qu'il le découvrait.
+  const fraisLivraison = Number(o.delivery_fee) || 0;
+  if (fraisLivraison > 0) {
+    docItems.push({ description: "Livraison", quantity: 1, price: fraisLivraison });
+  }
+
   const number = docNumber(String(o.ref));
   const lieu = (o.place_label || o.address || "") as string;
+
+  // Identité imprimée sur le document. Ce que le vendeur a saisi l'emporte ;
+  // à défaut on retombe sur ce qu'il a déjà renseigné pour son agent, plutôt
+  // que de laisser le document sortir au nom d'une autre entreprise.
+  const reglages = (() => {
+    const d = o.doc_settings;
+    if (!d) return {} as Record<string, string>;
+    if (typeof d === "object") return d as Record<string, string>;
+    try { return JSON.parse(String(d)) as Record<string, string>; } catch { return {}; }
+  })();
+
+  const vendeur = {
+    name:     reglages.name     || (o.business_name as string) || "",
+    tagline:  reglages.tagline  || "",
+    address:  reglages.address  || (o.location as string) || "",
+    phone:    reglages.phone    || (o.whatsapp_number as string) || "",
+    email:    reglages.email    || (o.owner_email as string) || "",
+    rccm:     reglages.rccm     || "",
+    niu:      reglages.niu      || "",
+    logo_url: reglages.logo_url || "",
+    color:    reglages.color    || "",
+  };
 
   let doc: { id?: string; number?: string; error?: string };
   try {
@@ -100,6 +131,10 @@ export async function sendOrderDocument(
         client_phone: String(o.contact_phone || "").replace(/@(c\.us|lid|s\.whatsapp\.net)$/, ""),
         client_address: lieu || null,
         items: docItems,
+        // Emetteur du document. Les clés vides sont écartées : côté
+        // buyfacturation, une chaîne vide laisserait un trou dans l'en-tête là
+        // où l'absence de clé retombe proprement sur la valeur par défaut.
+        seller: Object.fromEntries(Object.entries(vendeur).filter(([, v]) => v)),
         status: "sent",
       }),
     });
@@ -138,10 +173,15 @@ export async function sendOrderDocument(
   // Génération seule : le document existe et son URL est mémorisée, on s'arrête.
   if (!notifyClient) return { ok: true, number: doc.number || number, pdfUrl };
 
+  // Le montant de la livraison manquait aussi dans l'accusé de réception : le
+  // client lisait un total, puis on lui en demandait un autre à l'arrivée.
+  const montant = (n: number) => `${Math.round(n).toLocaleString("fr-FR")} FCFA`;
   const caption =
     `📄 Ton bon de commande n° ${doc.number || number}\n\n` +
-    `${o.business_name || "Nous"} a bien pris ta commande en traitement.\n` +
+    `${vendeur.name || "Nous"} a bien pris ta commande en traitement.\n` +
     (lieu ? `Livraison : ${lieu}\n` : "") +
+    (fraisLivraison > 0 ? `Frais de livraison : ${montant(fraisLivraison)}\n` : "") +
+    (Number(o.total) > 0 ? `Total à payer : ${montant(Number(o.total))}\n` : "") +
     `\nGarde ce document, il fait référence 🙌`;
 
   try {

@@ -59,6 +59,28 @@ export default function Dashboard({ stats, user, refreshing, onRefresh }) {
         </View>
       )}
 
+      {/* Un agent dont l'abonnement est fini ne répond plus à personne. Tant
+          que rien ne le disait, le vendeur croyait son agent actif et
+          cherchait la panne du mauvais côté. */}
+      {Number(stats?.subscription?.expired_count || 0) > 0 && (
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12,
+          borderRadius: R.md, backgroundColor: "#FCE8E6", borderWidth: 1, borderColor: "#F5C6C2",
+          marginBottom: S.md }}>
+          <Ionicons name="lock-closed-outline" size={17} color="#A3261B" style={{ marginTop: 1 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: "#A3261B", fontWeight: "700", fontSize: 13 }}>
+              {Number(stats.subscription.expired_count) > 1
+                ? `${stats.subscription.expired_count} agents à l'arrêt`
+                : `${stats.subscription.expired_agents?.[0]?.name || "Ton agent"} est à l'arrêt`}
+            </Text>
+            <Text style={{ color: "#A3261B", fontSize: 12, marginTop: 2, lineHeight: 17 }}>
+              L'abonnement est terminé : plus aucune réponse n'est envoyée à tes
+              clients. Réabonne-toi pour le remettre en service.
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* ── HERO façon carte immobilière : image + titre + CTA + bandeau ── */}
       <View style={{ borderRadius: 22, overflow: "hidden", marginBottom: S.md, backgroundColor: "#8FC0EF" }}>
         <ImageBackground source={require("../../assets/dash-hero.png")} style={{ width: "100%", minHeight: 430 }} resizeMode="cover">

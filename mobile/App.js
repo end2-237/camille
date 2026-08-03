@@ -49,6 +49,9 @@ export default function App() {
   const [unread, setUnread] = useState(0);
   const [sav, setSav] = useState(0);
   const [gate, setGate] = useState(null); // mise a jour obligatoire
+  // Cible d'une notification touchee : { agentId, view }. Consommee par l'ecran
+  // Agents des que la liste est chargee, puis remise a zero.
+  const [deepLink, setDeepLink] = useState(null);
 
   const load = useCallback(async () => {
     const [s, a, m] = await Promise.allSettled([getStats("30d"), getAgents(), getMe()]);
@@ -122,6 +125,11 @@ export default function App() {
         const t = String(data?.type || "");
         if (t === "order") setTab("agents");
         else if (t === "complaint" || t === "after_sales" || t === "talk_to_human") setTab("sav");
+        else if (t === "whatsapp_disconnected") {
+          // Un agent debranche doit tomber sur le bouton qui le rebranche.
+          setDeepLink({ agentId: String(data?.agentId || ""), view: "connect" });
+          setTab("agents");
+        } else if (t === "whatsapp_connected") setTab("agents");
         else setTab("notifs");
         setUnread(0);
       }
@@ -202,6 +210,10 @@ export default function App() {
     try { await load(); } catch {}
   }, [load]);
 
+  // Identite stable : sans useCallback, Agents recevrait une nouvelle fonction a
+  // chaque rendu et son effet d'aiguillage se redeclencherait en boucle.
+  const clearDeepLink = useCallback(() => setDeepLink(null), []);
+
   const initials = useMemo(() => {
     if (!user) return "";
     const n = user.full_name || user.email || "";
@@ -226,7 +238,7 @@ export default function App() {
   if (gate) return <ForceUpdate info={gate} />;
 
   if (tab === "dash") Body = <Dashboard {...common} user={user} />;
-  else if (tab === "agents") Body = <Agents {...common} onAgentChanged={onAgentChanged} onRefreshData={load} />;
+  else if (tab === "agents") Body = <Agents {...common} onAgentChanged={onAgentChanged} onRefreshData={load} deepLink={deepLink} onDeepLinkDone={clearDeepLink} />;
   else if (tab === "convos") Body = <Conversations {...common} />;
   else if (tab === "analytics") Body = <Analytics {...common} user={user} />;
   else if (tab === "notifs") Body = <Notifications onOpenOrders={() => setTab("agents")} />;

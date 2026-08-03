@@ -81,6 +81,8 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "media",
   // ── Livraison & carte du menu ──
   "delivery_enabled", "delivery_fee", "delivery_zones", "menu_image_url",
+  // ── Identité imprimée sur les bons de commande ──
+  "doc_settings",
 ]);
 
 type RouteContext = { params: Promise<{ agentId: string }> };
@@ -115,6 +117,9 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         catalog_source: row.catalog_source ?? null,
         conversion_mode: row.conversion_mode ?? "whatsapp",
         ofs_vendor_id: row.ofs_vendor_id ?? null,
+        // Identité imprimée sur les bons de commande, pour préremplir l'écran
+        // de personnalisation.
+        doc_settings: parseJ(row.doc_settings) ?? {},
       },
     });
   } catch (err) {

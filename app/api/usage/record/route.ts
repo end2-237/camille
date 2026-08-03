@@ -5,6 +5,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { currentPeriod } from "@/lib/plans";
+import { getPlanLimitDB } from "@/lib/plans-db";
+import { subscriptionState } from "@/lib/subscription";
+import { alerterQuota, alerterEcheance } from "@/lib/usage-alerts";
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,6 +41,20 @@ export async function POST(req: NextRequest) {
       }
       agentId = agentRes.rows[0].id;
     }
+
+    // Propriétaire et forfait : nécessaires aux alertes de fin de forfait, qui
+    // valent surtout AVANT la coupure. On les lit une fois, sans bloquer
+    // l'enregistrement si la lecture échoue.
+    let owner: { user_id: string; plan: string; name: string; plan_expires_at: string | null } | null = null;
+    try {
+      const r = await query(
+        `SELECT user_id, plan, plan_expires_at,
+                COALESCE(NULLIF(name, ''), 'Ton agent') AS name
+           FROM camille.agents WHERE id = $1`,
+        [agentId]
+      );
+      owner = r.rows[0] ?? null;
+    } catch { /* les compteurs priment sur les alertes */ }
 
     const period  = currentPeriod();
     const pt = Number(prompt_tokens)     || 0;
@@ -85,6 +102,38 @@ export async function POST(req: NextRequest) {
       const m = e instanceof Error ? e.message : String(e);
       console.error("[usage/record analytics]", m);
       warnings.push(`agent_analytics: ${m}`);
+    }
+
+    // ── Alertes ───────────────────────────────────────────────────────────────
+    // Après l'enregistrement, jamais avant : une alerte ratée ne doit pas coûter
+    // une consommation non comptée.
+    if (owner) {
+      try {
+        const limit = await getPlanLimitDB(owner.plan ?? "free");
+        const usedRes = await query(
+          `SELECT COALESCE(total_tokens, 0) AS total
+             FROM camille.token_usage WHERE agent_id = $1 AND period = $2`,
+          [agentId, period]
+        );
+        await alerterQuota({
+          agentId,
+          userId: owner.user_id,
+          agentName: owner.name,
+          period,
+          used: Number(usedRes.rows[0]?.total ?? 0),
+          limit,
+        });
+
+        const sub = subscriptionState(owner.plan, owner.plan_expires_at);
+        await alerterEcheance({
+          agentId,
+          userId: owner.user_id,
+          agentName: owner.name,
+          daysLeft: sub.daysLeft,
+        });
+      } catch (e) {
+        console.error("[usage/record alertes]", e);
+      }
     }
 
     return NextResponse.json({
