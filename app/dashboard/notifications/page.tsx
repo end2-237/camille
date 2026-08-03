@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { RefreshCw, CheckCheck } from "lucide-react";
 import { useNotifications, notifHref, whenLabel, type Notif } from "@/hooks/useNotifications";
 import { kindOf } from "@/components/ui/NotificationBell";
+import { PushWebCard } from "@/components/ui/PushWebCard";
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -26,6 +27,8 @@ export default function NotificationsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-6 sm:px-8">
+      <PushWebCard />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "var(--text-primary)" }}>

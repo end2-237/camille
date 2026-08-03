@@ -102,6 +102,10 @@ export interface BusinessContext {
   /** Physical or virtual location */
   location?: string;
 
+  /** Coordonnées du local, relevées à la configuration (épingle WhatsApp) */
+  latitude?: number | null;
+  longitude?: number | null;
+
   /** Target customer persona description */
   target_audience?: string;
 
@@ -259,6 +263,9 @@ export interface AgentFormData {
   description: string;
   website_url?: string;
   location?: string;
+  /** Coordonnées du local. Renseignées → l'épingle WhatsApp part toute seule. */
+  latitude?: number | null;
+  longitude?: number | null;
   target_audience?: string;
 
   // Step 2 – Agent Personality

@@ -161,6 +161,20 @@ export interface N1Options {
   welcomeMessage?: string | null;
 }
 
+/**
+ * Consigne « on t'envoie l'épingle » — seulement si la boutique a des
+ * coordonnées. camille-core détecte la demande d'adresse sur le message entrant
+ * et envoie la position WhatsApp de son côté ; sans cette ligne, le modèle
+ * répondrait qu'il ne peut pas partager de carte pendant qu'elle arrive.
+ */
+function locationPinClause(data: AgentFormData, lang: "fr" | "en" = "fr"): string {
+  if (data.latitude == null || data.longitude == null) return "";
+  if (lang === "en") {
+    return `\n- **When asked where the business is**: give the address in words${data.location ? ` (${data.location})` : ""}, then announce the map — e.g. "Here is our location 👇". The WhatsApp pin is sent **automatically**: never say you cannot share a location, and do not spell out GPS coordinates.`;
+  }
+  return `\n- **Adresse demandée** : donne la localisation en toutes lettres${data.location ? ` (${data.location})` : ""}, puis annonce la carte — ex. « Voici notre position 👇 ». L'épingle WhatsApp part **automatiquement** : ne dis jamais que tu ne peux pas envoyer de localisation, et ne recopie pas de coordonnées GPS.`;
+}
+
 function buildN1Prompt(data: AgentFormData, opts: N1Options): string {
   const {
     agent_name, business_name, description, website_url, location,
@@ -235,7 +249,7 @@ Toute information NON présente ici (prix, stock, délais, livraison, paiement, 
 
 ## FORMAT DE RÉPONSE
 - Concision : ≤ 3 phrases. Utilise le prénom du contact s'il est connu.
-- WhatsApp : markdown sobre (**gras** accepté), pas de tableaux ; listes pour 3+ éléments.
+- WhatsApp : markdown sobre (**gras** accepté), pas de tableaux ; listes pour 3+ éléments.${locationPinClause(data)}
 ${site ? `- Termine, dès que pertinent, par le renvoi au site : ${site}.` : ""}
 
 ---
@@ -346,7 +360,7 @@ ${LANGUAGE_INSTRUCTIONS[primary_language]}${secondaryLangNote}
 - Begin every first response in a new conversation with a warm, branded greeting.
 - Use markdown sparingly on WhatsApp (bold **text** is acceptable, avoid complex tables).
 - For lists of 3+ items, prefer numbered or bulleted formats.
-- Sign off supportive exchanges with a brief, brand-aligned closing line.
+- Sign off supportive exchanges with a brief, brand-aligned closing line.${locationPinClause(data, "en")}
 
 ## ESCALATION PROTOCOL
 If a user expresses frustration, legal concerns, or requests to speak to a human, respond with empathy and offer: "Je vous mets en relation avec notre équipe / I'll connect you with our team right away."

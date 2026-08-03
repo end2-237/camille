@@ -1,5 +1,9 @@
-// POST /api/agents/[agentId]/products/upload  (multipart: file)
-// Upload d'une image produit vers Camille Core → renvoie { url }.
+// POST /api/agents/[agentId]/products/upload  (multipart: file, kind?)
+// Upload d'une image vers Camille Core → renvoie { url }.
+//
+// Malgré son chemin, la route sert toute image de l'agent : photo produit,
+// carte du menu, logo du bon de commande. `kind` ne sert qu'à nommer le fichier
+// de façon lisible dans le dossier média de core.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
@@ -38,7 +42,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   try {
     const ext = (file.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
-    const filename = `${agentId.replace(/-/g, "")}_product_${Date.now()}.${ext}`;
+    // Liste fermée : `kind` finit dans un nom de fichier, il ne doit pas
+    // pouvoir y introduire un séparateur de chemin.
+    const kindRaw = String(formData.get("kind") ?? "product");
+    const kind = ["product", "logo", "menu", "banner"].includes(kindRaw) ? kindRaw : "product";
+    const filename = `${agentId.replace(/-/g, "")}_${kind}_${Date.now()}.${ext}`;
     const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
 
     const uploadRes = await fetch(`${coreUrl()}/api/media/upload`, {

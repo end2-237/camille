@@ -100,6 +100,8 @@ function coord(v: unknown, max: number): number | null {
 const LOW_STOCK = Number(process.env.LOW_STOCK_THRESHOLD || 5);
 
 type LowLine = { name: string; stock: number };
+/** Un client a commandé plus que ce qui restait — vente manquée, en tout ou partie. */
+type RuptureLine = { name: string; demande: number; dispo: number };
 
 /**
  * Retire du stock ce que la commande emporte.
@@ -112,47 +114,68 @@ type LowLine = { name: string; stock: number };
  * Ne lève jamais : une commande ne doit pas échouer parce que le stock n'a pas
  * pu être mis à jour.
  *
- * @returns les articles passés au seuil bas lors de CETTE commande
+ * @returns les articles passés au seuil bas, et ceux qui manquaient déjà
  */
-async function applyStock(agentId: string, items: NewOrderItem[]): Promise<LowLine[]> {
+async function applyStock(
+  agentId: string,
+  items: NewOrderItem[]
+): Promise<{ low: LowLine[]; ruptures: RuptureLine[] }> {
   const low: LowLine[] = [];
+  const ruptures: RuptureLine[] = [];
 
   for (const it of items) {
     const qty = Math.max(1, Number(it.qty) || 1);
     try {
       // GREATEST(0, …) : un stock ne descend pas sous zéro, même si deux
       // commandes se croisent sur le dernier article.
+      //
+      // Le `FROM camille.products avant` donne l'état d'AVANT la mise à jour.
+      // Sans lui, on reconstituait le stock précédent par `stock + qty`, ce que
+      // le GREATEST rend faux dès qu'il y a écrêtage : un article déjà à zéro
+      // ressortait comme s'il en restait `qty`, et la vente manquée passait
+      // totalement inaperçue.
       const r = it.productId
         ? await query(
-            `UPDATE camille.products
-                SET stock = GREATEST(0, stock - $1), updated_at = NOW()
-              WHERE id = $2 AND agent_id = $3 AND stock IS NOT NULL
-            RETURNING name, stock`,
+            `UPDATE camille.products p
+                SET stock = GREATEST(0, p.stock - $1), updated_at = NOW()
+               FROM camille.products avant
+              WHERE avant.id = p.id
+                AND p.id = $2 AND p.agent_id = $3 AND p.stock IS NOT NULL
+            RETURNING p.name, p.stock, avant.stock AS stock_avant`,
             [qty, it.productId, agentId]
           )
         : await query(
-            `UPDATE camille.products
-                SET stock = GREATEST(0, stock - $1), updated_at = NOW()
-              WHERE agent_id = $2 AND lower(name) = lower($3) AND stock IS NOT NULL
-            RETURNING name, stock`,
+            `UPDATE camille.products p
+                SET stock = GREATEST(0, p.stock - $1), updated_at = NOW()
+               FROM camille.products avant
+              WHERE avant.id = p.id
+                AND p.agent_id = $2 AND lower(p.name) = lower($3) AND p.stock IS NOT NULL
+            RETURNING p.name, p.stock, avant.stock AS stock_avant`,
             [qty, agentId, String(it.name || "")]
           );
 
       const row = r.rows[0];
       if (!row) continue;
 
+      const apres = Number(row.stock);
+      const avant = Number(row.stock_avant);
+
+      // Le client en a demandé plus qu'il n'y en avait : la commande est
+      // enregistrée quand même — refuser une vente sans laisser au vendeur la
+      // chance d'arranger le coup serait pire — mais il faut le lui dire.
+      if (avant < qty) ruptures.push({ name: row.name, demande: qty, dispo: avant });
+
       // On ne prévient qu'au FRANCHISSEMENT du seuil : sans cela, chaque
       // commande d'un article déjà bas rejouerait la même alerte.
-      const before = Number(row.stock) + qty;
-      if (Number(row.stock) <= LOW_STOCK && before > LOW_STOCK) {
-        low.push({ name: row.name, stock: Number(row.stock) });
+      if (apres <= LOW_STOCK && avant > LOW_STOCK) {
+        low.push({ name: row.name, stock: apres });
       }
     } catch {
       // colonne stock absente, ou produit supprimé : sans conséquence ici.
     }
   }
 
-  return low;
+  return { low, ruptures };
 }
 
 /**
@@ -285,7 +308,7 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
   // Une commande enregistrée sort la marchandise : sans ce décompte, le
   // catalogue annonçait indéfiniment des quantités déjà vendues, et l'agent
   // continuait de proposer des articles épuisés.
-  const lowStock = await applyStock(input.agentId, items);
+  const { low: lowStock, ruptures } = await applyStock(input.agentId, items);
 
   const ag = await query(
     // business_hours sert à ne pas promettre un rappel immédiat la nuit.
@@ -366,6 +389,30 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
           : `Stock faible — ${lowStock.length} article${lowStock.length > 1 ? "s" : ""}`,
         body: detail.slice(0, 160),
         data: { type: "stock", agentId: String(input.agentId) },
+        channel: "commandes",
+      }).catch(() => {});
+    }
+
+    // Vente manquée : distincte de l'alerte de stock ci-dessus, qui prévient
+    // qu'un article DEVIENT bas. Ici un client a déjà demandé plus que ce qui
+    // restait — il attend une marchandise qui n'existe pas, et le vendeur a
+    // quelques heures pour le rappeler avant qu'il n'aille voir ailleurs.
+    if (ruptures.length) {
+      const total = ruptures.filter((r) => r.dispo === 0);
+      const detail = ruptures
+        .map((r) => `${r.name} : ${r.demande} demandé${r.demande > 1 ? "s" : ""}, ${r.dispo} en stock`)
+        .join(" · ");
+      notifyUser(shop.user_id, "alerte", {
+        title: total.length
+          ? `Commandé mais épuisé — ${total.map((r) => r.name).join(", ")}`.slice(0, 90)
+          : `Stock insuffisant — ${ruptures.length} article${ruptures.length > 1 ? "s" : ""}`,
+        body: `${customerName ? `${customerName} · ` : ""}${detail}`.slice(0, 160),
+        data: {
+          type: "rupture",
+          ref,
+          orderId: String(orderId || ""),
+          agentId: String(input.agentId),
+        },
         channel: "commandes",
       }).catch(() => {});
     }

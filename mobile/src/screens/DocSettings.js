@@ -10,11 +10,12 @@
 // demande où se trouve la boutique.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import { C, R, S } from "../theme";
-import { getAgent, patchAgent } from "../api";
+import { getAgent, patchAgent, uploadImage } from "../api";
 import { Header } from "./AgentEdit";
 
 // Teintes proposées. Le vendeur peut saisir n'importe quel code hexadécimal :
@@ -24,13 +25,30 @@ const TEINTES = ["#DD5509", "#101012", "#1D4ED8", "#047857", "#B91C1C", "#7C3AED
 const CHAMPS_VIDES = {
   name: "", tagline: "", address: "", phone: "",
   email: "", rccm: "", niu: "", logo_url: "", color: "",
+  template: "classique", lines: "", zebra: true, banner_url: "",
 };
+
+// Les mêmes trois modèles que le rendu PDF et que l'aperçu web. Un vendeur ne
+// veut pas régler quinze curseurs : il veut choisir une allure.
+const MODELES = [
+  { id: "classique", nom: "Classique", entete: "plein",    lines: "horizontales", zebra: true },
+  { id: "epure",     nom: "Épuré",     entete: "souligne", lines: "aucune",       zebra: false },
+  { id: "contraste", nom: "Contrasté", entete: "sombre",   lines: "toutes",       zebra: false },
+];
+
+const FILETS = [
+  { id: "horizontales", nom: "Lignes horizontales" },
+  { id: "toutes",       nom: "Toutes les bordures" },
+  { id: "aucune",       nom: "Aucune bordure" },
+];
 
 export default function DocSettings({ agent, onClose }) {
   const [f, setF] = useState(null);
   const [geo, setGeo] = useState({ latitude: null, longitude: null });
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [bandeauBusy, setBandeauBusy] = useState(false);
 
   useEffect(() => {
     getAgent(agent.agent_id)
@@ -94,14 +112,71 @@ export default function DocSettings({ agent, onClose }) {
     }
   }
 
+  // Le logo se choisit dans la galerie. Demander une URL supposait que le
+  // vendeur héberge son image quelque part — ce que personne ne fait depuis un
+  // téléphone.
+  async function choisirLogo() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Autorisation refusée", "Camille a besoin d'accéder à tes photos pour envoyer le logo.");
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.9,
+      });
+      if (res.canceled || !res.assets?.[0]?.uri) return;
+
+      setLogoBusy(true);
+      const url = await uploadImage(agent.agent_id, res.assets[0].uri, "logo.jpg", "logo");
+      // Posé dans le formulaire seulement : c'est « Enregistrer » qui valide,
+      // comme pour tous les autres champs de l'écran.
+      set("logo_url", url);
+    } catch (e) {
+      Alert.alert("Logo", e.message || "Envoi impossible");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  // Même flux que le logo, autre destination : le bandeau est large et bas, il
+  // se pose avant le pied de page du document.
+  async function choisirBandeau() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Autorisation refusée", "Camille a besoin d'accéder à tes photos pour envoyer le bandeau.");
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.9,
+      });
+      if (res.canceled || !res.assets?.[0]?.uri) return;
+
+      setBandeauBusy(true);
+      const url = await uploadImage(agent.agent_id, res.assets[0].uri, "bandeau.jpg", "banner");
+      set("banner_url", url);
+    } catch (e) {
+      Alert.alert("Bandeau", e.message || "Envoi impossible");
+    } finally {
+      setBandeauBusy(false);
+    }
+  }
+
   async function save() {
     setBusy(true);
     try {
-      // Les champs vides ne sont pas enregistrés : côté document, l'absence
-      // d'une clé retombe proprement sur une valeur par défaut là où une chaîne
-      // vide laisserait un trou dans l'en-tête.
+      // Les champs vides ne sont pas enregistrés. Pour l'habillage, une clé
+      // absente retombe sur le modèle choisi ; pour l'identité, elle ne retombe
+      // sur rien — un champ vide reste vide sur le document, il n'emprunte pas
+      // les mentions légales de la plateforme.
+      //
+      // `?? ""` et non `|| ""` : `zebra: false` est un choix, pas une case
+      // vide, et `false || ""` l'aurait effacé silencieusement.
       const doc_settings = Object.fromEntries(
-        Object.entries(f).filter(([, v]) => String(v || "").trim() !== "")
+        Object.entries(f).filter(([, v]) => String(v ?? "").trim() !== "")
       );
       await patchAgent(agent.agent_id, {
         doc_settings,
@@ -156,9 +231,46 @@ export default function DocSettings({ agent, onClose }) {
         </Group>
 
         <Group title="Apparence">
-          <Field label="Adresse du logo (facultatif)" value={f.logo_url}
-            onChangeText={(v) => set("logo_url", v)} autoCapitalize="none"
-            placeholder="https://…" />
+          <Text style={{ color: C.sub, fontSize: 11, marginBottom: 6 }}>Logo (facultatif)</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            {f.logo_url ? (
+              <Image
+                source={{ uri: f.logo_url }}
+                style={{ width: 56, height: 56, borderRadius: R.sm, backgroundColor: C.card }}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={{
+                width: 56, height: 56, borderRadius: R.sm, backgroundColor: C.card,
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Ionicons name="image-outline" size={22} color={C.sub} />
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={choisirLogo}
+              disabled={logoBusy}
+              style={{
+                flexDirection: "row", alignItems: "center", gap: 6,
+                paddingVertical: 10, paddingHorizontal: 14,
+                borderRadius: R.sm, backgroundColor: C.card, opacity: logoBusy ? 0.6 : 1,
+              }}
+            >
+              {logoBusy
+                ? <ActivityIndicator size="small" color={C.text} />
+                : <Ionicons name="cloud-upload-outline" size={16} color={C.text} />}
+              <Text style={{ color: C.text, fontSize: 13 }}>
+                {logoBusy ? "Envoi…" : f.logo_url ? "Changer" : "Choisir une image"}
+              </Text>
+            </TouchableOpacity>
+
+            {f.logo_url && !logoBusy && (
+              <TouchableOpacity onPress={() => set("logo_url", "")} style={{ padding: 8 }}>
+                <Ionicons name="trash-outline" size={18} color={C.sub} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           <Text style={{ color: C.sub, fontSize: 11, marginBottom: 6 }}>Couleur du document</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
@@ -182,6 +294,131 @@ export default function DocSettings({ agent, onClose }) {
           </View>
           <Field label="Ou un code précis (facultatif)" value={f.color}
             onChangeText={(v) => set("color", v)} autoCapitalize="none" placeholder="#DD5509" />
+        </Group>
+
+        <Group title="Modèle du tableau">
+          <View style={{ gap: 8, marginBottom: 14 }}>
+            {MODELES.map((m) => {
+              const choisi = (f.template || "classique") === m.id;
+              const accent = /^#[0-9a-fA-F]{6}$/.test(String(f.color).trim())
+                ? String(f.color).trim() : "#DD5509";
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  onPress={() => { set("template", m.id); set("lines", ""); set("zebra", m.zebra); }}
+                  style={{
+                    flexDirection: "row", alignItems: "center", gap: 12,
+                    padding: 10, borderRadius: R.sm,
+                    backgroundColor: C.card,
+                    borderWidth: choisi ? 2 : 1,
+                    borderColor: choisi ? C.text : "transparent",
+                  }}
+                >
+                  {/* Vignette : choisir sur un nom seul revient à choisir au hasard. */}
+                  <View style={{ width: 46, borderRadius: 3, overflow: "hidden", backgroundColor: "#FFFFFF" }}>
+                    <View style={{
+                      height: 7,
+                      backgroundColor: m.entete === "sombre" ? "#1F2328" : m.entete === "plein" ? accent : "#FFFFFF",
+                      borderBottomWidth: m.entete === "souligne" ? 2 : 0,
+                      borderBottomColor: accent,
+                    }} />
+                    {[0, 1, 2].map((i) => (
+                      <View key={i} style={{
+                        height: 6,
+                        backgroundColor: m.zebra && i % 2 === 1 ? "#FBF6F2" : "#FFFFFF",
+                        borderBottomWidth: m.lines !== "aucune" ? 1 : 0,
+                        borderBottomColor: "#E6E6E6",
+                      }} />
+                    ))}
+                  </View>
+                  <Text style={{ color: C.text, fontSize: 14, flex: 1 }}>{m.nom}</Text>
+                  {choisi && <Ionicons name="checkmark-circle" size={18} color={C.text} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={{ color: C.sub, fontSize: 11, marginBottom: 6 }}>Filets du tableau</Text>
+          <View style={{ gap: 6, marginBottom: 14 }}>
+            {FILETS.map((ft) => {
+              const courant = f.lines
+                || (MODELES.find((m) => m.id === (f.template || "classique")) || MODELES[0]).lines;
+              const choisi = courant === ft.id;
+              return (
+                <TouchableOpacity
+                  key={ft.id}
+                  onPress={() => set("lines", ft.id)}
+                  style={{
+                    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                    paddingVertical: 9, paddingHorizontal: 12,
+                    borderRadius: R.sm, backgroundColor: C.card,
+                    borderWidth: choisi ? 2 : 1, borderColor: choisi ? C.text : "transparent",
+                  }}
+                >
+                  <Text style={{ color: C.text, fontSize: 13 }}>{ft.nom}</Text>
+                  {choisi && <Ionicons name="checkmark" size={16} color={C.text} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity
+            onPress={() => set("zebra", !f.zebra)}
+            style={{
+              flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+              paddingVertical: 11, paddingHorizontal: 12,
+              borderRadius: R.sm, backgroundColor: C.card,
+            }}
+          >
+            <Text style={{ color: C.text, fontSize: 13 }}>
+              {f.zebra ? "Une ligne sur deux colorée" : "Fond uni"}
+            </Text>
+            <Ionicons
+              name={f.zebra ? "toggle" : "toggle-outline"}
+              size={24}
+              color={f.zebra ? C.text : C.sub}
+            />
+          </TouchableOpacity>
+        </Group>
+
+        <Group title="Bandeau de bas de page">
+          <Text style={{ color: C.sub, fontSize: 12, lineHeight: 17, marginBottom: 10 }}>
+            Une image large et peu haute, placée juste avant le pied de page du
+            bon. Format conseillé : environ 1000 × 150 pixels.
+          </Text>
+
+          {f.banner_url ? (
+            <Image
+              source={{ uri: f.banner_url }}
+              style={{ width: "100%", height: 54, borderRadius: R.sm, backgroundColor: C.card, marginBottom: 10 }}
+              resizeMode="contain"
+            />
+          ) : null}
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <TouchableOpacity
+              onPress={choisirBandeau}
+              disabled={bandeauBusy}
+              style={{
+                flexDirection: "row", alignItems: "center", gap: 6,
+                paddingVertical: 10, paddingHorizontal: 14,
+                borderRadius: R.sm, backgroundColor: C.card, opacity: bandeauBusy ? 0.6 : 1,
+              }}
+            >
+              {bandeauBusy
+                ? <ActivityIndicator size="small" color={C.text} />
+                : <Ionicons name="cloud-upload-outline" size={16} color={C.text} />}
+              <Text style={{ color: C.text, fontSize: 13 }}>
+                {bandeauBusy ? "Envoi…" : f.banner_url ? "Changer" : "Choisir une image"}
+              </Text>
+            </TouchableOpacity>
+
+            {f.banner_url && !bandeauBusy && (
+              <TouchableOpacity onPress={() => set("banner_url", "")} style={{ padding: 8 }}>
+                <Ionicons name="trash-outline" size={18} color={C.sub} />
+              </TouchableOpacity>
+            )}
+          </View>
         </Group>
 
         <Group title="Position du local">

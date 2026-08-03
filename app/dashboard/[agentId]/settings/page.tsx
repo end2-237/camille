@@ -6,6 +6,7 @@ import { Save, RefreshCw, Bot, ShoppingBag, CreditCard, MapPin, MessageSquare, L
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
 import { getMaxLevel } from "@/lib/plans";
+import BonPreview, { MODELES } from "@/components/BonPreview";
 
 /**
  * Identité imprimée en tête et en pied de chaque bon de commande.
@@ -15,11 +16,14 @@ import { getMaxLevel } from "@/lib/plans";
 interface DocSettings {
   name: string; tagline: string; address: string; phone: string;
   email: string; rccm: string; niu: string; logo_url: string; color: string;
+  /** Habillage : modèle, filets du tableau, alternance des lignes, bandeau. */
+  template: string; lines: string; zebra: boolean; banner_url: string;
 }
 
 const DOC_VIDE: DocSettings = {
   name: "", tagline: "", address: "", phone: "",
   email: "", rccm: "", niu: "", logo_url: "", color: "",
+  template: "classique", lines: "", zebra: true, banner_url: "",
 };
 
 /** Raccourcis de teinte. N'importe quel code hexadécimal reste saisissable. */
@@ -76,10 +80,12 @@ export default function AgentSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [regen, setRegen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
   const [locating, setLocating] = useState(false);
 
   /** Modifie un seul champ du bon de commande. */
-  const setDoc = (k: keyof DocSettings, v: string) =>
+  const setDoc = (k: keyof DocSettings, v: string | boolean) =>
     setCfg((p) => (p ? { ...p, doc: { ...p.doc, [k]: v } } : p));
 
   // La carte du menu est propre à la restauration.
@@ -129,23 +135,51 @@ export default function AgentSettingsPage() {
 
   // On reutilise la route d'upload des images produit : meme stockage, meme
   // controle de taille et de format. Pas de second chemin a maintenir.
+  async function uploadAgentImage(file: File, kind: "menu" | "logo" | "banner"): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", kind);
+    const r = await fetch(`/api/agents/${agentId}/products/upload`, {
+      method: "POST",
+      headers: { ...authHeaders() },
+      body: fd,
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.url) throw new Error(d.error || "Envoi impossible");
+    return d.url as string;
+  }
+
   async function uploadMenu(file: File) {
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const r = await fetch(`/api/agents/${agentId}/products/upload`, {
-        method: "POST",
-        headers: { ...authHeaders() },
-        body: fd,
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.url) throw new Error(d.error || "Envoi impossible");
-      setCfg((p) => (p ? { ...p, menu_image_url: d.url } : p));
+      const url = await uploadAgentImage(file, "menu");
+      setCfg((p) => (p ? { ...p, menu_image_url: url } : p));
       toast.success("Carte envoyée — pense à enregistrer");
     } catch (e) {
       toast.error((e as Error).message);
     } finally { setUploading(false); }
+  }
+
+  async function uploadLogo(file: File) {
+    setLogoUploading(true);
+    try {
+      // Posé dans le formulaire seulement : c'est « Enregistrer » qui valide,
+      // comme pour les autres champs du bon de commande.
+      setDoc("logo_url", await uploadAgentImage(file, "logo"));
+      toast.success("Logo envoyé — pense à enregistrer");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setLogoUploading(false); }
+  }
+
+  async function uploadBanner(file: File) {
+    setBannerUploading(true);
+    try {
+      setDoc("banner_url", await uploadAgentImage(file, "banner"));
+      toast.success("Bandeau envoyé — pense à enregistrer");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setBannerUploading(false); }
   }
 
   async function save() {
@@ -168,9 +202,10 @@ export default function AgentSettingsPage() {
           delivery_fee: Number(cfg.delivery_fee ?? 1000) || 0,
           delivery_zones: parseZones(cfg.delivery_zones_text ?? ""),
           menu_image_url: (cfg.menu_image_url ?? "").trim() || null,
-          // Les champs vides ne sont pas enregistrés : côté document, l'absence
-          // d'une clé retombe sur une valeur par défaut là où une chaîne vide
-          // laisserait un trou dans l'en-tête.
+          // Les champs vides ne sont pas enregistrés. Pour l'habillage, une clé
+          // absente retombe sur le modèle choisi ; pour l'identité, elle ne
+          // retombe sur rien — un champ vide reste vide sur le document, il
+          // n'emprunte pas les mentions légales de la plateforme.
           doc_settings: Object.fromEntries(
             Object.entries(cfg.doc).filter(([, v]) => String(v ?? "").trim() !== "")
           ),
@@ -406,7 +441,39 @@ export default function AgentSettingsPage() {
         </div>
 
         <SubTitle className="mt-4">Apparence</SubTitle>
-        <Field label="Adresse du logo (facultatif)" value={cfg.doc.logo_url} onChange={(v) => setDoc("logo_url", v)} placeholder="https://…/logo.png" />
+        <label className="mb-1.5 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+          Logo (facultatif)
+        </label>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          {cfg.doc.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- média hébergé par camille-core, hors domaines Next
+            <img
+              src={cfg.doc.logo_url}
+              alt="Logo du bon de commande"
+              className="h-14 w-14 rounded-lg object-contain"
+              style={{ background: "var(--surface-raised)" }}
+            />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-lg"
+              style={{ background: "var(--surface-raised)", color: "var(--text-disabled)" }}>
+              <FileText size={18} />
+            </div>
+          )}
+
+          <label className="btn-ghost cursor-pointer">
+            {logoUploading ? "Envoi…" : cfg.doc.logo_url ? "Remplacer" : "Choisir une image"}
+            <input type="file" accept="image/*" className="hidden" disabled={logoUploading}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ""; }} />
+          </label>
+
+          {cfg.doc.logo_url && !logoUploading && (
+            <button type="button" className="text-[12px] underline"
+              style={{ color: "var(--text-disabled)" }}
+              onClick={() => setDoc("logo_url", "")}>
+              Retirer
+            </button>
+          )}
+        </div>
 
         <label className="mb-1.5 mt-3 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
           Couleur du document
@@ -433,6 +500,103 @@ export default function AgentSettingsPage() {
             placeholder="#DD5509"
           />
         </div>
+        <SubTitle className="mt-4">Modèle du tableau</SubTitle>
+        <div className="grid gap-2.5 sm:grid-cols-3">
+          {(Object.keys(MODELES) as (keyof typeof MODELES)[]).map((id) => {
+            const m = MODELES[id];
+            const choisi = (cfg.doc.template || "classique") === id;
+            const accent = /^#[0-9a-fA-F]{6}$/.test(cfg.doc.color.trim()) ? cfg.doc.color.trim() : "#DD5509";
+            // Vignette : trois lignes qui montrent l'allure de l'en-tête et des
+            // filets. Choisir sur un nom seul revient à choisir au hasard.
+            const enteteVignette =
+              m.entete === "sombre"   ? { background: "#1F2328" }
+              : m.entete === "souligne" ? { borderBottom: `2px solid ${accent}` }
+              : { background: accent };
+            return (
+              <button
+                key={id} type="button"
+                onClick={() => { setDoc("template", id); setDoc("lines", ""); setDoc("zebra", m.zebra); }}
+                className="rounded-lg p-2.5 text-left transition-all"
+                style={{
+                  background: "var(--surface-raised)",
+                  border: choisi ? "2px solid var(--text-primary)" : "1px solid var(--border-default)",
+                }}
+              >
+                <div className="mb-1.5 overflow-hidden rounded" style={{ background: "#fff" }}>
+                  <div style={{ height: 7, ...enteteVignette }} />
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} style={{
+                      height: 6,
+                      background: m.zebra && i % 2 === 1 ? "#FBF6F2" : "#fff",
+                      borderBottom: m.lines !== "aucune" ? "1px solid #E6E6E6" : undefined,
+                    }} />
+                  ))}
+                </div>
+                <div className="text-[12px] font-medium" style={{ color: "var(--text-primary)" }}>{m.nom}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+              Filets du tableau
+            </label>
+            <select
+              className="input-midnight w-full"
+              value={cfg.doc.lines || MODELES[(cfg.doc.template || "classique") as keyof typeof MODELES].lines}
+              onChange={(e) => setDoc("lines", e.target.value)}
+            >
+              <option value="horizontales">Lignes horizontales</option>
+              <option value="toutes">Toutes les bordures</option>
+              <option value="aucune">Aucune bordure</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+              Lignes alternées
+            </label>
+            <button
+              type="button"
+              onClick={() => setDoc("zebra", !cfg.doc.zebra)}
+              className="btn-ghost w-full justify-start"
+            >
+              {cfg.doc.zebra ? "Une ligne sur deux colorée" : "Fond uni"}
+            </button>
+          </div>
+        </div>
+
+        <SubTitle className="mt-4">Bandeau de bas de page</SubTitle>
+        <p className="mb-2 text-[11px]" style={{ color: "var(--text-disabled)" }}>
+          Une image large et peu haute, placée juste avant le pied de page. Format
+          conseillé : environ 1000 × 150 pixels.
+        </p>
+        <div className="mb-1 flex flex-wrap items-center gap-3">
+          <label className="btn-ghost cursor-pointer">
+            {bannerUploading ? "Envoi…" : cfg.doc.banner_url ? "Remplacer" : "Choisir une image"}
+            <input type="file" accept="image/*" className="hidden" disabled={bannerUploading}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadBanner(f); e.target.value = ""; }} />
+          </label>
+          {cfg.doc.banner_url && !bannerUploading && (
+            <button type="button" className="text-[12px] underline"
+              style={{ color: "var(--text-disabled)" }}
+              onClick={() => setDoc("banner_url", "")}>
+              Retirer
+            </button>
+          )}
+        </div>
+
+        <SubTitle className="mt-5">Aperçu</SubTitle>
+        <p className="mb-2 text-[11px]" style={{ color: "var(--text-disabled)" }}>
+          Articles et client fictifs. Ce qui est vide ici le sera aussi sur le document.
+        </p>
+        <div className="overflow-x-auto rounded-lg p-3" style={{ background: "var(--surface-raised)" }}>
+          <div style={{ minWidth: 420 }}>
+            <BonPreview d={cfg.doc} />
+          </div>
+        </div>
+
         <p className="mt-2 text-[11px]" style={{ color: "var(--text-disabled)" }}>
           La position du local se relève dans « Site &amp; localisation » ci-dessus.
         </p>

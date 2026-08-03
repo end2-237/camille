@@ -6,12 +6,18 @@
 // d'ajouter google-auth-library — une trentaine de lignes, zéro dépendance.
 //
 // Configuration : FIREBASE_SERVICE_ACCOUNT_JSON (le JSON du compte de service,
-// en une seule ligne). Sans cette variable, l'envoi est simplement ignoré :
-// aucune fonctionnalité existante ne doit tomber parce que le push n'est pas
-// configuré.
+// en une seule ligne). Sans cette variable, l'envoi mobile est simplement
+// ignoré : aucune fonctionnalité existante ne doit tomber parce que le push
+// n'est pas configuré.
+//
+// Les navigateurs, eux, ne passent pas par ici : ils sont notifiés par
+// lib/webpush, qui n'a besoin que d'une paire VAPID. notifyUser trie les deux
+// selon la forme du jeton, et chaque transport marche sans l'autre.
 // ─────────────────────────────────────────────────────────────────────────────
 import crypto from "crypto";
 import { query } from "@/lib/db";
+import { lienNotif } from "@/lib/notif-links";
+import { envoyerWebPush, estSouscriptionWeb, webPushConfigure } from "@/lib/webpush";
 
 export type ServiceAccount = { client_email: string; private_key: string; project_id: string };
 
@@ -107,27 +113,70 @@ export async function notifyUser(
     // table absente : on continue, l'envoi push reste possible
   }
 
-  const sa = serviceAccount();
-  if (!sa) return { sent: 0, skipped: "FIREBASE_SERVICE_ACCOUNT_JSON absent" };
-
-  let tokens: string[] = [];
+  let tous: string[] = [];
   try {
     const r = await query(
       "SELECT token FROM camille.push_tokens WHERE user_id = $1 AND active",
       [userId]
     );
-    tokens = r.rows.map((x: { token: string }) => x.token);
+    tous = r.rows.map((x: { token: string }) => x.token);
   } catch {
     return { sent: 0, skipped: "table push_tokens absente" };
   }
-  if (!tokens.length) return { sent: 0, skipped: "aucun appareil enregistré" };
+  if (!tous.length) return { sent: 0, skipped: "aucun appareil enregistré" };
 
-  const bearer = await accessToken(sa);
-  if (!bearer) return { sent: 0, skipped: "authentification Firebase refusée" };
+  // Deux transports pour deux mondes : FCM pour les applications mobiles, Web
+  // Push pour les navigateurs. Un navigateur n'a pas besoin d'un projet
+  // Firebase, et un téléphone ne sait pas recevoir de Web Push — les envoyer
+  // par le même chemin échouerait pour la moitié des appareils.
+  const tokensWeb = tous.filter(estSouscriptionWeb);
+  const tokens    = tous.filter((t) => !estSouscriptionWeb(t));
 
-  const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
+  // Chemin absolu : le clic sur une notification système ouvre une URL, pas une
+  // route interne. NEXT_PUBLIC_APP_URL sert déjà de base publique ailleurs ;
+  // sans elle on n'envoie pas de lien plutôt qu'un lien cassé.
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const chemin = lienNotif(p.data as Record<string, unknown> | undefined);
+  const lienWeb = base && chemin ? `${base}${chemin}` : null;
+
   let sent = 0;
   const errors: string[] = [];
+
+  // ── Navigateurs ────────────────────────────────────────────────────────────
+  // D'abord, et indépendamment de Firebase : un déploiement sans compte de
+  // service doit quand même notifier les navigateurs.
+  if (tokensWeb.length) {
+    if (!webPushConfigure()) {
+      errors.push("VAPID absente : navigateurs non notifiés");
+    } else {
+      const r = await envoyerWebPush(tokensWeb, {
+        title: p.title,
+        body: p.body,
+        data: {
+          ...Object.fromEntries(
+            Object.entries(p.data || {}).map(([k, v]) => [k, String(v ?? "")])
+          ),
+          ...(lienWeb ? { href: lienWeb } : {}),
+        },
+      });
+      sent += r.sent;
+      errors.push(...r.errors);
+    }
+  }
+
+  // ── Mobiles ────────────────────────────────────────────────────────────────
+  if (!tokens.length) return { sent, ...(errors.length ? { errors } : {}) };
+
+  const sa = serviceAccount();
+  if (!sa) {
+    return { sent, skipped: "FIREBASE_SERVICE_ACCOUNT_JSON absent", ...(errors.length ? { errors } : {}) };
+  }
+  const bearer = await accessToken(sa);
+  if (!bearer) {
+    return { sent, skipped: "authentification Firebase refusée", ...(errors.length ? { errors } : {}) };
+  }
+
+  const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
 
   await Promise.all(tokens.map(async (token) => {
     try {
@@ -141,9 +190,14 @@ export async function notifyUser(
             // FCM v1 refuse toute valeur non textuelle dans data, avec un 400
             // qui ne dit pas laquelle. On convertit plutôt que de risquer un
             // envoi perdu à cause d'un nombre oublié quelque part.
-            data: Object.fromEntries(
-              Object.entries(p.data || {}).map(([k, v]) => [k, String(v ?? "")])
-            ),
+            data: {
+              ...Object.fromEntries(
+                Object.entries(p.data || {}).map(([k, v]) => [k, String(v ?? "")])
+              ),
+              // Le lien d'ouverture voyage dans data : l'application mobile
+              // le lit au clic, comme le fait le service worker côté web.
+              ...(lienWeb ? { href: lienWeb } : {}),
+            },
             android: {
               priority: "HIGH",
               notification: {
