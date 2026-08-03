@@ -9,6 +9,7 @@ import AgentEdit from "./AgentEdit";
 import AgentCapabilities from "./AgentCapabilities";
 import Catalogue from "./Catalogue";
 import ConnectWhatsApp from "./ConnectWhatsApp";
+import DocSettings from "./DocSettings";
 import Orders from "./Orders";
 
 const WEB = "https://camille.vps.buyticle.com";
@@ -43,6 +44,7 @@ export default function AgentDetail({ agent, onClose, onChanged, initialView }) 
   if (view === "capabilities") return <AgentCapabilities agent={agent} onClose={back} />;
   if (view === "catalogue") return <Catalogue agent={agent} onClose={back} />;
   if (view === "connect") return <ConnectWhatsApp agent={agent} onClose={back} />;
+  if (view === "docsettings") return <DocSettings agent={agent} onClose={back} />;
   if (view === "orders") return <Orders agent={agent} onClose={back} />;
 
   const id = full?.identity || {};
@@ -290,6 +292,7 @@ export default function AgentDetail({ agent, onClose, onChanged, initialView }) 
           <Action icon="receipt-outline" label="Commandes" onPress={() => setView("orders")} />
           <Action icon="create-outline" label="Modifier l'agent" onPress={() => setView("edit")} />
           <Action icon="options-outline" label="Capacités" onPress={() => setView("capabilities")} />
+          <Action icon="document-text-outline" label="Mon bon de commande" onPress={() => setView("docsettings")} />
           <Action icon="pricetags-outline" label="Catalogue produits" onPress={() => setView("catalogue")} />
           <Action icon="logo-whatsapp" label="Connexion WhatsApp" onPress={() => setView("connect")} />
           <Action icon="stats-chart-outline" label="Statistiques détaillées" onPress={() => Linking.openURL(`${WEB}/dashboard/stats`)} />
