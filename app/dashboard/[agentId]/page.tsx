@@ -993,6 +993,7 @@ function PromptTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>
       owner_email: agent.business_context.owner_email, sector: agent.business_context.sector,
       description: agent.business_context.description, website_url: agent.business_context.website_url,
       location: agent.business_context.location, target_audience: agent.business_context.target_audience,
+      latitude: agent.business_context.latitude ?? null, longitude: agent.business_context.longitude ?? null,
       whatsapp_number: agent.business_context.whatsapp_number,
       products_services: agent.knowledge_base.products_services, pricing_info: agent.knowledge_base.pricing_info,
       business_hours: agent.knowledge_base.business_hours, policies: agent.knowledge_base.policies,

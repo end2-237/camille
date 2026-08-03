@@ -151,10 +151,11 @@ export const buildOrderDocument = (orderId, send = false) =>
 
 // ── Upload d'image (carte du menu, photos produit) ──────────────────────────
 // multipart : on ne passe PAS par req() qui force application/json.
-export async function uploadImage(agentId, uri, name = "carte.jpg") {
+export async function uploadImage(agentId, uri, name = "carte.jpg", kind = "product") {
   const fd = new FormData();
   const ext = (uri.split(".").pop() || "jpg").toLowerCase().replace("jpeg", "jpg");
   fd.append("file", { uri, name: `${name}`, type: `image/${ext === "png" ? "png" : "jpeg"}` });
+  fd.append("kind", kind);
 
   const res = await fetch(`${BASE}/api/agents/${agentId}/products/upload`, {
     method: "POST",

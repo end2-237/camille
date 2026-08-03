@@ -34,6 +34,8 @@ function rowToAgent(row: Record<string, any>): Agent {
       description: row.description,
       website_url: row.website_url ?? undefined,
       location: row.location ?? undefined,
+      latitude:  row.latitude  != null ? Number(row.latitude)  : null,
+      longitude: row.longitude != null ? Number(row.longitude) : null,
       target_audience: row.target_audience ?? undefined,
       owner_name: row.owner_name,
       owner_email: row.owner_email,

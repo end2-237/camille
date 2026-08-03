@@ -76,6 +76,7 @@ export default function AgentSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [regen, setRegen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [locating, setLocating] = useState(false);
 
   /** Modifie un seul champ du bon de commande. */
@@ -129,23 +130,41 @@ export default function AgentSettingsPage() {
 
   // On reutilise la route d'upload des images produit : meme stockage, meme
   // controle de taille et de format. Pas de second chemin a maintenir.
+  async function uploadAgentImage(file: File, kind: "menu" | "logo"): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", kind);
+    const r = await fetch(`/api/agents/${agentId}/products/upload`, {
+      method: "POST",
+      headers: { ...authHeaders() },
+      body: fd,
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.url) throw new Error(d.error || "Envoi impossible");
+    return d.url as string;
+  }
+
   async function uploadMenu(file: File) {
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const r = await fetch(`/api/agents/${agentId}/products/upload`, {
-        method: "POST",
-        headers: { ...authHeaders() },
-        body: fd,
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.url) throw new Error(d.error || "Envoi impossible");
-      setCfg((p) => (p ? { ...p, menu_image_url: d.url } : p));
+      const url = await uploadAgentImage(file, "menu");
+      setCfg((p) => (p ? { ...p, menu_image_url: url } : p));
       toast.success("Carte envoyée — pense à enregistrer");
     } catch (e) {
       toast.error((e as Error).message);
     } finally { setUploading(false); }
+  }
+
+  async function uploadLogo(file: File) {
+    setLogoUploading(true);
+    try {
+      // Posé dans le formulaire seulement : c'est « Enregistrer » qui valide,
+      // comme pour les autres champs du bon de commande.
+      setDoc("logo_url", await uploadAgentImage(file, "logo"));
+      toast.success("Logo envoyé — pense à enregistrer");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setLogoUploading(false); }
   }
 
   async function save() {
@@ -406,7 +425,39 @@ export default function AgentSettingsPage() {
         </div>
 
         <SubTitle className="mt-4">Apparence</SubTitle>
-        <Field label="Adresse du logo (facultatif)" value={cfg.doc.logo_url} onChange={(v) => setDoc("logo_url", v)} placeholder="https://…/logo.png" />
+        <label className="mb-1.5 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
+          Logo (facultatif)
+        </label>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          {cfg.doc.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- média hébergé par camille-core, hors domaines Next
+            <img
+              src={cfg.doc.logo_url}
+              alt="Logo du bon de commande"
+              className="h-14 w-14 rounded-lg object-contain"
+              style={{ background: "var(--surface-raised)" }}
+            />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-lg"
+              style={{ background: "var(--surface-raised)", color: "var(--text-disabled)" }}>
+              <FileText size={18} />
+            </div>
+          )}
+
+          <label className="btn-ghost cursor-pointer">
+            {logoUploading ? "Envoi…" : cfg.doc.logo_url ? "Remplacer" : "Choisir une image"}
+            <input type="file" accept="image/*" className="hidden" disabled={logoUploading}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ""; }} />
+          </label>
+
+          {cfg.doc.logo_url && !logoUploading && (
+            <button type="button" className="text-[12px] underline"
+              style={{ color: "var(--text-disabled)" }}
+              onClick={() => setDoc("logo_url", "")}>
+              Retirer
+            </button>
+          )}
+        </div>
 
         <label className="mb-1.5 mt-3 block text-[11.5px] font-medium" style={{ color: "var(--text-secondary)" }}>
           Couleur du document

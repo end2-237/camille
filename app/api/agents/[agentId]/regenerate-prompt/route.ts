@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   const r = await query(
     `SELECT name, agent_tagline, brand_voice, primary_language, secondary_languages,
-            business_name, sector, description, website_url, location, target_audience,
+            business_name, sector, description, website_url, location, latitude, longitude, target_audience,
             products_services, pricing_info, business_hours, policies, faq, forbidden_topics,
             target_model, level, out_of_scope_behavior, welcome_enabled, welcome_message
      FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'`,
@@ -43,6 +43,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     description: a.description ?? "",
     website_url: a.website_url ?? "",
     location: a.location ?? "",
+    latitude:  a.latitude  != null ? Number(a.latitude)  : null,
+    longitude: a.longitude != null ? Number(a.longitude) : null,
     target_audience: a.target_audience ?? "",
     products_services: a.products_services ?? "",
     pricing_info: a.pricing_info ?? "",

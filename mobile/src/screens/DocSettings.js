@@ -10,11 +10,12 @@
 // demande où se trouve la boutique.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import { C, R, S } from "../theme";
-import { getAgent, patchAgent } from "../api";
+import { getAgent, patchAgent, uploadImage } from "../api";
 import { Header } from "./AgentEdit";
 
 // Teintes proposées. Le vendeur peut saisir n'importe quel code hexadécimal :
@@ -31,6 +32,7 @@ export default function DocSettings({ agent, onClose }) {
   const [geo, setGeo] = useState({ latitude: null, longitude: null });
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
 
   useEffect(() => {
     getAgent(agent.agent_id)
@@ -91,6 +93,34 @@ export default function DocSettings({ agent, onClose }) {
       Alert.alert("Position introuvable", e.message);
     } finally {
       setLocating(false);
+    }
+  }
+
+  // Le logo se choisit dans la galerie. Demander une URL supposait que le
+  // vendeur héberge son image quelque part — ce que personne ne fait depuis un
+  // téléphone.
+  async function choisirLogo() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Autorisation refusée", "Camille a besoin d'accéder à tes photos pour envoyer le logo.");
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.9,
+      });
+      if (res.canceled || !res.assets?.[0]?.uri) return;
+
+      setLogoBusy(true);
+      const url = await uploadImage(agent.agent_id, res.assets[0].uri, "logo.jpg", "logo");
+      // Posé dans le formulaire seulement : c'est « Enregistrer » qui valide,
+      // comme pour tous les autres champs de l'écran.
+      set("logo_url", url);
+    } catch (e) {
+      Alert.alert("Logo", e.message || "Envoi impossible");
+    } finally {
+      setLogoBusy(false);
     }
   }
 
@@ -156,9 +186,46 @@ export default function DocSettings({ agent, onClose }) {
         </Group>
 
         <Group title="Apparence">
-          <Field label="Adresse du logo (facultatif)" value={f.logo_url}
-            onChangeText={(v) => set("logo_url", v)} autoCapitalize="none"
-            placeholder="https://…" />
+          <Text style={{ color: C.sub, fontSize: 11, marginBottom: 6 }}>Logo (facultatif)</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            {f.logo_url ? (
+              <Image
+                source={{ uri: f.logo_url }}
+                style={{ width: 56, height: 56, borderRadius: R.sm, backgroundColor: C.card }}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={{
+                width: 56, height: 56, borderRadius: R.sm, backgroundColor: C.card,
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Ionicons name="image-outline" size={22} color={C.sub} />
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={choisirLogo}
+              disabled={logoBusy}
+              style={{
+                flexDirection: "row", alignItems: "center", gap: 6,
+                paddingVertical: 10, paddingHorizontal: 14,
+                borderRadius: R.sm, backgroundColor: C.card, opacity: logoBusy ? 0.6 : 1,
+              }}
+            >
+              {logoBusy
+                ? <ActivityIndicator size="small" color={C.text} />
+                : <Ionicons name="cloud-upload-outline" size={16} color={C.text} />}
+              <Text style={{ color: C.text, fontSize: 13 }}>
+                {logoBusy ? "Envoi…" : f.logo_url ? "Changer" : "Choisir une image"}
+              </Text>
+            </TouchableOpacity>
+
+            {f.logo_url && !logoBusy && (
+              <TouchableOpacity onPress={() => set("logo_url", "")} style={{ padding: 8 }}>
+                <Ionicons name="trash-outline" size={18} color={C.sub} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           <Text style={{ color: C.sub, fontSize: 11, marginBottom: 6 }}>Couleur du document</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
