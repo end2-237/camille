@@ -22,6 +22,10 @@ export function lienNotif(data: Record<string, unknown> | null | undefined): str
     case "subscription":          return "/dashboard/billing";
     case "whatsapp_disconnected":
     case "whatsapp_connected":    return agentId ? `/dashboard/${agentId}/integrations` : null;
+    // L'automatisation en panne se regarde au même endroit que la connexion :
+    // c'est là que le vendeur voit l'état de sa liaison WhatsApp.
+    case "automation_down":
+    case "automation_up":         return agentId ? `/dashboard/${agentId}/integrations` : null;
     default:                      return null;
   }
 }
