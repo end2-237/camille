@@ -13,8 +13,17 @@ import { embedImage, imageEmbeddingsEnabled } from "@/lib/imageEmbeddings";
 export const maxDuration = 300; // laisse le temps au lot (embeddings CLIP)
 
 export async function POST(req: NextRequest) {
+  // Sans clé configurée, on REFUSE. L'ancienne condition ne s'activait que si
+  // la variable existait : la route restait grande ouverte tant que personne
+  // ne pensait à la définir.
   const adminKey = process.env.ADMIN_REINDEX_KEY || "";
-  if (adminKey && req.headers.get("x-admin-key") !== adminKey) {
+  if (!adminKey) {
+    return NextResponse.json(
+      { error: "Administration non configurée (ADMIN_REINDEX_KEY absente)." },
+      { status: 503 }
+    );
+  }
+  if (req.headers.get("x-admin-key") !== adminKey) {
     return NextResponse.json({ error: "clé admin invalide" }, { status: 401 });
   }
 

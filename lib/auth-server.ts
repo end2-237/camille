@@ -31,6 +31,8 @@ export type AuthUser = {
   email: string;
   full_name: string | null;
   plan: string;
+  /** Accès à la console d'exploitation. Faux tant que la migration n'est pas passée. */
+  is_admin: boolean;
 };
 
 export async function getUserFromRequest(
@@ -43,8 +45,13 @@ export async function getUserFromRequest(
   const payload = verifyToken(token);
   if (!payload) return null;
 
+  // to_jsonb plutôt que u.is_admin : sur une base où migration_admin.sql n'est
+  // pas encore passée, demander la colonne ferait échouer TOUTE
+  // l'authentification. Un déploiement ne doit pas dépendre de l'ordre dans
+  // lequel on applique les migrations.
   const result = await query(
-    `SELECT u.id, u.email, u.full_name, u.plan, u.created_at
+    `SELECT u.id, u.email, u.full_name, u.plan, u.created_at,
+            COALESCE((to_jsonb(u)->>'is_admin')::boolean, FALSE) AS is_admin
      FROM camille.sessions s
      JOIN camille.users u ON u.id = s.user_id
      WHERE s.token = $1 AND s.expires_at > NOW()`,
@@ -53,6 +60,19 @@ export async function getUserFromRequest(
 
   if (result.rows.length === 0) return null;
   return result.rows[0] as AuthUser;
+}
+
+/**
+ * Comme getUserFromRequest, mais refuse quiconque n'est pas administrateur.
+ *
+ * Renvoie `null` dans les deux cas — non authentifié et non autorisé — pour ne
+ * pas révéler l'existence de la console à un compte ordinaire qui tâtonne.
+ */
+export async function getAdminFromRequest(
+  req: NextRequest
+): Promise<AuthUser | null> {
+  const user = await getUserFromRequest(req);
+  return user?.is_admin ? user : null;
 }
 
 export function tokenExpiresAt(): Date {

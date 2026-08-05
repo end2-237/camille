@@ -8,6 +8,8 @@ export interface AuthUser {
   email: string;
   full_name: string | null;
   plan: string;
+  /** Accès à la console d'exploitation. */
+  is_admin?: boolean;
 }
 
 export function getStoredToken(): string | null {
