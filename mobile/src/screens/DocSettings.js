@@ -258,9 +258,9 @@ export default function DocSettings({ agent, onClose }) {
               }}
             >
               {logoBusy
-                ? <ActivityIndicator size="small" color={C.text} />
-                : <Ionicons name="cloud-upload-outline" size={16} color={C.text} />}
-              <Text style={{ color: C.text, fontSize: 13 }}>
+                ? <ActivityIndicator size="small" color={C.white} />
+                : <Ionicons name="cloud-upload-outline" size={16} color={C.white} />}
+              <Text style={{ color: C.white, fontSize: 13 }}>
                 {logoBusy ? "Envoi…" : f.logo_url ? "Changer" : "Choisir une image"}
               </Text>
             </TouchableOpacity>
@@ -311,7 +311,7 @@ export default function DocSettings({ agent, onClose }) {
                     padding: 10, borderRadius: R.sm,
                     backgroundColor: C.card,
                     borderWidth: choisi ? 2 : 1,
-                    borderColor: choisi ? C.text : "transparent",
+                    borderColor: choisi ? C.lime : "transparent",
                   }}
                 >
                   {/* Vignette : choisir sur un nom seul revient à choisir au hasard. */}
@@ -331,8 +331,8 @@ export default function DocSettings({ agent, onClose }) {
                       }} />
                     ))}
                   </View>
-                  <Text style={{ color: C.text, fontSize: 14, flex: 1 }}>{m.nom}</Text>
-                  {choisi && <Ionicons name="checkmark-circle" size={18} color={C.text} />}
+                  <Text style={{ color: C.white, fontSize: 14, flex: 1 }}>{m.nom}</Text>
+                  {choisi && <Ionicons name="checkmark-circle" size={18} color={C.lime} />}
                 </TouchableOpacity>
               );
             })}
@@ -352,11 +352,11 @@ export default function DocSettings({ agent, onClose }) {
                     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
                     paddingVertical: 9, paddingHorizontal: 12,
                     borderRadius: R.sm, backgroundColor: C.card,
-                    borderWidth: choisi ? 2 : 1, borderColor: choisi ? C.text : "transparent",
+                    borderWidth: choisi ? 2 : 1, borderColor: choisi ? C.lime : "transparent",
                   }}
                 >
-                  <Text style={{ color: C.text, fontSize: 13 }}>{ft.nom}</Text>
-                  {choisi && <Ionicons name="checkmark" size={16} color={C.text} />}
+                  <Text style={{ color: C.white, fontSize: 13 }}>{ft.nom}</Text>
+                  {choisi && <Ionicons name="checkmark" size={16} color={C.lime} />}
                 </TouchableOpacity>
               );
             })}
@@ -370,13 +370,13 @@ export default function DocSettings({ agent, onClose }) {
               borderRadius: R.sm, backgroundColor: C.card,
             }}
           >
-            <Text style={{ color: C.text, fontSize: 13 }}>
+            <Text style={{ color: C.white, fontSize: 13 }}>
               {f.zebra ? "Une ligne sur deux colorée" : "Fond uni"}
             </Text>
             <Ionicons
               name={f.zebra ? "toggle" : "toggle-outline"}
               size={24}
-              color={f.zebra ? C.text : C.sub}
+              color={f.zebra ? C.lime : C.sub}
             />
           </TouchableOpacity>
         </Group>
@@ -414,9 +414,9 @@ export default function DocSettings({ agent, onClose }) {
               }}
             >
               {bandeauBusy
-                ? <ActivityIndicator size="small" color={C.text} />
-                : <Ionicons name="cloud-upload-outline" size={16} color={C.text} />}
-              <Text style={{ color: C.text, fontSize: 13 }}>
+                ? <ActivityIndicator size="small" color={C.white} />
+                : <Ionicons name="cloud-upload-outline" size={16} color={C.white} />}
+              <Text style={{ color: C.white, fontSize: 13 }}>
                 {bandeauBusy ? "Envoi…" : f.banner_url ? "Changer" : "Choisir une image"}
               </Text>
             </TouchableOpacity>
