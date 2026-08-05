@@ -30,6 +30,11 @@ export function lienNotif(data: Record<string, unknown> | null | undefined): str
     // sur le web : on ouvre la fiche de l'agent, d'où le vendeur voit l'état
     // et peut agir. Renvoyer vers une page inexistante serait pire que rien.
     case "automation_fallback":   return agentId ? `/dashboard/${agentId}` : null;
+    // Incident WhatsApp touchant plusieurs comptes. On envoie quand même vers
+    // la page de connexion de l'agent : le vendeur y verra l'état revenir au
+    // vert de lui-même, ce qui vaut mieux qu'une alerte sur laquelle on ne
+    // peut rien faire.
+    case "platform_incident":     return agentId ? `/dashboard/${agentId}/integrations` : null;
     default:                      return null;
   }
 }

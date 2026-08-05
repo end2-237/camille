@@ -36,7 +36,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Clé invalide" }, { status: 401 });
   }
 
-  let body: { session?: string; status?: string; reason?: string; contact?: string };
+  let body: {
+    session?: string; status?: string; reason?: string; contact?: string;
+    prevision?: string; sessions_touchees?: number;
+  };
   try {
     body = await req.json();
   } catch {
@@ -99,6 +102,29 @@ export async function POST(req: NextRequest) {
           : `Un client a écrit à ${agent_name}, qui n'a pas pu répondre. Reprends la conversation à la main.`,
         channel: "alertes",
         data: { type: "automation_fallback", agentId: agent_id, session, contact },
+      });
+      return NextResponse.json({ ok: true, notified: true, status });
+    }
+
+    // ── Incident de plateforme ────────────────────────────────────────────────
+    // Plusieurs comptes sont tombés dans le même quart d'heure : la cause est
+    // chez WhatsApp, pas chez le vendeur. Sans ce message, chacun croit que
+    // c'est son téléphone, redémarre, rescanne un QR code qui n'a rien — et
+    // finit par écrire au support. On ne touche PAS au statut stocké : la
+    // déconnexion elle-même est déjà rapportée par ailleurs.
+    if (status === "PLATFORM_INCIDENT") {
+      const combien = Number(body.sessions_touchees ?? 0);
+      const prevision = String(body.prevision ?? "").trim();
+      await notifyUser(user_id, "systeme", {
+        title: "Coupure WhatsApp générale — ce n'est pas ton téléphone",
+        body:
+          (combien > 1
+            ? `${combien} agents sont touchés en même temps, dont ${agent_name}. `
+            : `${agent_name} est touché. `) +
+          "WhatsApp a changé quelque chose de son côté. La reconnexion est automatique, tu n'as rien à faire." +
+          (prevision ? ` ${prevision}` : ""),
+        channel: "alertes",
+        data: { type: "platform_incident", agentId: agent_id, session, reason },
       });
       return NextResponse.json({ ok: true, notified: true, status });
     }

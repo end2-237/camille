@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, ShieldAlert, RotateCw, Check, X } from "lucide-react";
+import { RefreshCw, ShieldAlert, RotateCw, Check, X, Radio, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
 
@@ -35,6 +35,24 @@ interface Ligne {
 }
 
 const PLANS = ["free", "starter", "pro", "enterprise"];
+
+/** État de la plateforme WhatsApp, tel que le tient camille-core. */
+interface Plateforme {
+  injoignable?: boolean;
+  niveau: "ok" | "attention" | "critique";
+  diagnostic: string;
+  prevision: string;
+  bibliotheque?: { installee: string; derniere: string | null; en_retard: boolean };
+  whatsapp?: { annoncee: string; embarquee: string | null; master: string | null; decalage: boolean };
+  sessions?: { total: number; en_ligne: number };
+  incident?: {
+    en_cours: boolean;
+    fenetre_min: number;
+    sessions_touchees: string[];
+    chutes: { session: string; code: number; at: number }[];
+  };
+  veille?: { dernier_releve: number | null; erreur: string | null };
+}
 
 /** Combien de jours depuis cette date ? `null` quand elle manque. */
 function joursDepuis(iso: string | null): number | null {
@@ -76,15 +94,93 @@ const COULEUR = {
   ok:        { fg: "#4A6B00", bg: "rgba(198,242,78,0.20)" },
 } as const;
 
+/**
+ * L'état de la plateforme WhatsApp, en haut de la console.
+ *
+ * Trois lignes suffisent : ce qui se passe, ce qui va arriver, et les deux
+ * numéros de version qui expliquent presque toujours pourquoi. Le reste
+ * (la liste des sessions tombées) ne s'affiche que pendant un incident —
+ * une console qu'on lit tous les jours ne doit pas montrer en permanence des
+ * données qui ne servent qu'une fois par trimestre.
+ */
+function CartePlateforme({ etat }: { etat: Plateforme | null }) {
+  if (!etat) return null;
+
+  const c = COULEUR[etat.niveau === "critique" ? "ko" : etat.niveau === "attention" ? "attention" : "ok"];
+  const bib = etat.bibliotheque;
+  const wa = etat.whatsapp;
+
+  return (
+    <div className="mt-4 rounded-xl p-4" style={{ border: "1px solid var(--border-default)", background: "var(--surface-raised)" }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Radio className="h-4 w-4 shrink-0" style={{ color: c.fg }} />
+        <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>
+          Plateforme WhatsApp
+        </span>
+        <span className="rounded-md px-2 py-0.5 text-[11px] font-medium" style={{ background: c.bg, color: c.fg }}>
+          {etat.niveau === "critique" ? "incident" : etat.niveau === "attention" ? "à surveiller" : "stable"}
+        </span>
+        {etat.sessions && (
+          <span className="text-[11.5px]" style={{ color: "var(--text-disabled)" }}>
+            {etat.sessions.en_ligne}/{etat.sessions.total} sessions en ligne
+          </span>
+        )}
+      </div>
+
+      <p className="mt-2 text-[13px]" style={{ color: "var(--text-primary)" }}>{etat.diagnostic}</p>
+
+      {/* La prévision est le vrai produit de cette carte : elle transforme un
+          constat en décision. On la marque comme telle. */}
+      <p className="mt-1.5 flex items-start gap-1.5 text-[12.5px]" style={{ color: "var(--text-secondary)" }}>
+        <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>{etat.prevision}</span>
+      </p>
+
+      {(bib || wa) && (
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11.5px]" style={{ color: "var(--text-disabled)" }}>
+          {bib && (
+            <span>
+              Bibliothèque <b style={{ color: "var(--text-secondary)" }}>{bib.installee}</b>
+              {bib.derniere && bib.derniere !== bib.installee && <> · dernière publiée {bib.derniere}</>}
+            </span>
+          )}
+          {wa && (
+            <span>
+              Protocole annoncé <b style={{ color: wa.decalage ? "#8A2020" : "var(--text-secondary)" }}>{wa.annoncee}</b>
+              {wa.embarquee && wa.embarquee !== wa.annoncee && <> · la bibliothèque parle {wa.embarquee}</>}
+              {wa.master && <> · master {wa.master}</>}
+            </span>
+          )}
+        </div>
+      )}
+
+      {etat.incident?.en_cours && etat.incident.sessions_touchees.length > 0 && (
+        <div className="mt-3 rounded-lg p-2.5 text-[11.5px]" style={{ background: COULEUR.ko.bg, color: COULEUR.ko.fg }}>
+          Tombées dans les {etat.incident.fenetre_min} dernières minutes :{" "}
+          {etat.incident.sessions_touchees.join(" · ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
   const [erreur, setErreur] = useState("");
   const [degrade, setDegrade] = useState<string[]>([]);
   const [charge, setCharge] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [plateforme, setPlateforme] = useState<Plateforme | null>(null);
 
   const load = useCallback(async () => {
     setCharge(true);
+    // La veille plateforme est chargée en parallèle et sans await bloquant :
+    // si le core met dix secondes à répondre, la liste des agents s'affiche
+    // quand même.
+    fetch("/api/admin/platform", { headers: { ...authHeaders() }, cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setPlateforme(d))
+      .catch(() => setPlateforme(null));
     try {
       const r = await fetch("/api/admin/overview", { headers: { ...authHeaders() }, cache: "no-store" });
       const d = await r.json().catch(() => ({}));
@@ -149,6 +245,8 @@ export default function AdminPage() {
           <ShieldAlert className="h-4 w-4 shrink-0" /> {erreur}
         </div>
       )}
+
+      <CartePlateforme etat={plateforme} />
 
       {degrade.length > 0 && (
         <div className="mt-4 rounded-lg p-3 text-[12px]"
