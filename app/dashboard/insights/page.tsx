@@ -2,7 +2,7 @@
 // app/dashboard/insights/page.tsx
 // OUTIL INTERNE — qualité du modèle : précision, cohérence, zones de friction.
 // Analyse par DISCUSSION entière (pas message par message).
-// L'API renvoie 403 si le compte n'est pas listé dans INSIGHTS_ADMIN_EMAILS.
+// L'API renvoie 403 si le compte n'est pas administrateur (is_admin).
 // ─────────────────────────────────────────────────────────────────────────────
 "use client";
 

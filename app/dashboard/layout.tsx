@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck,
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity,
 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -146,9 +146,16 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
             administrateur, mais c'est la route serveur qui protège vraiment :
             masquer un lien n'a jamais interdit d'y aller. */}
         {user?.is_admin && (
-          <NavItem href="/dashboard/admin" label="Exploitation"
-            icon={<ShieldCheck className="w-3.5 h-3.5" />}
-            active={pathname === "/dashboard/admin"} collapsed={collapsed} />
+          <>
+            <NavItem href="/dashboard/admin" label="Exploitation"
+              icon={<ShieldCheck className="w-3.5 h-3.5" />}
+              active={pathname === "/dashboard/admin"} collapsed={collapsed} />
+            {/* La page qui dit où l'agent se trompe. Elle existait déjà mais
+                n'était atteignable qu'en tapant l'URL — donc jamais ouverte. */}
+            <NavItem href="/dashboard/insights" label="Qualité de l'agent"
+              icon={<Activity className="w-3.5 h-3.5" />}
+              active={pathname === "/dashboard/insights"} collapsed={collapsed} />
+          </>
         )}
 
         {(() => {

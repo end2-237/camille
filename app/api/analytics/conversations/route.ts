@@ -55,17 +55,22 @@ function similar(a: string, b: string) {
 const NEGATIVE = /\bnon\b|c est pas (ca|cela)|pas (ca|cela)|je (ne )?comprends pas|tu comprends pas|je parle de|plutot|je veux pas/;
 
 // Outil INTERNE : sert à mesurer la précision et la cohérence du modèle.
-// Réservé aux comptes listés dans INSIGHTS_ADMIN_EMAILS (séparés par des virgules).
-function isInternal(email?: string) {
-  const list = (process.env.INSIGHTS_ADMIN_EMAILS || "emansoga@gmail.com")
+//
+// L'accès suit maintenant `is_admin`, comme la console d'exploitation : une
+// liste d'adresses en variable d'environnement se désynchronise du jour où on
+// ajoute un administrateur en base, et personne ne s'en aperçoit avant le 403.
+// INSIGHTS_ADMIN_EMAILS reste accepté pour ne casser aucun accès existant.
+function isInternal(user: { email?: string; is_admin?: boolean }) {
+  if (user.is_admin) return true;
+  const list = (process.env.INSIGHTS_ADMIN_EMAILS || "")
     .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  return !!email && list.includes(email.toLowerCase());
+  return !!user.email && list.includes(user.email.toLowerCase());
 }
 
 export async function GET(req: NextRequest) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-  if (!isInternal((user as { email?: string }).email)) {
+  if (!isInternal(user)) {
     return NextResponse.json({ error: "Accès réservé" }, { status: 403 });
   }
 
