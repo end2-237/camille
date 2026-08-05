@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
+import Svg, { Defs, LinearGradient, RadialGradient, Stop, Rect } from "react-native-svg";
 import { C, R, S, SH, F, BOTTOM_INSET } from "../theme";
 
 const TITLES = {
@@ -20,17 +20,48 @@ const TITLES = {
  * où il n'y a pas de texte à protéger. Un dégradé n'assombrit que le bas : la
  * photo reste une photo, et le texte reste lisible.
  */
-export function Scrim({ height = 200, to = "rgba(6,6,10,0.88)", from = "rgba(6,6,10,0)" }) {
+export function Scrim({ height = 200, to = "rgba(6,6,10,0.88)", from = "rgba(6,6,10,0)", depuis = "bas", id = "sc" }) {
+  const haut = depuis === "haut";
   return (
-    <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height }} pointerEvents="none">
+    <View
+      style={{ position: "absolute", left: 0, right: 0, [haut ? "top" : "bottom"]: 0, height }}
+      pointerEvents="none"
+    >
       <Svg width="100%" height="100%">
         <Defs>
-          <LinearGradient id="sc" x1="0" y1="0" x2="0" y2="1">
+          {/* Le dégradé part du bord où il est ancré : dense contre le bord,
+              nul vers le centre de l'image. */}
+          <LinearGradient id={id} x1="0" y1={haut ? "1" : "0"} x2="0" y2={haut ? "0" : "1"}>
             <Stop offset="0" stopColor={from} />
             <Stop offset="1" stopColor={to} />
           </LinearGradient>
         </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#sc)" />
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
+    </View>
+  );
+}
+
+/**
+ * Tache de lumière diffuse.
+ *
+ * Un cercle de couleur semi-transparent posé derrière le contenu ne fait PAS
+ * une lueur : il fait un disque au bord net, et c'est exactement ce qui donne
+ * l'air bon marché. Une vraie lueur s'éteint progressivement vers ses bords —
+ * donc un dégradé radial, opaque au centre, transparent au bord.
+ */
+export function Lueur({ size = 320, color = "rgba(198,242,78,0.55)", style, id = "lu" }) {
+  return (
+    <View style={[{ width: size, height: size }, style]} pointerEvents="none">
+      <Svg width={size} height={size}>
+        <Defs>
+          <RadialGradient id={id} cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor={color} />
+            <Stop offset="0.55" stopColor={color} stopOpacity={0.35} />
+            <Stop offset="1" stopColor={color} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width={size} height={size} fill={`url(#${id})`} />
       </Svg>
     </View>
   );

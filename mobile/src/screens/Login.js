@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, SH } from "../theme";
-import { Glass } from "../components/ui";
+import { Glass, Lueur } from "../components/ui";
 import { Press, Reveal } from "../components/motion";
 import { login, register } from "../api";
 
@@ -74,17 +74,11 @@ export default function Login({ onDone }) {
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
-      {/* Halos de marque très diffus derrière le contenu. Un aplat uni sur
-          toute la hauteur ferait plat ; ces taches donnent un point de lumière
-          vers lequel l'œil monte naturellement. */}
-      <View pointerEvents="none" style={{
-        position: "absolute", top: -110, left: -60, width: 320, height: 320, borderRadius: 160,
-        backgroundColor: "rgba(198,242,78,0.30)",
-      }} />
-      <View pointerEvents="none" style={{
-        position: "absolute", top: 40, right: -90, width: 260, height: 260, borderRadius: 130,
-        backgroundColor: "rgba(140,170,255,0.16)",
-      }} />
+      {/* Halos de marque derrière le contenu. Un aplat uni sur toute la hauteur
+          ferait plat ; ces taches donnent un point de lumière vers lequel l'œil
+          monte naturellement. */}
+      <Lueur size={360} color="rgba(198,242,78,0.55)" id="lu1" style={{ position: "absolute", top: -130, left: -80 }} />
+      <Lueur size={300} color="rgba(140,170,255,0.34)" id="lu2" style={{ position: "absolute", top: 20, right: -110 }} />
 
       <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 26, justifyContent: "center" }} keyboardShouldPersistTaps="handled">
         <Reveal index={0} dy={22} duree={520}>

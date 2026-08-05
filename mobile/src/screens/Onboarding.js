@@ -87,7 +87,7 @@ export default function Onboarding({ onDone }) {
         pointerEvents="none"
       >
         <ImageBackground source={require("../../assets/ob1-hero.png")} style={{ flex: 1 }} resizeMode="cover">
-          <Scrim height={height * 0.72} to="rgba(6,6,10,0.94)" />
+          <Scrim id="obBas" height={height * 0.72} to="rgba(6,6,10,0.94)" />
         </ImageBackground>
       </Animated.View>
 
