@@ -43,6 +43,22 @@ export async function login(email, password) {
   return data;
 }
 
+/**
+ * Création de compte.
+ *
+ * Le serveur renvoie un jeton immédiatement : on enchaîne donc sur
+ * l'application sans repasser par l'écran de connexion — redemander à
+ * quelqu'un le mot de passe qu'il vient de choisir n'a aucun sens.
+ */
+export async function register(email, password, full_name) {
+  const data = await req("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, ...(full_name ? { full_name } : {}) }),
+  });
+  if (data.token) await setToken(data.token);
+  return data;
+}
+
 export const getStats = (period = "30d") =>
   req(`/api/stats?period=${encodeURIComponent(period)}`);
 
