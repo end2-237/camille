@@ -35,6 +35,9 @@ export function lienNotif(data: Record<string, unknown> | null | undefined): str
     // vert de lui-même, ce qui vaut mieux qu'une alerte sur laquelle on ne
     // peut rien faire.
     case "platform_incident":     return agentId ? `/dashboard/${agentId}/integrations` : null;
+    // Veille plateforme : réservée aux administrateurs, elle mène à la console
+    // où le détail des versions est affiché.
+    case "platform_update":       return "/dashboard/admin";
     default:                      return null;
   }
 }
