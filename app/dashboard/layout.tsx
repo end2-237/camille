@@ -323,6 +323,7 @@ function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop
   const pathname = usePathname();
   const router   = useRouter();
   const { agents } = useAgents();
+  const { user }   = useAuth();
   const [mounted, setMounted]       = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [q, setQ]                   = useState("");
@@ -442,6 +443,23 @@ function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop
       </div>
 
       <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+        {/* Accès à la console d'exploitation. Il n'apparaît que pour un
+            administrateur, mais ce n'est PAS ce qui la protège : la route
+            serveur refuse tout compte non administrateur. Masquer un lien n'a
+            jamais interdit d'y aller — ici on économise un élément d'interface
+            à ceux à qui il ne sert à rien, rien de plus. */}
+        {user?.is_admin && (
+          <Link href="/dashboard/admin" title="Console d'exploitation"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:brightness-110"
+            style={{
+              background: pathname === "/dashboard/admin" ? "rgba(220,38,38,0.16)" : "rgba(220,38,38,0.08)",
+              color: "#B0322C",
+              border: "1px solid rgba(220,38,38,0.22)",
+            }}>
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Admin</span>
+          </Link>
+        )}
         <button onClick={() => router.push("/configure")} title="Créer un agent"
           className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:brightness-110"
           style={{ background: "rgba(124,90,248,0.08)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.18)" }}>

@@ -19,8 +19,14 @@ export async function POST(req: NextRequest) {
 
     const { email, password } = parsed.data;
 
+    // is_admin est lu ici parce que c'est cet objet-là qui finit dans le
+    // navigateur et qui décide de l'affichage de la console d'exploitation.
+    // to_jsonb plutôt que u.is_admin : sur une base où migration_admin.sql
+    // n'est pas passée, demander la colonne ferait échouer TOUTE connexion.
     const result = await query(
-      "SELECT id, email, full_name, plan, password_hash FROM camille.users WHERE email = $1",
+      `SELECT id, email, full_name, plan, password_hash,
+              COALESCE((to_jsonb(users)->>'is_admin')::boolean, FALSE) AS is_admin
+         FROM camille.users WHERE email = $1`,
       [email]
     );
 
