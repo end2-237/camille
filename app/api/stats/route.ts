@@ -40,35 +40,45 @@ function dateRange(days: number): { from: string; to: string } {
 // Exécute une requête en tolérant les dérives de schéma (colonne/table absente) :
 // renvoie des lignes vides au lieu de faire planter toute la page de stats.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Les échecs sont collectés plutôt que simplement journalisés : afficher 0
-// message et 0 chiffre d'affaires parce qu'une table manque, sans rien dire,
-// laisse croire que l'activité est nulle. Mieux vaut l'avouer.
-const failures: string[] = [];
-
 function parseCaps(val: any): Record<string, boolean> {
   if (!val) return {};
   if (typeof val === "object") return val as Record<string, boolean>;
   try { return JSON.parse(val) ?? {}; } catch { return {}; }
 }
 
-async function safe(sql: string, params: unknown[]): Promise<{ rows: any[] }> {
-  try { return (await query(sql, params)) as any; }
-  catch (e) {
-    const m = (e as Error).message;
-    console.error("[stats] requête ignorée:", m);
-    if (!failures.includes(m)) failures.push(m);
-    return { rows: [] };
-  }
+/**
+ * Exécute une requête en tolérant les dérives de schéma, et note l'échec.
+ *
+ * Les échecs sont collectés plutôt que simplement journalisés : afficher 0
+ * message parce qu'une table manque, sans rien dire, laisse croire que
+ * l'activité est nulle. Mieux vaut l'avouer.
+ *
+ * Le collecteur est passé en argument, et non partagé au niveau du module :
+ * un tableau global aurait survécu d'une requête à l'autre dans un serveur
+ * qui tourne en continu, et une panne d'une seconde aurait marqué les
+ * statistiques « dégradées » indéfiniment, pour tous les comptes.
+ */
+function makeSafe(failures: string[]) {
+  return async function safe(sql: string, params: unknown[]): Promise<{ rows: any[] }> {
+    try { return (await query(sql, params)) as any; }
+    catch (e) {
+      const m = (e as Error).message;
+      console.error("[stats] requête ignorée:", m);
+      if (!failures.includes(m)) failures.push(m);
+      return { rows: [] };
+    }
+  };
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  const failures: string[] = [];
+  const safe = makeSafe(failures);
   try {
     const user = await getUserFromRequest(req);
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-    failures.length = 0;
     const params      = req.nextUrl.searchParams;
     const agentIdParam = params.get("agentId");
     const periodParam  = params.get("period") ?? "30d";
@@ -338,13 +348,21 @@ export async function GET(req: NextRequest) {
           data: await wahaAnalytics(r.session_name, fromMs, toMs),
         }))
       );
+      // Un compteur à zéro parce que la source est injoignable ressemble
+      // exactement à un compteur à zéro parce qu'il n'y a eu aucun message.
+      // Le vendeur, lui, en conclut que son agent ne reçoit plus rien. On
+      // distingue donc les deux : `null` = on ne sait pas, 0 = on sait.
+      let lues = 0;
       results.forEach(({ agentId: aid, data }) => {
         if (!data) return;
+        lues++;
         receivedByAgent[aid] = (receivedByAgent[aid] ?? 0) + data.messages;
         totalReceived += data.messages;
       });
-    } catch {
-      // Camille Core indisponible : on renvoie simplement 0, sans casser les stats
+      if (sessRes.rows.length && !lues) failures.push("messages_received");
+    } catch (e) {
+      failures.push("messages_received");
+      console.error("[stats] analytics core injoignable :", (e as Error).message);
     }
 
     // ── 12. Per-agent enriched list ───────────────────────────────────────────

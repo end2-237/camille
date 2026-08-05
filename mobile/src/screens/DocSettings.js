@@ -381,6 +381,14 @@ export default function DocSettings({ agent, onClose }) {
           </TouchableOpacity>
         </Group>
 
+        <Group title="Aperçu">
+          <Text style={{ color: C.sub, fontSize: 12, lineHeight: 17, marginBottom: 10 }}>
+            Client et articles fictifs. Ce qui est vide ici le sera aussi sur le
+            document envoyé à ton client.
+          </Text>
+          <BonApercu f={f} />
+        </Group>
+
         <Group title="Bandeau de bas de page">
           <Text style={{ color: C.sub, fontSize: 12, lineHeight: 17, marginBottom: 10 }}>
             Une image large et peu haute, placée juste avant le pied de page du
@@ -481,6 +489,97 @@ export default function DocSettings({ agent, onClose }) {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Aperçu du bon de commande.
+ *
+ * Reproduit la mise en page du PDF avec des articles fictifs, pour que le
+ * vendeur voie ce qu'il règle au lieu de l'imaginer. Mêmes règles de modèle,
+ * de filets et d'alternance que le rendu réel : toute différence ici est un
+ * défaut d'aperçu, pas un choix.
+ */
+function BonApercu({ f }) {
+  const accent = /^#[0-9a-fA-F]{6}$/.test(String(f.color).trim()) ? String(f.color).trim() : "#DD5509";
+  const mod = MODELES.find((m) => m.id === (f.template || "classique")) || MODELES[0];
+  const filets = f.lines || mod.lines;
+  const zebre = typeof f.zebra === "boolean" ? f.zebra : mod.zebra;
+
+  const ARTICLES = [
+    { d: "Poulet DG", q: 2, p: 4500 },
+    { d: "Jus naturel", q: 3, p: 1000 },
+    { d: "Livraison", q: 1, p: 1000 },
+  ];
+  const total = ARTICLES.reduce((s, a) => s + a.q * a.p, 0);
+  const fmt = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " F";
+
+  // Rien n'est inventé : un champ vide reste vide, c'est tout l'intérêt.
+  const identite = [
+    f.address, f.phone && "Tél : " + f.phone, f.email,
+    f.rccm && "RCCM : " + f.rccm, f.niu && "NIU : " + f.niu,
+  ].filter(Boolean);
+  const pied = [f.name, f.address, f.phone && "Tél : " + f.phone, f.rccm && "RCCM : " + f.rccm]
+    .filter(Boolean).join(" · ");
+
+  const cellule = (derniere) => ({
+    paddingVertical: 4, paddingHorizontal: 5,
+    borderBottomWidth: filets !== "aucune" ? 1 : 0, borderBottomColor: "#E6E6E6",
+    borderRightWidth: filets === "toutes" && !derniere ? 1 : 0, borderRightColor: "#E6E6E6",
+  });
+
+  const enteteFond =
+    mod.entete === "sombre" ? { backgroundColor: "#1F2328" }
+    : mod.entete === "souligne" ? { borderBottomWidth: 2, borderBottomColor: accent }
+    : { backgroundColor: accent };
+  const enteteTexte = mod.entete === "souligne" ? accent : "#FFFFFF";
+
+  return (
+    <View style={{ backgroundColor: "#FFFFFF", borderRadius: R.sm, padding: 12 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text style={{ fontWeight: "700", fontSize: 13, color: "#1F2328" }}>
+            {f.name || "[ nom de l'entreprise ]"}
+          </Text>
+          {f.tagline ? <Text style={{ fontSize: 9, fontStyle: "italic", color: "#6B7280" }}>{f.tagline}</Text> : null}
+          {identite.map((l, i) => (
+            <Text key={i} style={{ fontSize: i >= 2 ? 8 : 9, color: i >= 2 ? "#6B7280" : "#1F2328" }}>{l}</Text>
+          ))}
+        </View>
+        {f.logo_url ? (
+          <Image source={{ uri: f.logo_url }} style={{ width: 44, height: 30 }} resizeMode="contain" />
+        ) : null}
+      </View>
+
+      <View style={{ borderBottomWidth: 3, borderBottomColor: accent, marginVertical: 8 }} />
+      <Text style={{ fontWeight: "700", fontSize: 16, color: accent, marginBottom: 8 }}>BON DE COMMANDE</Text>
+
+      <View style={{ flexDirection: "row", ...enteteFond }}>
+        <Text style={{ flex: 4, fontSize: 8, fontWeight: "700", color: enteteTexte, padding: 5 }}>DÉSIGNATION</Text>
+        <Text style={{ flex: 1, fontSize: 8, fontWeight: "700", color: enteteTexte, padding: 5, textAlign: "center" }}>QTÉ</Text>
+        <Text style={{ flex: 2, fontSize: 8, fontWeight: "700", color: enteteTexte, padding: 5, textAlign: "right" }}>MONTANT</Text>
+      </View>
+      {ARTICLES.map((a, i) => (
+        <View key={i} style={{ flexDirection: "row", backgroundColor: zebre && i % 2 === 1 ? "#FBF6F2" : "#FFFFFF" }}>
+          <Text style={{ flex: 4, fontSize: 9, color: "#1F2328", ...cellule(false) }}>{a.d}</Text>
+          <Text style={{ flex: 1, fontSize: 9, color: "#1F2328", textAlign: "center", ...cellule(false) }}>{a.q}</Text>
+          <Text style={{ flex: 2, fontSize: 9, color: "#1F2328", textAlign: "right", ...cellule(true) }}>{fmt(a.q * a.p)}</Text>
+        </View>
+      ))}
+
+      <View style={{ flexDirection: "row", justifyContent: "space-between", backgroundColor: accent, padding: 6, marginTop: 4 }}>
+        <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 10 }}>TOTAL NET À PAYER</Text>
+        <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 10 }}>{fmt(total)}</Text>
+      </View>
+
+      {f.banner_url ? (
+        <Image source={{ uri: f.banner_url }} style={{ width: "100%", height: 34, marginTop: 8 }} resizeMode="contain" />
+      ) : null}
+
+      <View style={{ borderTopWidth: 1, borderTopColor: "#E6E6E6", marginTop: 10, paddingTop: 4 }}>
+        <Text style={{ fontSize: 7, color: "#6B7280", textAlign: "center" }}>{pied || " "}</Text>
+      </View>
     </View>
   );
 }

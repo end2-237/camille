@@ -1,6 +1,7 @@
 // POST /api/admin/reindex-all
 // Réindexe TOUS les agents (texte + image CLIP) en une fois, dans le magasin de
-// vecteurs intégré. Protégé par un secret : header  X-Admin-Key: <ADMIN_REINDEX_KEY>.
+// vecteurs intégré. Exige le header X-Admin-Key: <ADMIN_REINDEX_KEY> ; sans clé
+// configurée, la route répond 503 plutôt que de s'ouvrir.
 // Aucune écriture Postgres (lecture seule) — écrit les fichiers d'index.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -13,10 +14,19 @@ const ADMIN_KEY = process.env.ADMIN_REINDEX_KEY || "";
 
 export async function POST(req: NextRequest) {
   // Si ADMIN_REINDEX_KEY est défini → on l'exige. Sinon endpoint ouvert (à sécuriser plus tard).
-  if (ADMIN_KEY && req.headers.get("x-admin-key") !== ADMIN_KEY) {
+  // Sans clé configurée, on REFUSE. L'ancienne condition ne s'activait que
+  // si la variable existait : une route d'administration restait donc
+  // grande ouverte tant que personne ne pensait à la définir, et le code
+  // l'annonçait lui-même dans sa réponse.
+  if (!ADMIN_KEY) {
+    return NextResponse.json(
+      { error: "Administration non configurée (ADMIN_REINDEX_KEY absente)." },
+      { status: 503 }
+    );
+  }
+  if (req.headers.get("x-admin-key") !== ADMIN_KEY) {
     return NextResponse.json({ error: "Clé admin invalide." }, { status: 403 });
   }
-  const warning = ADMIN_KEY ? undefined : "ADMIN_REINDEX_KEY non définie — endpoint OUVERT. Pense à la définir.";
 
   const doText = embeddingsEnabled();
   const doImage = imageEmbeddingsEnabled();
@@ -66,5 +76,5 @@ export async function POST(req: NextRequest) {
     { agents: 0, text: 0, image: 0 }
   );
 
-  return NextResponse.json({ success: true, warning, engines: { text: doText, image: doImage }, totals, results });
+  return NextResponse.json({ success: true, engines: { text: doText, image: doImage }, totals, results });
 }

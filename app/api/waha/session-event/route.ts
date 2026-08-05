@@ -6,8 +6,10 @@
 // Un agent débranché ne dit rien de lui-même : le vendeur découvre la panne
 // quand un client se plaint. C'est ce silence qu'on corrige ici.
 //
-// Corps attendu : { session, status, reason? }
+// Corps attendu : { session, status, reason?, contact? }
 //   status : "CONNECTED" | "DISCONNECTED" | "AUTH_FAILURE"
+//            | "WEBHOOK_FALLBACK" (un client a reçu le message d'attente)
+//            | "WEBHOOK_FAILING" | "WEBHOOK_OK" (l'automatisation tombe / repart)
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Clé invalide" }, { status: 401 });
   }
 
-  let body: { session?: string; status?: string; reason?: string };
+  let body: { session?: string; status?: string; reason?: string; contact?: string };
   try {
     body = await req.json();
   } catch {
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest) {
   const session = String(body.session ?? "").trim();
   const status = String(body.status ?? "").trim().toUpperCase();
   const reason = String(body.reason ?? "").trim();
+  const contact = String(body.contact ?? "").trim();
 
   if (!session || !status) {
     return NextResponse.json({ error: "Champs requis : session, status" }, { status: 400 });
@@ -72,6 +75,55 @@ export async function POST(req: NextRequest) {
       user_id: string;
       agent_name: string;
     };
+
+    // ── Automatisation en panne ───────────────────────────────────────────────
+    // Trois états, tous distincts de la déconnexion : ici WhatsApp répond, la
+    // session est vivante, mais le workflow qui fabrique les réponses ne
+    // répond plus (arrêté, 404, serveur tombé). Le client écrit et n'obtient
+    // rien, et jusqu'ici personne ne l'apprenait — il a fallu lire les
+    // journaux du serveur pour le voir.
+    //
+    // Aucun des trois ne touche au statut stocké : la session est bel et bien
+    // connectée, et l'écrire en panne enverrait le vendeur rescanner un QR
+    // code qui n'a aucun problème.
+
+    // Un client précis vient de recevoir le message d'attente. C'est la plus
+    // actionnable des trois : elle nomme la personne à rappeler. Sa cadence
+    // est celle du filet côté core — un client, une alerte, par fenêtre — donc
+    // une panne longue ne noie pas le vendeur.
+    if (status === "WEBHOOK_FALLBACK") {
+      await notifyUser(user_id, "alerte", {
+        title: "Un client attend ta réponse",
+        body: contact
+          ? `${contact} a écrit à ${agent_name}, qui n'a pas pu répondre. Reprends la conversation à la main.`
+          : `Un client a écrit à ${agent_name}, qui n'a pas pu répondre. Reprends la conversation à la main.`,
+        channel: "alertes",
+        data: { type: "automation_fallback", agentId: agent_id, session, contact },
+      });
+      return NextResponse.json({ ok: true, notified: true, status });
+    }
+
+    if (status === "WEBHOOK_FAILING" || status === "WEBHOOK_OK") {
+      const enPanne = status === "WEBHOOK_FAILING";
+      await notifyUser(
+        user_id,
+        enPanne ? "alerte" : "systeme",
+        enPanne
+          ? {
+              title: `${agent_name} ne répond plus à tes clients`,
+              body: "WhatsApp est connecté, mais l'automatisation ne répond pas. Tes clients écrivent dans le vide — réponds-leur à la main en attendant.",
+              channel: "alertes",
+              data: { type: "automation_down", agentId: agent_id, session, reason },
+            }
+          : {
+              title: `${agent_name} répond de nouveau`,
+              body: "L'automatisation est repartie.",
+              channel: "alertes",
+              data: { type: "automation_up", agentId: agent_id, session },
+            }
+      );
+      return NextResponse.json({ ok: true, notified: true, status });
+    }
 
     const prev = String(previous ?? "").toUpperCase();
     const wasDown = DOWN.has(prev);

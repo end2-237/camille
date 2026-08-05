@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt,
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck,
 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -141,6 +141,15 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
         <NavItem href="/dashboard/billing" label="Plans & Facturation"
           icon={<CreditCard className="w-3.5 h-3.5" />}
           active={pathname === "/dashboard/billing"} collapsed={collapsed} />
+
+        {/* Console d'exploitation. Le lien ne s'affiche que pour un
+            administrateur, mais c'est la route serveur qui protège vraiment :
+            masquer un lien n'a jamais interdit d'y aller. */}
+        {user?.is_admin && (
+          <NavItem href="/dashboard/admin" label="Exploitation"
+            icon={<ShieldCheck className="w-3.5 h-3.5" />}
+            active={pathname === "/dashboard/admin"} collapsed={collapsed} />
+        )}
 
         {(() => {
           const activeAgentId = pathname.match(/\/dashboard\/([0-9a-fA-F-]{8,})/)?.[1] || agents[0]?.id;

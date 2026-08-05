@@ -198,7 +198,9 @@ function ProductForm({ agentId, product, onClose, onSaved }) {
       stock: f.stock ? Number(f.stock) : null,
       image_url: f.image_url.trim() || null,
       product_url: f.product_url.trim() || null,
-      description: f.description.trim() || null,
+      // "" et non null : la colonne est NOT NULL en base. Envoyer null faisait
+      // échouer l'enregistrement du stock avec une 500 sans explication.
+      description: f.description.trim(),
     };
     setBusy(true);
     try {
