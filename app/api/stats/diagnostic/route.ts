@@ -72,6 +72,27 @@ export async function GET(req: NextRequest) {
     [agentIds]
   );
 
+  // « J'ai deux lignes dans agent_analytics et le tableau de bord affiche 0. »
+  // Compter ne suffit pas à répondre : il faut savoir si ces lignes tombent
+  // dans la fenêtre interrogée, et si elles appartiennent bien à un agent de
+  // ce compte. On lit donc les lignes elles-mêmes, sans filtre d'agent, puis
+  // on tranche.
+  const WINDOW = 30;
+  const winFrom = new Date();
+  winFrom.setDate(winFrom.getDate() - WINDOW + 1);
+  const from = winFrom.toISOString().slice(0, 10);
+  const to = new Date().toISOString().slice(0, 10);
+
+  const rawRows = await probe(
+    `SELECT agent_id, date::text AS date, messages_handled, tokens_consumed,
+            (agent_id = ANY($1::uuid[]))            AS mine,
+            (date >= $2::date AND date <= $3::date) AS in_window
+       FROM camille.agent_analytics
+      ORDER BY date DESC
+      LIMIT 20`,
+    [agentIds, from, to]
+  );
+
   const tokens = await probe(
     `SELECT COUNT(*)::int AS rows,
             COALESCE(SUM(total_tokens), 0)::int AS total_tokens,
@@ -108,8 +129,23 @@ export async function GET(req: NextRequest) {
     problems.push("Aucune conversation enregistrée pour tes sessions (n8n n'appelle pas POST /api/conversations, ou le session_name ne correspond pas).");
   if (!analytics.ok)
     problems.push(`Table agent_analytics inaccessible : ${analytics.error} — applique migration_stats_align.sql`);
-  else if ((analytics.rows[0]?.rows ?? 0) === 0)
-    problems.push("agent_analytics vide : n8n n'appelle pas POST /api/usage/record après chaque réponse.");
+  else if ((analytics.rows[0]?.rows ?? 0) === 0) {
+    // Zéro ligne POUR CE COMPTE. La table est-elle vide, ou les lignes
+    // appartiennent-elles à un autre agent ? Les deux se corrigent autrement.
+    if (rawRows.ok && rawRows.rows.length)
+      problems.push(
+        `agent_analytics contient ${rawRows.rows.length} ligne(s), mais aucune pour tes agents : ` +
+        `elles sont rattachées à ${[...new Set(rawRows.rows.map((r) => r.agent_id))].join(", ")}. ` +
+        `n8n enregistre sous un agent_id qui n'est pas le tien — vérifie le lien session_name → agent.`
+      );
+    else
+      problems.push("agent_analytics vide : n8n n'appelle pas POST /api/usage/record après chaque réponse.");
+  } else if (rawRows.ok && rawRows.rows.some((r) => r.mine) && !rawRows.rows.some((r) => r.mine && r.in_window)) {
+    problems.push(
+      `Tes lignes agent_analytics existent mais sont toutes hors de la fenêtre ${from} → ${to} ` +
+      `(la plus récente : ${analytics.rows[0]?.last_date}). Le tableau de bord n'affiche que les 30 derniers jours.`
+    );
+  }
   if (!tokens.ok)
     problems.push(`Table token_usage inaccessible : ${tokens.error} — applique migration_stats_align.sql`);
   if (orphans.ok && orphans.rows.length)
@@ -120,6 +156,9 @@ export async function GET(req: NextRequest) {
     sessions: { count: sessions.rows.length, ok: sessions.ok, error: sessions.error, list: sessions.rows },
     conversations: { ok: conversations.ok, error: conversations.error, ...(conversations.rows[0] ?? {}) },
     analytics: { ok: analytics.ok, error: analytics.error, ...(analytics.rows[0] ?? {}) },
+    // Les lignes brutes, avec pour chacune : est-elle à moi, est-elle dans la
+    // fenêtre. C'est ce qui permet de répondre sans accès à la base.
+    analytics_rows: { window: { from, to }, ok: rawRows.ok, error: rawRows.error, rows: rawRows.rows },
     token_usage: {
       ok: tokens.ok,
       error: tokens.error,

@@ -12,6 +12,8 @@
 --   4. Carte du menu, frais de livraison, version minimale de l'app
 --   5. Traces de conversation       (analyse de friction, interne)
 --   6. Cles d'API publiques         (integration du site d'un client)
+--   7. Contacts + reprise humaine   (bouton « faire taire » de l'app)
+--   8. Catalogue v2                 (images, variations)
 -- ═════════════════════════════════════════════════════════════════════════════
 
 
@@ -397,3 +399,40 @@ CREATE UNIQUE INDEX IF NOT EXISTS token_usage_agent_period_key
     ON camille.token_usage (agent_id, period);
 
 COMMIT;
+
+-- ═════════════════════ migration_contacts.sql ═════════════════════
+
+-- Contact WhatsApp par agent : langue, accueil, et reprise par un humain.
+CREATE TABLE IF NOT EXISTS camille.contacts (
+  id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id      UUID         NOT NULL REFERENCES camille.agents(id) ON DELETE CASCADE,
+  phone         TEXT         NOT NULL,
+  language_pref TEXT         DEFAULT NULL,
+  welcomed_at   TIMESTAMPTZ  DEFAULT NULL,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT contacts_agent_phone_unique UNIQUE (agent_id, phone)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contacts_agent_phone ON camille.contacts (agent_id, phone);
+CREATE INDEX IF NOT EXISTS idx_contacts_agent_id    ON camille.contacts (agent_id);
+
+-- ── Reprise par un humain ────────────────────────────────────────────────────
+-- Quand le commercant reprend la main sur une conversation, l'agent doit se
+-- taire pour CE client precisement — sinon il repond par-dessus l'humain.
+-- Le bouton de l'application et le test « Humain en cours ? » du workflow
+-- lisent tous deux cette colonne : sans elle, les deux echouent.
+ALTER TABLE camille.contacts ADD COLUMN IF NOT EXISTS human_takeover BOOLEAN NOT NULL DEFAULT false;
+
+
+-- ═════════════════════ migration_catalog_v2.sql ═════════════════════
+
+-- Multi-images et variations. La creation de produit ecrit ces deux colonnes :
+-- sans elles, ajouter un produit depuis l'application echoue.
+ALTER TABLE camille.products ADD COLUMN IF NOT EXISTS images   JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE camille.products ADD COLUMN IF NOT EXISTS variants JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE camille.products ADD COLUMN IF NOT EXISTS needs_reindex BOOLEAN NOT NULL DEFAULT true;
+
+-- ── Filet : une base creee avant que ces colonnes soient NOT NULL ────────────
+UPDATE camille.products SET description = '' WHERE description IS NULL;
+
