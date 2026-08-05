@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { View, Text, SafeAreaView, StatusBar, Platform, Animated, AppState, BackHandler } from "react-native";
+import { View, Text, SafeAreaView, StatusBar, Platform, Animated, Easing, AppState, BackHandler } from "react-native";
 import * as Updates from "expo-updates";
 import { registerForPush, listenPush, clearBadge } from "./src/push";
 import Notifications from "./src/screens/Notifications";
@@ -10,6 +10,7 @@ import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { C, TOP_INSET } from "./src/theme";
 import { Header, BottomNav, ScreenTitle } from "./src/components/ui";
+import { styleTitreDefilant } from "./src/components/motion";
 import Splash from "./src/screens/Splash";
 import Onboarding from "./src/screens/Onboarding";
 import Login from "./src/screens/Login";
@@ -19,6 +20,12 @@ import Conversations from "./src/screens/Conversations";
 import Analytics from "./src/screens/Analytics";
 import Profile from "./src/screens/Profile";
 import { loadToken, getStats, getAgents, getMe } from "./src/api";
+
+// Onglets qui portent un grand titre, et parmi eux celui où une recherche a un
+// sens. Conversations, Réclamations et Notifications ont déjà leur propre
+// en-tête : leur en ajouter un second empilerait deux titres l'un sur l'autre.
+const AVEC_TITRE = new Set(["dash", "agents", "analytics"]);
+const AVEC_RECHERCHE = new Set(["agents"]);
 
 export default function App() {
   const [booting, setBooting] = useState(true);
@@ -52,6 +59,13 @@ export default function App() {
   // Cible d'une notification touchee : { agentId, view }. Consommee par l'ecran
   // Agents des que la liste est chargee, puis remise a zero.
   const [deepLink, setDeepLink] = useState(null);
+
+  // Position de défilement de l'écran courant. Elle vit ici parce que le grand
+  // titre vit ici : c'est lui qui doit s'effacer quand le contenu monte. On la
+  // remet à zéro à chaque changement d'onglet, sinon le titre du nouvel écran
+  // naîtrait déjà effacé, avec la position du précédent.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  useEffect(() => { scrollY.setValue(0); }, [tab, scrollY]);
 
   const load = useCallback(async () => {
     const [s, a, m] = await Promise.allSettled([getStats("30d"), getAgents(), getMe()]);
@@ -232,7 +246,7 @@ export default function App() {
     });
   };
 
-  const common = { stats, query, refreshing, onRefresh };
+  const common = { stats, query, refreshing, onRefresh, scrollY };
   let Body;
   // Le blocage passe avant tout : ni onglets, ni en-tete, ni contenu.
   if (gate) return <ForceUpdate info={gate} />;
@@ -250,14 +264,22 @@ export default function App() {
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
       <View style={{ paddingTop: TOP_INSET }}>
         <Header
-          query={query}
-          setQuery={setQuery}
+          user={user}
           initials={initials}
           onProfile={() => setTab("profile")}
           onNotifications={() => { setTab("notifs"); setUnread(0); clearBadge(); }}
           unread={unread}
         />
-        {tab === "dash" || tab === "agents" || tab === "analytics" ? <ScreenTitle tab={tab} /> : null}
+        {AVEC_TITRE.has(tab) && (
+          <Animated.View style={styleTitreDefilant(scrollY)}>
+            <ScreenTitle
+              tab={tab}
+              query={query}
+              setQuery={setQuery}
+              showSearch={AVEC_RECHERCHE.has(tab)}
+            />
+          </Animated.View>
+        )}
       </View>
       {updating && (
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 999, backgroundColor: C.ink, paddingVertical: 6, alignItems: "center" }}>
@@ -270,16 +292,35 @@ export default function App() {
   );
 }
 
-// Fondu + léger slide vertical à chaque changement d'onglet.
+/**
+ * Transition d'onglet : l'écran arrive en montant et en se dépliant.
+ *
+ * Le léger passage sous l'échelle 1 (0.98 → 1) est ce qui distingue un fondu
+ * d'une arrivée : sans lui l'écran apparaît, avec lui il vient de quelque part.
+ * La courbe est franche au départ et posée à l'arrivée — c'est celle qu'iOS
+ * utilise partout, et l'œil la reconnaît sans savoir la nommer.
+ */
 function AnimatedScreen({ tabKey, children }) {
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     a.setValue(0);
-    Animated.timing(a, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    Animated.timing(a, {
+      toValue: 1,
+      duration: 320,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start();
   }, [tabKey, a]);
-  const translateY = a.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+
   return (
-    <Animated.View style={{ flex: 1, opacity: a, transform: [{ translateY }] }}>
+    <Animated.View style={{
+      flex: 1,
+      opacity: a,
+      transform: [
+        { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+        { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) },
+      ],
+    }}>
       {children}
     </Animated.View>
   );
