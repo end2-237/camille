@@ -13,7 +13,7 @@ function fr(n) { return num(n).toLocaleString("fr-FR"); }
 // Outil interne : l'analyse de friction n'est pas destinée aux clients.
 const INTERNAL_EMAILS = ["emansoga@gmail.com"];
 
-export default function Analytics({ stats, refreshing, onRefresh, user }) {
+export default function Analytics({ stats, refreshing, onRefresh, user, titre }) {
   const [view, setView] = useState("volume");
   const internal = INTERNAL_EMAILS.includes(String(user?.email || "").toLowerCase());
   const ov = stats?.overview || {};
@@ -71,8 +71,10 @@ export default function Analytics({ stats, refreshing, onRefresh, user }) {
   return (
     <View style={{ flex: 1 }}>
       {Switcher}
-    <ScrollView contentContainerStyle={{ padding: S.md, paddingTop: 0, paddingBottom: 92 + BOTTOM_INSET }} showsVerticalScrollIndicator={false}
+    <ScrollView contentContainerStyle={{ padding: S.md, paddingTop: 8, paddingBottom: 92 + BOTTOM_INSET }} showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}>
+
+      {titre}
 
       {/* ── Messages : reçus / envoyés ────────────────────────────────── */}
       <Text style={{ color: C.sub, fontSize: 12, fontWeight: "700", letterSpacing: 0.3, marginBottom: 8, marginLeft: 2 }}>MESSAGES</Text>

@@ -10,7 +10,6 @@ import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { C, TOP_INSET } from "./src/theme";
 import { Header, BottomNav, ScreenTitle } from "./src/components/ui";
-import { styleTitreDefilant } from "./src/components/motion";
 import Splash from "./src/screens/Splash";
 import Onboarding from "./src/screens/Onboarding";
 import Login from "./src/screens/Login";
@@ -255,7 +254,15 @@ export default function App() {
     });
   };
 
-  const common = { stats, query, refreshing, onRefresh, scrollY };
+  // Le grand titre descend DANS l'écran : posé dans l'en-tête fixe, on ne
+  // pouvait que l'estomper, et sa place restait réservée — une large bande
+  // vide apparaissait dès qu'il s'effaçait. Chaque écran le pose désormais en
+  // tête de son contenu, où il défile avec le reste.
+  const titre = AVEC_TITRE.has(tab) ? (
+    <ScreenTitle tab={tab} query={query} setQuery={setQuery} showSearch={AVEC_RECHERCHE.has(tab)} />
+  ) : null;
+
+  const common = { stats, query, refreshing, onRefresh, scrollY, titre };
   let Body;
   // Le blocage passe avant tout : ni onglets, ni en-tete, ni contenu.
   if (gate) return <ForceUpdate info={gate} />;
@@ -279,16 +286,6 @@ export default function App() {
           onNotifications={() => { setTab("notifs"); setUnread(0); clearBadge(); }}
           unread={unread}
         />
-        {AVEC_TITRE.has(tab) && (
-          <Animated.View style={styleTitreDefilant(scrollY)}>
-            <ScreenTitle
-              tab={tab}
-              query={query}
-              setQuery={setQuery}
-              showSearch={AVEC_RECHERCHE.has(tab)}
-            />
-          </Animated.View>
-        )}
       </View>
       {updating && (
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 999, backgroundColor: C.ink, paddingVertical: 6, alignItems: "center" }}>

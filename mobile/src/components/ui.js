@@ -168,11 +168,23 @@ export function Header({ user, onProfile, onNotifications, unread = 0, initials 
   );
 }
 
-/** Grand titre + barre de recherche pleine largeur. */
+/**
+ * Grand titre + barre de recherche pleine largeur.
+ *
+ * Il se place DANS le contenu qui défile, pas dans l'en-tête fixe. Posé en
+ * haut, on ne pouvait que l'estomper : sa place restait réservée et laissait
+ * une grande zone vide dès qu'il s'effaçait. Animer sa hauteur était exclu —
+ * la position de défilement est pilotée nativement, et le module natif ne sait
+ * pas animer une hauteur. Le faire défiler avec le reste règle les deux : la
+ * place se libère d'elle-même, et c'est exactement le comportement d'un grand
+ * titre iOS.
+ *
+ * Pas de marge horizontale ici : l'écran qui l'accueille a déjà la sienne.
+ */
 export function ScreenTitle({ tab, query, setQuery, showSearch = false }) {
   const titre = TITLES[tab] || "";
   return (
-    <View style={{ paddingHorizontal: S.md, marginTop: 14 }}>
+    <View style={{ marginBottom: 4 }}>
       <Text style={F.large}>{titre}</Text>
 
       {showSearch && (

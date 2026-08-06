@@ -9,7 +9,7 @@ import { BottomDrawer } from "../components/Drawer";
 import AgentDetail from "./AgentDetail";
 import AgentCreate from "./AgentCreate";
 
-export default function Agents({ stats, query, refreshing, onRefresh, onAgentChanged, onRefreshData, deepLink, onDeepLinkDone, scrollY }) {
+export default function Agents({ stats, query, refreshing, onRefresh, onAgentChanged, onRefreshData, deepLink, onDeepLinkDone, scrollY, titre }) {
   const all = stats?.agents || [];
   const ov = stats?.overview || {};
   const q = (query || "").trim().toLowerCase();
@@ -53,6 +53,8 @@ export default function Agents({ stats, query, refreshing, onRefresh, onAgentCha
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: suivi } } }], { useNativeDriver: true })}
         refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}
       >
+        {titre}
+
         <Reveal index={0} dy={20}>
           <View style={[{ backgroundColor: C.lime, borderRadius: R.xl, padding: S.md, marginBottom: S.md, overflow: "hidden" }, SH.card]}>
             {/* Cercle de lumière : casse l'aplat de vert sans ajouter d'image. */}

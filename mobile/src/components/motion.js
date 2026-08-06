@@ -122,38 +122,6 @@ export function styleParallaxe(scrollY, hauteur) {
 }
 
 /**
- * En-tête qui s'efface au défilement.
- *
- * Le grand titre n'a d'intérêt qu'en haut de page. Dès qu'on descend, il rend
- * la place au contenu — c'est la moitié du caractère « natif » d'un écran iOS.
- */
-export function styleTitreDefilant(scrollY, course = 90) {
-  return {
-    opacity: scrollY.interpolate({
-      inputRange: [0, course * 0.55, course],
-      outputRange: [1, 0.45, 0],
-      extrapolate: "clamp",
-    }),
-    transform: [
-      {
-        translateY: scrollY.interpolate({
-          inputRange: [0, course],
-          outputRange: [0, -22],
-          extrapolate: "clamp",
-        }),
-      },
-      {
-        scale: scrollY.interpolate({
-          inputRange: [0, course],
-          outputRange: [1, 0.92],
-          extrapolate: "clamp",
-        }),
-      },
-    ],
-  };
-}
-
-/**
  * Halo qui pulse, pour un élément qui attend une action.
  *
  * Boucle infinie mais purement native : elle ne réveille pas JavaScript une

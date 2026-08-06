@@ -14,7 +14,7 @@ const AD2 = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=f
 
 const HERO_H = 420;
 
-export default function Dashboard({ stats, user, refreshing, onRefresh, scrollY }) {
+export default function Dashboard({ stats, user, refreshing, onRefresh, scrollY, titre }) {
   const ov = stats?.overview || {};
   const rev = stats?.revenue || {};
   const messages = Number(ov.total_messages || 0);
@@ -50,6 +50,8 @@ export default function Dashboard({ stats, user, refreshing, onRefresh, scrollY 
       onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: suivi } } }], { useNativeDriver: true })}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.ink} /> : undefined}
     >
+      {titre}
+
       {/* Un zéro peut vouloir dire « aucune activité » ou « impossible à
           lire ». Les confondre fait chercher un problème commercial là où il
           y a un problème technique. */}
