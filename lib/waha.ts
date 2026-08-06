@@ -109,6 +109,37 @@ export async function wahaDeleteSession(sessionName: string) {
   return wahaStopSession(sessionName);
 }
 
+/**
+ * Code de couplage : la connexion par numéro, sans scanner de QR.
+ *
+ * Camille Core répond de deux façons, et les deux sont normales :
+ *   { code }     le code à saisir dans WhatsApp, il expire vite
+ *   { message }  le numéro est enregistré mais le socket n'est pas encore prêt ;
+ *                le code sortira au prochain cycle de connexion
+ *
+ * On rend donc les deux au lieu de traiter le second cas comme une panne : un
+ * « code non reçu » ferait recommencer le vendeur alors qu'il n'a qu'à attendre
+ * quelques secondes.
+ */
+export async function wahaPairingCode(
+  sessionName: string,
+  phone: string
+): Promise<{ code: string | null; message: string | null }> {
+  const res = await fetch(`${CORE_URL}/api/sessions/${sessionName}/pairing-code`, {
+    method: "POST",
+    headers: coreHeaders(),
+    body: JSON.stringify({ phone }),
+  });
+  const texte = await res.text();
+  let data: { code?: string; message?: string; error?: string } = {};
+  try { data = texte ? JSON.parse(texte) : {}; } catch { /* réponse non JSON */ }
+
+  if (!res.ok) {
+    throw new Error(data.error || `Camille Core ${res.status}${texte ? ` — ${texte.slice(0, 200)}` : ""}`);
+  }
+  return { code: data.code ?? null, message: data.message ?? null };
+}
+
 // Analytics Camille Core : nombre de messages REÇUS (et contacts uniques) sur une période.
 // Camille Core compte chaque message entrant, y compris ceux que l'IA n'a pas traités —
 // c'est la seule source fiable du "nombre de messages reçus".

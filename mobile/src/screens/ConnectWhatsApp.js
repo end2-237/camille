@@ -11,6 +11,7 @@ export default function ConnectWhatsApp({ agent, onClose }) {
   const [nonce, setNonce] = useState(0);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
+  const [attente, setAttente] = useState("");   // code pas encore prêt
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const poll = useRef(null);
@@ -48,10 +49,14 @@ export default function ConnectWhatsApp({ agent, onClose }) {
 
   async function getCode() {
     if (!phone.trim()) { Alert.alert("Numéro requis", "Entre le numéro WhatsApp avec l'indicatif (ex: 2376…)."); return; }
-    setBusy(true); setCode("");
+    setBusy(true); setCode(""); setAttente("");
     try {
       const r = await wahaPairingCode(agent.agent_id, phone.trim());
-      setCode(r.code || "");
+      if (r.code) setCode(r.code);
+      // Le serveur peut accepter le numéro sans avoir encore de code : le
+      // socket WhatsApp finit de s'ouvrir. Sans ce message, l'écran ne montre
+      // rien et on croit que ça a échoué.
+      else setAttente(r.message || "Numéro enregistré. Le code arrive dans quelques secondes.");
     } catch (e) { Alert.alert("Erreur", e.message); } finally { setBusy(false); }
   }
 
@@ -132,6 +137,9 @@ export default function ConnectWhatsApp({ agent, onClose }) {
                   style={{ marginTop: 12, height: 48, borderRadius: R.pill, backgroundColor: C.ink, alignItems: "center", justifyContent: "center" }}>
                   {busy ? <ActivityIndicator color={C.lime} /> : <Text style={{ color: C.white, fontWeight: "700" }}>Recevoir le code</Text>}
                 </TouchableOpacity>
+                {attente && !code ? (
+                  <Text style={{ color: C.sub, fontSize: 12.5, lineHeight: 18, marginTop: 12 }}>{attente}</Text>
+                ) : null}
                 {code ? (
                   <View style={{ marginTop: 16, alignItems: "center" }}>
                     <Text style={{ color: C.sub, fontSize: 12 }}>Ton code de couplage</Text>
