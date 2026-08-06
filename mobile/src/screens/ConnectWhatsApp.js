@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, TextInput, Alert, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
-import { wahaStatus, wahaConnect, wahaDisconnect, wahaPairingCode, getWahaQr } from "../api";
+import { wahaStatus, wahaConnect, wahaDisconnect, wahaPairingCode, getWahaQr, wahaQrSource } from "../api";
 
 export default function ConnectWhatsApp({ agent, onClose }) {
   const [status, setStatus] = useState(null);      // {connected, status, phone_number, session_name}
@@ -14,6 +14,7 @@ export default function ConnectWhatsApp({ agent, onClose }) {
   const [attente, setAttente] = useState("");   // code pas encore prêt
   const [qr, setQr] = useState(null);           // image du QR, en data URL
   const [qrErreur, setQrErreur] = useState(""); // pourquoi il n'y en a pas
+  const [ancienneVoie, setAncienneVoie] = useState(false); // serveur pas encore redéployé
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const poll = useRef(null);
@@ -32,8 +33,17 @@ export default function ConnectWhatsApp({ agent, onClose }) {
     if (!session || mode !== "qr" || status?.connected) return;
     let vivant = true;
     getWahaQr(session)
-      .then((d) => { if (vivant) { setQr(d.qr || null); setQrErreur(""); } })
-      .catch((e) => { if (vivant) { setQr(null); setQrErreur(e.message || "QR indisponible"); } });
+      .then((d) => {
+        if (!vivant) return;
+        // Un serveur pas encore redéployé ignore format=json et renvoie le PNG.
+        // req() n'en tire rien d'exploitable : on repasse alors par l'image,
+        // qui marchait avant. L'ordre des déploiements ne doit pas décider si
+        // un vendeur peut connecter son WhatsApp.
+        setQr(d.qr || null);
+        setAncienneVoie(!d.qr);
+        setQrErreur("");
+      })
+      .catch((e) => { if (vivant) { setQr(null); setAncienneVoie(false); setQrErreur(e.message || "QR indisponible"); } });
     return () => { vivant = false; };
   }, [session, nonce, mode, status?.connected]);
 
@@ -141,6 +151,9 @@ export default function ConnectWhatsApp({ agent, onClose }) {
                 <Text style={{ color: C.sub, fontSize: 12, textAlign: "center", marginBottom: 14 }}>WhatsApp → Appareils connectés → Connecter un appareil</Text>
                 {qr ? (
                   <Image source={{ uri: qr }} style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#F4F4F4" }} resizeMode="contain" />
+                ) : ancienneVoie ? (
+                  <Image key={nonce} source={wahaQrSource(session, String(nonce))}
+                    style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#F4F4F4" }} resizeMode="contain" />
                 ) : (
                   <View style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#F4F4F4", alignItems: "center", justifyContent: "center", padding: 20 }}>
                     {qrErreur ? (

@@ -43,7 +43,16 @@ export const C = {
   // `glassLine` est le liseré du HAUT : sur une vraie surface de verre, la
   // lumière accroche l'arête supérieure. C'est ce détail d'un pixel qui fait
   // qu'une carte semble posée sur l'écran plutôt que peinte dedans.
-  glass: "rgba(255,255,255,0.78)",
+  //
+  // `glass` est OPAQUE, et c'est délibéré. Il valait rgba(255,255,255,0.78) :
+  // sur fond clair, le rendu composé était le même — mais Android peint l'ombre
+  // d'elevation DERRIÈRE une vue translucide, et l'ombre transparaissait au
+  // travers. On voyait un centre d'une teinte et un pourtour d'une autre, comme
+  // un cadre mal imprimé. La teinte ci-dessous est exactement le résultat de
+  // l'ancien mélange sur le fond de l'app : rien ne change à l'œil, l'artefact
+  // disparaît. La translucidité reste là où elle sert vraiment — au-dessus des
+  // photos, avec `glassDark`.
+  glass: "#FCFCFE",
   glassLine: "rgba(255,255,255,0.9)",
   glassEdge: "rgba(17,17,26,0.06)",
   glassDark: "rgba(18,18,21,0.90)",

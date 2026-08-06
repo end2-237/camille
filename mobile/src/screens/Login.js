@@ -77,8 +77,8 @@ export default function Login({ onDone }) {
       {/* Halos de marque derrière le contenu. Un aplat uni sur toute la hauteur
           ferait plat ; ces taches donnent un point de lumière vers lequel l'œil
           monte naturellement. */}
-      <Lueur size={360} color="rgba(198,242,78,0.55)" id="lu1" style={{ position: "absolute", top: -130, left: -80 }} />
-      <Lueur size={300} color="rgba(140,170,255,0.34)" id="lu2" style={{ position: "absolute", top: 20, right: -110 }} />
+      <Lueur size={360} couleur="#C6F24E" opacite={0.55} id="lu1" style={{ position: "absolute", top: -130, left: -80 }} />
+      <Lueur size={300} couleur="#8CAAFF" opacite={0.34} id="lu2" style={{ position: "absolute", top: 20, right: -110 }} />
 
       <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 26, justifyContent: "center" }} keyboardShouldPersistTaps="handled">
         <Reveal index={0} dy={22} duree={520}>

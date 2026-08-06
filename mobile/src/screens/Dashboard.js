@@ -93,8 +93,8 @@ export default function Dashboard({ stats, user, refreshing, onRefresh, scrollY 
               celui du HAUT protège le titre — sans lui, « en pilote auto » en
               citron se posait sur un ciel blanc et devenait illisible. Le
               milieu de la photo, lui, reste intact. */}
-          <Scrim id="heroHaut" depuis="haut" height={HERO_H * 0.52} to="rgba(6,6,10,0.72)" />
-          <Scrim id="heroBas" height={HERO_H * 0.55} to="rgba(6,6,10,0.86)" />
+          <Scrim id="heroHaut" depuis="haut" height={HERO_H * 0.52} opacite={0.72} />
+          <Scrim id="heroBas" height={HERO_H * 0.55} opacite={0.86} />
 
           <View style={{ flex: 1, padding: 22 }}>
             <Text style={{ color: "#fff", fontWeight: "800", fontSize: 32, lineHeight: 35, letterSpacing: -1.1 }}>
@@ -174,7 +174,7 @@ export default function Dashboard({ stats, user, refreshing, onRefresh, scrollY 
 
           <View style={[{ flex: 1, borderRadius: R.lg, overflow: "hidden", minHeight: 138 }, SH.card]}>
             <ImageBackground source={require("../../assets/dash-hero.png")} style={{ flex: 1 }} resizeMode="cover">
-              <Scrim id="tuileBas" height={110} to="rgba(6,6,10,0.88)" />
+              <Scrim id="tuileBas" height={110} opacite={0.88} />
               <View style={{ flex: 1, padding: 16, justifyContent: "flex-end" }}>
                 <Text style={{ color: "#fff", fontWeight: "800", fontSize: 24, letterSpacing: -0.8 }}>{received.toLocaleString("fr-FR")}</Text>
                 <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11.5 }}>messages reçus</Text>

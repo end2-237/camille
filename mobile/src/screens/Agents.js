@@ -61,7 +61,12 @@ export default function Agents({ stats, query, refreshing, onRefresh, onAgentCha
               borderRadius: 85, backgroundColor: "rgba(255,255,255,0.28)",
             }} />
 
-            <Text style={{ color: C.ink, fontWeight: "800", fontSize: 20, letterSpacing: -0.6 }}>Agents en ligne</Text>
+            {/* Le bouton « Nouvel agent » est posé en absolu dans le coin haut
+                droit. Sans cette réserve à droite, le titre passait DESSOUS et
+                les deux textes se chevauchaient. */}
+            <Text style={{ color: C.ink, fontWeight: "800", fontSize: 20, letterSpacing: -0.6, paddingRight: 145 }}>
+              Agents en ligne
+            </Text>
             <Text style={{ color: "rgba(0,0,0,0.58)", fontSize: 12.5, marginTop: 5, width: "70%", lineHeight: 18 }}>
               Vos vendeurs IA répondent à vos clients en temps réel sur WhatsApp
             </Text>
@@ -139,9 +144,18 @@ export default function Agents({ stats, query, refreshing, onRefresh, onAgentCha
                       <Text style={{ color: C.sub, fontSize: 11.5 }}>{a.business_name || a.sector || "Agent"}</Text>
                     </View>
                   </View>
+                  {/* Deux chiffres, pas un. « Messages » seul était ambigu :
+                      le vendeur y lisait ce que ses clients lui ont écrit,
+                      alors qu'on affichait ce que l'IA a traité. Les deux
+                      diffèrent dès qu'un message passe à l'humain. */}
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color: C.ink, fontWeight: "800", fontSize: 16, letterSpacing: -0.4 }}>{a.messages ?? 0}</Text>
-                    <Text style={{ color: C.sub, fontSize: 10 }}>messages</Text>
+                    <Text style={{ color: C.ink, fontWeight: "800", fontSize: 16, letterSpacing: -0.4 }}>
+                      {a.messages_received ?? 0}
+                    </Text>
+                    <Text style={{ color: C.sub, fontSize: 10 }}>reçus</Text>
+                    <Text style={{ color: C.sub, fontSize: 10, marginTop: 1 }}>
+                      {a.messages ?? 0} traités
+                    </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={C.sub} />
                 </View>

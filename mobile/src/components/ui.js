@@ -20,7 +20,7 @@ const TITLES = {
  * où il n'y a pas de texte à protéger. Un dégradé n'assombrit que le bas : la
  * photo reste une photo, et le texte reste lisible.
  */
-export function Scrim({ height = 200, to = "rgba(6,6,10,0.88)", from = "rgba(6,6,10,0)", depuis = "bas", id = "sc" }) {
+export function Scrim({ height = 200, opacite = 0.88, couleur = "#06060A", depuis = "bas", id = "sc" }) {
   const haut = depuis === "haut";
   return (
     <View
@@ -29,11 +29,15 @@ export function Scrim({ height = 200, to = "rgba(6,6,10,0.88)", from = "rgba(6,6
     >
       <Svg width="100%" height="100%">
         <Defs>
-          {/* Le dégradé part du bord où il est ancré : dense contre le bord,
-              nul vers le centre de l'image. */}
+          {/* La transparence se déclare dans `stopOpacity`, JAMAIS dans la
+              couleur. react-native-svg ignore la composante alpha d'un rgba()
+              passé à `stopColor` : « rgba(6,6,10,0) » devient un noir OPAQUE,
+              les deux extrémités du dégradé se rejoignent, et le voile censé
+              s'estomper recouvre la photo d'un aplat noir. C'est exactement ce
+              qui noircissait les images de l'accueil. */}
           <LinearGradient id={id} x1="0" y1={haut ? "1" : "0"} x2="0" y2={haut ? "0" : "1"}>
-            <Stop offset="0" stopColor={from} />
-            <Stop offset="1" stopColor={to} />
+            <Stop offset="0" stopColor={couleur} stopOpacity={0} />
+            <Stop offset="1" stopColor={couleur} stopOpacity={opacite} />
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
@@ -50,15 +54,17 @@ export function Scrim({ height = 200, to = "rgba(6,6,10,0.88)", from = "rgba(6,6
  * l'air bon marché. Une vraie lueur s'éteint progressivement vers ses bords —
  * donc un dégradé radial, opaque au centre, transparent au bord.
  */
-export function Lueur({ size = 320, color = "rgba(198,242,78,0.55)", style, id = "lu" }) {
+export function Lueur({ size = 320, couleur = "#C6F24E", opacite = 0.55, style, id = "lu" }) {
   return (
     <View style={[{ width: size, height: size }, style]} pointerEvents="none">
       <Svg width={size} height={size}>
         <Defs>
+          {/* Même règle que pour Scrim : l'alpha vit dans stopOpacity. Une
+              couleur rgba() ici donnerait un disque plein au lieu d'une lueur. */}
           <RadialGradient id={id} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={color} />
-            <Stop offset="0.55" stopColor={color} stopOpacity={0.35} />
-            <Stop offset="1" stopColor={color} stopOpacity={0} />
+            <Stop offset="0" stopColor={couleur} stopOpacity={opacite} />
+            <Stop offset="0.55" stopColor={couleur} stopOpacity={opacite * 0.35} />
+            <Stop offset="1" stopColor={couleur} stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Rect x="0" y="0" width={size} height={size} fill={`url(#${id})`} />

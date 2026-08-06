@@ -73,8 +73,14 @@ export default function App() {
     if (a.status === "fulfilled") {
       const list = a.value?.agents || a.value;
       if (Array.isArray(list)) {
+        // /api/stats nomme la clé « id ». On indexait sur « agent_id », qui
+        // n'existe pas dans cette réponse : byId[undefined] écrasé à chaque
+        // tour, et toutes les recherches revenaient vides. Silencieusement —
+        // aucune erreur, juste des zéros. Chaque agent affichait donc 0
+        // message, 0 lead, 0 token, aucun message reçu, et « l'agent le plus
+        // actif » se tirait au hasard entre des ex æquo à zéro.
         const byId = {};
-        (st.agents || []).forEach((x) => { byId[x.agent_id] = x; });
+        (st.agents || []).forEach((x) => { byId[x.agent_id || x.id] = x; });
         st.agents = list.map((ag) => ({
           agent_id: ag.id,
           name: ag.identity?.name || ag.name,
@@ -84,6 +90,9 @@ export default function App() {
           status: ag.status,
           messages: byId[ag.id]?.period_messages ?? byId[ag.id]?.messages ?? 0,
           ...byId[ag.id],
+          // Le spread rapporte « id » depuis /api/stats ; l'application, elle,
+          // s'aiguille partout sur agent_id. On le réaffirme en dernier.
+          agent_id: ag.id,
         }));
       }
     }
