@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, TextInput, Alert, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
-import { wahaStatus, wahaConnect, wahaDisconnect, wahaPairingCode, wahaQrSource } from "../api";
+import { wahaStatus, wahaConnect, wahaDisconnect, wahaPairingCode, getWahaQr } from "../api";
 
 export default function ConnectWhatsApp({ agent, onClose }) {
   const [status, setStatus] = useState(null);      // {connected, status, phone_number, session_name}
@@ -12,6 +12,8 @@ export default function ConnectWhatsApp({ agent, onClose }) {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [attente, setAttente] = useState("");   // code pas encore prêt
+  const [qr, setQr] = useState(null);           // image du QR, en data URL
+  const [qrErreur, setQrErreur] = useState(""); // pourquoi il n'y en a pas
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const poll = useRef(null);
@@ -25,6 +27,16 @@ export default function ConnectWhatsApp({ agent, onClose }) {
     } catch { return null; }
   }
 
+  // Le QR est récupéré en JSON : on veut pouvoir DIRE pourquoi il n'est pas là.
+  useEffect(() => {
+    if (!session || mode !== "qr" || status?.connected) return;
+    let vivant = true;
+    getWahaQr(session)
+      .then((d) => { if (vivant) { setQr(d.qr || null); setQrErreur(""); } })
+      .catch((e) => { if (vivant) { setQr(null); setQrErreur(e.message || "QR indisponible"); } });
+    return () => { vivant = false; };
+  }, [session, nonce, mode, status?.connected]);
+
   useEffect(() => {
     (async () => { await refresh(); setLoading(false); })();
     poll.current = setInterval(async () => {
@@ -36,6 +48,19 @@ export default function ConnectWhatsApp({ agent, onClose }) {
   }, [agent.agent_id]);
 
   const connected = status?.connected;
+
+  // Une ligne en base ne veut PAS dire qu'une session tourne.
+  //
+  // /api/waha/status renvoie le nom de session dès qu'une ligne existe dans la
+  // base, même quand camille-core, lui, n'a plus rien en mémoire — après une
+  // réinitialisation, ou après un redémarrage qui n'a pas repris le dossier.
+  // L'écran en concluait « session existante », affichait le panneau du QR, et
+  // n'appelait donc JAMAIS le démarrage. Le core n'avait rien à montrer, et on
+  // attendait devant un carré vide un QR que personne n'avait demandé.
+  //
+  // La vérité est dans l'état renvoyé par le core, pas dans l'existence du nom.
+  const MORTS = ["STOPPED", "FAILED", "ERROR"];
+  const aDemarrer = !session || MORTS.includes(String(status?.status || ""));
 
   async function startConnect() {
     setBusy(true);
@@ -105,7 +130,7 @@ export default function ConnectWhatsApp({ agent, onClose }) {
               ))}
             </View>
 
-            {!session ? (
+            {aDemarrer ? (
               <TouchableOpacity onPress={startConnect} disabled={busy}
                 style={{ height: 52, borderRadius: R.pill, backgroundColor: C.lime, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 }}>
                 {busy ? <ActivityIndicator color={C.ink} /> : <><Ionicons name="qr-code-outline" size={18} color={C.ink} /><Text style={{ color: C.ink, fontWeight: "800" }}>Démarrer la connexion</Text></>}
@@ -114,15 +139,39 @@ export default function ConnectWhatsApp({ agent, onClose }) {
               <View style={{ backgroundColor: C.white, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: S.md, alignItems: "center" }}>
                 <Text style={{ color: C.ink, fontWeight: "700", fontSize: 14, marginBottom: 4 }}>Scanne ce QR depuis WhatsApp</Text>
                 <Text style={{ color: C.sub, fontSize: 12, textAlign: "center", marginBottom: 14 }}>WhatsApp → Appareils connectés → Connecter un appareil</Text>
-                <Image key={nonce} source={wahaQrSource(session, String(nonce))} style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#F4F4F4" }} resizeMode="contain" />
+                {qr ? (
+                  <Image source={{ uri: qr }} style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#F4F4F4" }} resizeMode="contain" />
+                ) : (
+                  <View style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#F4F4F4", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                    {qrErreur ? (
+                      <>
+                        <Ionicons name="alert-circle-outline" size={26} color={C.sub} />
+                        <Text style={{ color: C.sub, fontSize: 12.5, textAlign: "center", marginTop: 8, lineHeight: 18 }}>{qrErreur}</Text>
+                      </>
+                    ) : (
+                      <ActivityIndicator color={C.ink} />
+                    )}
+                  </View>
+                )}
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 }}>
                   <ActivityIndicator size="small" color={C.sub} />
-                  <Text style={{ color: C.sub, fontSize: 12 }}>En attente du scan…</Text>
+                  <Text style={{ color: C.sub, fontSize: 12 }}>
+                    {qr ? "En attente du scan…" : "Nouvelle tentative toutes les 5 s…"}
+                  </Text>
                 </View>
-                <TouchableOpacity onPress={() => setNonce((n) => n + 1)} style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 5 }}>
-                  <Ionicons name="refresh" size={14} color={C.ink} />
-                  <Text style={{ color: C.ink, fontWeight: "600", fontSize: 12 }}>Rafraîchir le QR</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: "row", gap: 18, marginTop: 10 }}>
+                  <TouchableOpacity onPress={() => setNonce((n) => n + 1)} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <Ionicons name="refresh" size={14} color={C.ink} />
+                    <Text style={{ color: C.ink, fontWeight: "600", fontSize: 12 }}>Rafraîchir le QR</Text>
+                  </TouchableOpacity>
+                  {/* Relancer reste accessible même quand l'écran croit la
+                      session vivante : c'est la sortie quand le core, lui, ne
+                      l'a plus. */}
+                  <TouchableOpacity onPress={startConnect} disabled={busy} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <Ionicons name="play-outline" size={14} color={C.ink} />
+                    <Text style={{ color: C.ink, fontWeight: "600", fontSize: 12 }}>Relancer la session</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
               <View style={{ backgroundColor: C.white, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: S.md }}>

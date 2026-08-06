@@ -82,18 +82,48 @@ export async function wahaGetSession(sessionName: string): Promise<{
   };
 }
 
-// Récupère le QR code en base64 et le retourne sous forme de Buffer image
-export async function wahaGetQR(sessionName: string): Promise<Buffer | null> {
-  const res = await fetch(`${CORE_URL}/api/sessions/${sessionName}/qr`, {
-    headers: coreHeaders(),
-  });
-  if (!res.ok) return null;
-  const data = await res.json() as { qrCodeBase64?: string; status?: string };
-  if (!data.qrCodeBase64) return null;
+/**
+ * Récupère le QR code de la session.
+ *
+ * On rend AUSSI l'état et le message du core, pas seulement l'image. Sans eux,
+ * l'appelant ne peut pas distinguer « le QR n'est pas encore prêt » de « la
+ * session est en reconnexion » ni de « la session n'existe pas » — trois
+ * situations qui appellent trois réponses différentes, et qui se présentaient
+ * jusqu'ici comme une seule et même absence d'image.
+ */
+export async function wahaGetQR(sessionName: string): Promise<{
+  buffer: Buffer | null;
+  dataUrl: string | null;
+  coreStatus: string | null;
+  message: string | null;
+}> {
+  const vide = { buffer: null, dataUrl: null, coreStatus: null, message: null };
 
-  // data URL → Buffer PNG
+  let res: Response;
+  try {
+    res = await fetch(`${CORE_URL}/api/sessions/${sessionName}/qr`, { headers: coreHeaders() });
+  } catch (e) {
+    return { ...vide, message: `Service WhatsApp injoignable (${(e as Error).message})` };
+  }
+
+  const texte = await res.text();
+  let data: { qrCodeBase64?: string; status?: string; message?: string; error?: string } = {};
+  try { data = texte ? JSON.parse(texte) : {}; } catch { /* réponse non JSON */ }
+
+  if (!res.ok) {
+    return { ...vide, coreStatus: data.status ?? null, message: data.error ?? `Camille Core ${res.status}` };
+  }
+  if (!data.qrCodeBase64) {
+    return { ...vide, coreStatus: data.status ?? null, message: data.message ?? null };
+  }
+
   const base64 = data.qrCodeBase64.replace(/^data:image\/\w+;base64,/, "");
-  return Buffer.from(base64, "base64");
+  return {
+    buffer: Buffer.from(base64, "base64"),
+    dataUrl: `data:image/png;base64,${base64}`,
+    coreStatus: data.status ?? null,
+    message: null,
+  };
 }
 
 // Arrête une session ET efface les fichiers d'auth (permet de connecter un autre numéro)

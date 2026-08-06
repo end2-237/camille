@@ -118,6 +118,16 @@ export function wahaQrSource(sessionName, nonce = "") {
   };
 }
 
+/**
+ * Le QR en JSON plutôt qu'en image.
+ *
+ * Une balise <Image> qui échoue ne dit rien : réseau coupé, session inconnue,
+ * jeton refusé ou QR pas encore prêt donnent tous le même carré gris. En
+ * passant par req(), on récupère le message du serveur et on peut l'afficher.
+ */
+export const getWahaQr = (sessionName) =>
+  req(`/api/waha/qr?session=${encodeURIComponent(sessionName)}&format=json`);
+
 // ── Catalogue / produits ────────────────────────────────────────────────────
 export const getProducts = (agentId) => req(`/api/agents/${agentId}/products`);
 
