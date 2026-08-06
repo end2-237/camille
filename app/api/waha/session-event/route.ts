@@ -168,6 +168,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, notified: false, reason: "coupure volontaire" });
     }
 
+    // ── Arrêt commandé ────────────────────────────────────────────────────────
+    // Quand le vendeur coupe son agent depuis l'application, /api/waha/disconnect
+    // a déjà écrit STOPPED : `prev` vaut donc STOPPED et on se tait, il sait ce
+    // qu'il a fait. Si `prev` était WORKING, l'arrêt vient d'ailleurs — de la
+    // console d'exploitation, ou de quelqu'un d'autre. Là, il doit l'apprendre :
+    // son agent ne répond plus à ses clients et rien ne le lui disait.
+    if (status === "STOPPED" && prev !== "STOPPED") {
+      await notifyUser(user_id, "alerte", {
+        title: `${agent_name} a été arrêté`,
+        body: "Il ne répond plus à tes clients. Touche cette alerte pour le remettre en service.",
+        channel: "alertes",
+        data: { type: "whatsapp_disconnected", agentId: agent_id, session, reason },
+      });
+      return NextResponse.json({ ok: true, notified: true, status });
+    }
+
     // Seules les bascules comptent. Rester connecté n'est pas une nouvelle, et
     // rester déconnecté non plus — on l'a déjà dit une fois.
     if (wasDown === isDown) {
