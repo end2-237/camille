@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, Image, TextInput, Alert, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, Image, TextInput, Alert, ScrollView, Clipboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R, S } from "../theme";
 import { wahaStatus, wahaConnect, wahaDisconnect, wahaPairingCode, getWahaQr, wahaQrSource } from "../api";
@@ -15,6 +15,7 @@ export default function ConnectWhatsApp({ agent, onClose }) {
   const [qr, setQr] = useState(null);           // image du QR, en data URL
   const [qrErreur, setQrErreur] = useState(""); // pourquoi il n'y en a pas
   const [ancienneVoie, setAncienneVoie] = useState(false); // serveur pas encore redéployé
+  const [copie, setCopie] = useState(false);    // retour visuel après la copie
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const poll = useRef(null);
@@ -93,6 +94,26 @@ export default function ConnectWhatsApp({ agent, onClose }) {
       // rien et on croit que ça a échoué.
       else setAttente(r.message || "Numéro enregistré. Le code arrive dans quelques secondes.");
     } catch (e) { Alert.alert("Erreur", e.message); } finally { setBusy(false); }
+  }
+
+  /**
+   * Copier le code.
+   *
+   * Un code de huit caractères se recopie de travers une fois sur deux quand
+   * on jongle entre deux applications. Clipboard vient de react-native : il
+   * est déprécié, mais c'est le seul qui n'ajoute pas de module natif — donc
+   * le seul qui parte par mise à jour à distance. Il est appelé avec
+   * précaution : si une version future le retire, on le dit au lieu de planter.
+   */
+  function copier() {
+    if (!code) return;
+    try {
+      Clipboard.setString(code);
+      setCopie(true);
+      setTimeout(() => setCopie(false), 2000);
+    } catch {
+      Alert.alert("Copie impossible", "Sélectionne le code et copie-le à la main.");
+    }
   }
 
   async function disconnect() {
@@ -205,7 +226,25 @@ export default function ConnectWhatsApp({ agent, onClose }) {
                 {code ? (
                   <View style={{ marginTop: 16, alignItems: "center" }}>
                     <Text style={{ color: C.sub, fontSize: 12 }}>Ton code de couplage</Text>
-                    <Text style={{ color: C.ink, fontWeight: "900", fontSize: 30, letterSpacing: 6, marginTop: 6 }}>{code}</Text>
+
+                    {/* Le code entier est tapable : c'est la plus grande cible
+                        de l'écran, et c'est celle que le doigt vise. Il reste
+                        sélectionnable au cas où la copie échouerait. */}
+                    <TouchableOpacity onPress={copier} activeOpacity={0.7}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6,
+                        backgroundColor: "#F4F4F4", borderRadius: R.md, paddingHorizontal: 16, paddingVertical: 10 }}>
+                      <Text selectable style={{ color: C.ink, fontWeight: "900", fontSize: 30, letterSpacing: 6 }}>
+                        {code}
+                      </Text>
+                      <Ionicons name={copie ? "checkmark-circle" : "copy-outline"} size={20} color={copie ? C.green : C.sub} />
+                    </TouchableOpacity>
+
+                    <Text style={{ color: copie ? C.green : C.sub, fontSize: 12, marginTop: 8, fontWeight: copie ? "700" : "400" }}>
+                      {copie ? "Copié" : "Touche le code pour le copier"}
+                    </Text>
+                    <Text style={{ color: C.sub, fontSize: 11.5, marginTop: 6, textAlign: "center", lineHeight: 17 }}>
+                      Il expire vite : saisis-le tout de suite dans WhatsApp.
+                    </Text>
                   </View>
                 ) : null}
               </View>
