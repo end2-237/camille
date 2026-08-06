@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { notifyUser } from "@/lib/fcm";
+import { activerAgentSiBrouillon } from "@/lib/agent-activation";
 
 const CORE_KEY = () => process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
 
@@ -154,6 +155,12 @@ export async function POST(req: NextRequest) {
     const prev = String(previous ?? "").toUpperCase();
     const wasDown = DOWN.has(prev);
     const isDown = DOWN.has(status);
+
+    // Le couplage vient d'aboutir : c'est le seul instant où l'on sait que
+    // l'agent est vraiment opérationnel. Tant qu'il restait en brouillon,
+    // GET /api/agents/by-session le refusait et n8n s'arrêtait sur « Aucun
+    // agent actif pour cette session » — session en ligne, clients ignorés.
+    if (status === "CONNECTED") await activerAgentSiBrouillon(agent_id);
 
     await query(
       `UPDATE camille.whatsapp_sessions

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { wahaGetSession } from "@/lib/waha";
+import { activerAgentSiBrouillon } from "@/lib/agent-activation";
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,6 +33,11 @@ export async function GET(req: NextRequest) {
     const status    = coreSession.status;
     const connected = status === "WORKING";
     const phoneFromCore = coreSession.me?.id?.replace("@c.us", "") ?? phone_number;
+
+    // Le téléphone est couplé : l'agent a fini sa mise en route. S'il était
+    // resté en brouillon, n8n le refusait (« Aucun agent actif pour cette
+    // session ») et aucun message n'était traité.
+    if (connected) await activerAgentSiBrouillon(agentId);
 
     if (connected && phoneFromCore) {
       await query(

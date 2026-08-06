@@ -69,9 +69,58 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // ── Dire POURQUOI, pas seulement « non » ──────────────────────────────────
+    // « Aucun agent actif pour cette session » recouvrait deux pannes qui ne se
+    // réparent pas du tout pareil : une session que la base ne connaît pas, et
+    // un agent connu mais laissé en brouillon (l'état par défaut à la création)
+    // ou mis en pause. n8n recopiait le message tel quel et l'exploitant devait
+    // ouvrir la base pour trancher. On tranche ici, en une requête.
     if (result.rows.length === 0) {
+      const lien = await query(
+        `SELECT a.id, a.name, a.status
+           FROM camille.whatsapp_sessions ws
+           LEFT JOIN camille.agents a ON a.id = ws.agent_id
+          WHERE ws.session_name = $1`,
+        [sessionName]
+      );
+
+      if (lien.rows.length === 0) {
+        return NextResponse.json(
+          {
+            error: `La session « ${sessionName} » n'est liée à aucun agent.`,
+            cause: "session_non_liee",
+            remede: "Reconnecte WhatsApp depuis l'application (l'agent recréera le lien), ou appelle POST /api/waha/link avec agentId et sessionName.",
+          },
+          { status: 404 }
+        );
+      }
+
+      const { id, name, status } = lien.rows[0] as { id: string | null; name: string | null; status: string | null };
+
+      if (!id) {
+        return NextResponse.json(
+          {
+            error: `La session « ${sessionName} » pointe vers un agent qui n'existe plus.`,
+            cause: "agent_supprime",
+            remede: "Relie la session à un agent existant via POST /api/waha/link.",
+          },
+          { status: 404 }
+        );
+      }
+
       return NextResponse.json(
-        { error: "Aucun agent actif pour cette session" },
+        {
+          error: `L'agent « ${name ?? id} » est en statut « ${status} », pas « active ».`,
+          cause: "agent_inactif",
+          agent_id: id,
+          status,
+          remede:
+            status === "draft"
+              ? "L'agent est encore un brouillon : ouvre-le dans l'application et appuie sur « Activer l'agent ». Une reconnexion WhatsApp l'active désormais automatiquement."
+              : status === "paused"
+              ? "L'agent a été mis en pause : réactive-le depuis l'application."
+              : "L'agent a été archivé : il ne peut plus répondre.",
+        },
         { status: 404 }
       );
     }

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { wahaSetWebhook } from "@/lib/waha";
+import { activerAgentSiBrouillon } from "@/lib/agent-activation";
 
 export async function POST(req: NextRequest) {
   const user = await getUserFromRequest(req);
@@ -35,6 +36,11 @@ export async function POST(req: NextRequest) {
            updated_at = NOW()`,
     [sessionName, agentId, user.id]
   );
+
+  // Lier une session à la main, c'est déclarer l'agent en service. Le laisser
+  // en brouillon ferait échouer n8n sur « Aucun agent actif pour cette
+  // session » alors que tout le reste du branchement est correct.
+  await activerAgentSiBrouillon(agentId);
 
   // Auto-config du webhook n8n selon le NIVEAU de l'agent (ou son webhook propre)
   const wh = await query(
