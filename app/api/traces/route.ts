@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
         (agent_id, session_name, contact_phone, user_msg,
          search_q, search_off, search_kind,
          llm_intent, final_intent, corrected,
-         resolved_product, reply_mode, items, cart_size, tokens, latency_ms)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+         resolved_product, reply_mode, items, cart_size, tokens, latency_ms,
+         analyse, certitude, ambigu)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [
         agentId,
         b.session ?? null,
@@ -45,6 +46,11 @@ export async function POST(req: NextRequest) {
         Number(b.cartSize) || 0,
         Number(b.tokens) || 0,
         Number(b.latencyMs) || 0,
+        // Couche de réflexion. Sans ces trois-là, on relit la trace en sachant
+        // ce que l'agent a décidé mais jamais sur quoi il s'est fondé.
+        (b.analyse ?? "").slice(0, 300) || null,
+        b.certitude != null && isFinite(Number(b.certitude)) ? Number(b.certitude) : null,
+        b.ambigu === true || b.ambigu === "true",
       ]
     );
 
