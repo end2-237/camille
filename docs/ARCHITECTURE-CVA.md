@@ -2,7 +2,7 @@
 
 **L'architecture de l'agent-vendeur ancré de Camille.**
 
-Version du document : 1.2 — correspond au workflow `Camille_N2_Restaurant_v33`.
+Version du document : 1.3 — correspond au workflow `Camille_N2_Restaurant_v34`.
 Ce fichier est le point de référence. On le relit, on le conteste et on
 l'amende chaque jour ; la section « Failles connues » est faite pour être
 raturée.
@@ -54,6 +54,16 @@ chère, vous avez quoi d'autre ? » est une demande de catalogue.
    segment.
 3. Cette règle **tranche** : si la dernière clause demande visiblement autre
    chose, elle l'emporte, y compris contre le classement du modèle.
+4. **Le verbe appartient au modèle.** Le code résout le produit — c'est son
+   métier — mais il ne décide pas de ce qu'on en fait. Quand le modèle est sûr
+   (certitude ≥ 80, non ambigu, réponse reçue) et qu'il a nommé un verbe
+   (`cart_add`, `product_details`, `price_check`, `stock_check`…), ce verbe est
+   restauré après les cascades. Sans cette règle, `refExact → show_product`
+   aplatissait **7 intentions sur 12** : « je veux un redbull », « décris-moi
+   le poulet DG » et « ça coûte combien » devenaient tous « montre la fiche ».
+   Deux domaines gardent la priorité absolue parce qu'ils portent des
+   invariants que le modèle ne voit pas : le tunnel de commande et les
+   opérations de panier fermes.
 
 **Vérifiable par.** Cas 13 à 17 de la suite de référence.
 
@@ -399,3 +409,4 @@ lecture du sous-entendu que seul le modèle peut faire.
 | v31 | Promesse tenue, relais humain spontané, client reconnu, albums valides |
 | v32 | Huit fautes corrigées d'après 388 tours de production réels |
 | v33 | L'impuissance ne se répète plus : demander, puis montrer, puis passer la main |
+| v34 | Le verbe revient au modèle, le produit reste au code |
