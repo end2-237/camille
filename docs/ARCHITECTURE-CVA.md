@@ -2,7 +2,7 @@
 
 **L'architecture de l'agent-vendeur ancré de Camille.**
 
-Version du document : 1.0 — correspond au workflow `Camille_N2_Restaurant_v31`.
+Version du document : 1.1 — correspond au workflow `Camille_N2_Restaurant_v32`.
 Ce fichier est le point de référence. On le relit, on le conteste et on
 l'amende chaque jour ; la section « Failles connues » est faite pour être
 raturée.
@@ -325,6 +325,52 @@ Les quatre dernières sont la mesure de CVA lui-même :
 
 ---
 
+---
+
+## 7bis. Première mesure sur le réel — 9 août 2026
+
+388 tours réels, deux agents, 17 contacts, du 30 juillet au 9 août. Les chiffres
+remplacent enfin les impressions.
+
+| Mesure | Ensemble | Journée du 9 août |
+|---|---|---|
+| Modèle **muet** (`tokens = 0`) | 188 / 388 — **48 %** | 52 / 84 — **61 %** |
+| Code ayant **corrigé** le modèle | 259 — 66 % | 55 — 65 % |
+| `latency_ms` renseigné | 0 | 0 |
+| `cart_size` renseigné | 0 | 0 |
+
+**Ce que ça dit.** Six tours sur dix se jouent sans couche cognitive. Ce qui a
+été jugé « incohérent » ces derniers jours était, six fois sur dix, le filet
+déterministe — pas CVA.
+
+Quand le modèle parle (32 tours), le code le suit une fois sur deux et le
+corrige l'autre. Les corrections sont majoritairement justes : `order_intent →
+cart_add`, `price_check → recommend_cheaper`, `show_product → cart_pending_ok`.
+Une seule est douteuse : `delivery → order_eta` sur « tu livres souvent pendant
+combien de temps ? » — corrigée en v26.
+
+**Deux instruments morts.** `latency_ms` et `cart_size` valent zéro sur les 388
+lignes : jamais renseignés par le workflow. On ne mesure donc ni le temps de
+réponse ressenti, ni la taille des paniers — deux indicateurs commerciaux de
+premier plan.
+
+### Fautes réelles relevées puis corrigées
+
+| # | Message du client | Avant | v32 |
+|---|---|---|---|
+| 21 | « je veux le menu » | `cart_add` | `show_menu` |
+| 61 | « D'accord je valide » | `show_product` | `cart_validate` |
+| 90 | « Okey valide le panier » | `cart_view` | `cart_validate` |
+| 35 | « Je veux donc 4 burger » | `show_product` | `cart_add` |
+| 76 | « Okey je veux donc ça » | `show_product` | `cart_add` |
+| 78 | « Où est mon argent » | `smalltalk` | `refund` |
+| 45 | « on ne m'a pas livré » | `order_how` | `complaint` |
+| 46 | « le livreur n'est pas venu » | `order_how` | `complaint` |
+
+**Restent ouvertes :** « Depuis que j'attends » (→ `smalltalk`) et « pourquoi
+c'est si cher, une réduction ? » (→ `promotions`). Les deux demandent une
+lecture du sous-entendu que seul le modèle peut faire.
+
 ## 8. Historique des décisions structurantes
 
 | Version | Décision |
@@ -346,3 +392,4 @@ Les quatre dernières sont la mesure de CVA lui-même :
 | v29 | L'évident ne consomme plus d'appel ; sortie ramenée à 400 jetons |
 | v30 | Le bloc `## LA SITUATION` — donner au modèle ce que le code sait |
 | v31 | Promesse tenue, relais humain spontané, client reconnu, albums valides |
+| v32 | Huit fautes corrigées d'après 388 tours de production réels |
