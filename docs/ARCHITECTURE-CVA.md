@@ -2,7 +2,7 @@
 
 **L'architecture de l'agent-vendeur ancré de Camille.**
 
-Version du document : 1.4 — correspond au workflow `Camille_N2_Restaurant_v35`.
+Version du document : 1.5 — correspond au workflow `Camille_N2_Restaurant_v36`.
 Ce fichier est le point de référence. On le relit, on le conteste et on
 l'amende chaque jour ; la section « Failles connues » est faite pour être
 raturée.
@@ -121,6 +121,7 @@ côté est pire que d'avouer.
 |---|---|
 | L'agent a compris | il agit, et il le dit |
 | Il hésite | il reformule **avec les mots du client**, propose ce qui existe, demande |
+| Plusieurs produits collent | il **les nomme tous, avec leurs prix**, et demande lequel |
 | Il ne comprend pas | il **nomme la zone d'ombre** et demande |
 
 La **garde de clarification** interdit toute action irréversible sur une
@@ -138,6 +139,41 @@ Deux exceptions bornent cette garde :
 La reformulation suit quatre temps, dans cet ordre : *je répète ton mot* →
 *je dis franchement si je l'ai* → *je ramène vers ce qui existe, en disant
 pourquoi* → *je demande, sans rien engager*.
+
+**Un mot pour plusieurs produits ne se tranche pas.** C'est la faute la plus
+coûteuse trouvée en conversation réelle : « je veux 2 cle » a mis *Cle Bubble
+Tea* au panier alors que le catalogue contenait aussi *Cle maison*. Le client
+a répondu « pourquoi tu as choisie pour moi ? » — et ce reproche est juste.
+
+La cause n'était pas dans le raisonnement mais dans deux fonctions de
+résolution : `exact()` dans l'Ancrage et `findP()` dans Build Reply renvoyaient
+le **premier** produit dont le nom contient le mot, sans jamais regarder s'il
+y en avait un deuxième. Trois verrous ferment ça :
+
+1. `exact()` et `best()` collectent désormais **tous** les candidats de même
+   qualité. Deux candidats ou plus : aucune résolution, la liste voyage
+   jusqu'à Build Reply dans `candidats` avec le drapeau `ambigProduit` ;
+2. tant que ce drapeau est levé, le panier ne bouge pas et l'agent **ne
+   retombe pas sur le focus du tour précédent** — le client vient de nommer
+   quelque chose, le deviner serait exactement la faute reprochée ;
+3. la relance **nomme les candidats et leurs prix** au lieu de dire « dis-moi
+   le nom » — le client, lui, l'avait déjà dit.
+
+Quand un seul candidat est en stock, l'agent le dit franchement — « *Cle
+maison* est en rupture, ce qui me reste qui colle c'est *Cle Bubble Tea* à
+5 000 XAF, je t'en mets 2 ? » — et attend le oui. Il n'a pas choisi : il a
+constaté, expliqué, et demandé.
+
+**La quantité survit à la question.** « je veux 2 cle » → « tu veux lequel ? »
+→ « cle maison » : le 2 est conservé dans l'état (`chx.q`) et rendu au tour
+suivant — « tu m'en avais demandé 2, je te mets ça ? ». Sans ça, le client
+devait redire le nombre qu'il venait de donner.
+
+**Le choix se justifie.** `explain_choice` répond à « pourquoi tu as choisi
+pour moi ? », « qui t'a dit ? », « je t'ai pas demandé ça ». L'agent relit sa
+propre trace (`chx` : le mot du client, ce qu'il a retenu, ce qu'il aurait pu
+retenir) et rend une raison vérifiable, plus l'alternative en attente. S'il
+n'avait justement pas choisi, il le dit et relance.
 
 ---
 
@@ -261,7 +297,13 @@ par `session + téléphone`. Il porte :
 `focus` · `cart` · `pref` · `co` (étape du tunnel) · `cust` · `pend` ·
 `att` (question posée en attente de réponse) · `besoin` (dossier cumulatif :
 produit + quartier) · `pq` (question du client restée sans réponse) ·
-`rates` (échecs consécutifs, pour le relais humain).
+`rates` (échecs consécutifs, pour le relais humain) · `chx` (le dernier choix
+fait à la place du client : son mot, ce qu'on a retenu, ce qu'on aurait pu
+retenir, et la quantité en attente).
+
+`chx` est la seule mémoire qui existe pour *se justifier*. Sans elle,
+« pourquoi tu as choisi ? » n'a pas de réponse : l'agent sait ce qu'il a fait,
+pas sur quoi il s'est fondé.
 
 Le **dossier `besoin`** est ce qui fait la différence entre « répondre à des
 messages » et « suivre une conversation » : ce que le client veut et où il le
@@ -292,7 +334,7 @@ n8n. Ni WhatsApp, ni Groq, aucun jeton consommé.
 
 Il couvre :
 
-- **56 cas de référence**, dont 7 conversations multi-tours — un défaut de
+- **71 cas de référence**, dont 32 conversations multi-tours — un défaut de
   mémoire est structurellement invisible sur un message isolé ;
 - la simulation de la couche 1 (intention, certitude, facette, zone d'ombre,
   phrase du modèle) ;
@@ -326,7 +368,7 @@ Les quatre dernières sont la mesure de CVA lui-même :
 
 ---
 
-## 7. Failles connues, au 9 août 2026
+## 7. Failles connues, au 10 août 2026
 
 *Par ordre d'impact. Cette section est faite pour être raturée.*
 
@@ -351,6 +393,15 @@ Les quatre dernières sont la mesure de CVA lui-même :
    Restaurant.
 9. **Pas de mesure automatique de la qualité.** Les colonnes existent, personne
    ne les lit. Il manque un relevé hebdomadaire.
+10. **Le relais humain se déclenche sur une faute de frappe.** « je vux 2 cle »
+    a compté comme troisième échec d'affilée alors que « je veux 2 cle », au
+    message suivant, passait. Le compteur est juste dans son principe — trois
+    incompréhensions de suite, on passe la main — mais il compte des échecs que
+    le système aurait pu éviter. v36 en supprime deux causes (ambiguïté,
+    budget) ; le compteur lui-même n'a pas été touché.
+11. **`ambigProduit` ne couvre que la correspondance par le nom.** Deux produits
+    qui ne se distinguent que par une variante (taille, couleur) restent
+    résolus par le premier trouvé.
 
 ---
 
@@ -400,6 +451,33 @@ premier plan.
 c'est si cher, une réduction ? » (→ `promotions`). Les deux demandent une
 lecture du sous-entendu que seul le modèle peut faire.
 
+### Deuxième relevé — 10 août 2026
+
+Une conversation de cinq tours, modèle en panne sur les trois premiers, a
+donné quatre défauts distincts. Tous corrigés en v36.
+
+| Message du client | Avant | v36 |
+|---|---|---|
+| « t'as qui de 200f » | « j'ai pas bien saisi » | `budget` — ce qui tient dans 200, sinon le moins cher |
+| « tu as quoi de 200 ? » | « je ne suis pas sûr de bien suivre » | `budget` |
+| « je vux 2 cle » | relais humain (3ᵉ échec d'affilée) | l'agent nomme les deux « Cle » et demande |
+| « je veux 2 cle » | *Cle Bubble Tea* ajouté sans rien demander | l'agent nomme les deux et demande |
+| « pourquoi tu as choisie pour moi ? » | « j'ai pas bien saisi » | `explain_choice` — il se justifie et propose l'autre |
+
+**La somme d'argent est une demande, pas un chiffre.** « t'as quoi de 200f »
+porte tout ce qu'il faut : un plafond et une question de disponibilité. Le
+catalogue porte les prix. Il n'y a rien à réciter — il y a une requête à
+faire, et elle rend une réponse concrète : ce qui tient dans le budget, du
+plus cher au moins cher, ou franchement le moins cher de la carte quand rien
+ne tient. Le modèle peut nommer `budget` lui-même ; la lecture déterministe
+n'est que le filet pour les 61 % de tours où il ne répond pas.
+
+Le garde-fou est éprouvé dans les deux sens : quinze messages contenant un
+nombre qui **ne doit pas** devenir un budget (« 15 cheddars », « il est 11h »,
+« mon numéro c'est 690112233», « vous ouvrez à 8h30 ») et huit qui **doivent**
+l'être (« avec 3000 je peux avoir quoi », « j'ai 5k, tu proposes quoi »).
+24 sur 24.
+
 ## 8. Historique des décisions structurantes
 
 | Version | Décision |
@@ -425,3 +503,4 @@ lecture du sous-entendu que seul le modèle peut faire.
 | v33 | L'impuissance ne se répète plus : demander, puis montrer, puis passer la main |
 | v34 | Le verbe revient au modèle, le produit reste au code |
 | v35 | Le stock se vérifie sur tous les chemins ; un nom écrit ne se remplace pas |
+| v36 | Un mot qui désigne deux produits n'est plus tranché en silence ; une somme d'argent devient une requête ; le choix se justifie |
