@@ -2,7 +2,7 @@
 
 **L'architecture de l'agent-vendeur ancré de Camille.**
 
-Version du document : 1.3 — correspond au workflow `Camille_N2_Restaurant_v34`.
+Version du document : 1.4 — correspond au workflow `Camille_N2_Restaurant_v35`.
 Ce fichier est le point de référence. On le relit, on le conteste et on
 l'amende chaque jour ; la section « Failles connues » est faite pour être
 raturée.
@@ -93,6 +93,20 @@ Trois garde-fous complètent le dispositif :
   fait annoncer « la livraison est à 0 XAF » ;
 - une URL d'image doit être une URL absolue `http(s)` pour entrer dans un
   album ; une seule mauvaise valeur faisait rejeter l'album entier par WAHA.
+
+**Le stock est un invariant, pas une vérification.** Il se contrôle sur *tous*
+les chemins qui remplissent le panier — l'ajout direct, la confirmation par
+« oui », et la validation finale, où le panier déjà constitué est revalidé
+article par article. Un produit peut tomber en rupture pendant qu'il attend
+dans le panier ; jusqu'en v35, `cart_pending_ok` appelait `putInCart` sans
+aucun contrôle et une commande partait avec un article indisponible.
+
+**Un nom écrit par le client ne se remplace jamais.** « ajoute deux burger »
+dans une quincaillerie doit répondre « je n'ai pas de burger », pas parler du
+dernier produit consulté. Le focus sert à résoudre *ça*, *ce truc*, *celui-là*
+— jamais à substituer un nom explicite. Une distance d'édition distingue le mot
+inconnu (`burger`) de la faute de frappe (`chjeddar` → Cheddar), avec un seuil
+qui suit la longueur du mot.
 
 ---
 
@@ -410,3 +424,4 @@ lecture du sous-entendu que seul le modèle peut faire.
 | v32 | Huit fautes corrigées d'après 388 tours de production réels |
 | v33 | L'impuissance ne se répète plus : demander, puis montrer, puis passer la main |
 | v34 | Le verbe revient au modèle, le produit reste au code |
+| v35 | Le stock se vérifie sur tous les chemins ; un nom écrit ne se remplace pas |
