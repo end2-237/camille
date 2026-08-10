@@ -2,7 +2,7 @@
 
 **L'architecture de l'agent-vendeur ancré de Camille.**
 
-Version du document : 1.1 — correspond au workflow `Camille_N2_Restaurant_v32`.
+Version du document : 1.2 — correspond au workflow `Camille_N2_Restaurant_v33`.
 Ce fichier est le point de référence. On le relit, on le conteste et on
 l'amende chaque jour ; la section « Failles connues » est faite pour être
 raturée.
@@ -167,6 +167,11 @@ aujourd'hui » devient alors une phrase que le modèle écrit lui-même, différ
    identifié → sa fiche. Demande de vitrine → le catalogue. Infos boutique →
    composées depuis la base. Sinon → un aveu honnête, jamais une réponse à
    côté.
+   **Et jamais deux fois le même aveu** : un compteur d'échecs consécutifs
+   fait passer de *demander* (1er) à *montrer le catalogue* (2e) puis à
+   *passer la main à un humain* (3e). Répéter quatre fois « je n'ai pas bien
+   saisi » est pire que de répondre à côté — c'est avouer qu'on n'apprend
+   rien.
 4. **Le silence sur la panne** — aucun message technique ne peut atteindre le
    client. `llm_ok` est le seul juge ; un 429 ne devient jamais une phrase.
 
@@ -393,3 +398,4 @@ lecture du sous-entendu que seul le modèle peut faire.
 | v30 | Le bloc `## LA SITUATION` — donner au modèle ce que le code sait |
 | v31 | Promesse tenue, relais humain spontané, client reconnu, albums valides |
 | v32 | Huit fautes corrigées d'après 388 tours de production réels |
+| v33 | L'impuissance ne se répète plus : demander, puis montrer, puis passer la main |
