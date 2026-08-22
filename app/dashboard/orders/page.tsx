@@ -7,6 +7,10 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { authHeaders } from "@/lib/auth-client";
+import dynamic from "next/dynamic";
+
+// La carte ne se charge que si le vendeur ouvre un itinéraire.
+const ItineraryMap = dynamic(() => import("@/components/ItineraryMap"), { ssr: false });
 
 type Item = { name: string; variant?: string; qty?: number; price?: number; currency?: string; image?: string };
 type Order = {
@@ -220,6 +224,8 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
 
   const phone = String(o.contact_phone || "").replace(/@(c\.us|lid|s\.whatsapp\.net)$/, "");
   const hasGeo = o.lat != null && o.lng != null;
+  // L'itinéraire s'ouvre dans la page, sur la commande concernée.
+  const [itinerary, setItinerary] = useState(false);
   const lieu = o.place_label || o.address || (hasGeo ? `${Number(o.lat).toFixed(5)}, ${Number(o.lng).toFixed(5)}` : "");
 
   return (
@@ -333,15 +339,13 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
               📍 {lieu}
             </a>
             {hasGeo && (
-              <a href={`https://www.google.com/maps/dir/?api=1&destination=${o.lat},${o.lng}` +
-                   (o.shop_lat != null && o.shop_lng != null ? `&origin=${o.shop_lat},${o.shop_lng}` : "") +
-                   `&travelmode=driving`}
-                target="_blank" rel="noreferrer"
-                style={{ display: "block", textAlign: "center", marginTop: 8, padding: "9px 12px",
+              <button
+                onClick={() => setItinerary(true)}
+                style={{ display: "block", width: "100%", textAlign: "center", marginTop: 8, padding: "9px 12px",
                   borderRadius: 999, background: "#2563EB", color: "#fff", fontSize: 12.5,
-                  fontWeight: 700, textDecoration: "none" }}>
+                  fontWeight: 700, border: "none", cursor: "pointer" }}>
                 Lancer l&apos;itinéraire
-              </a>
+              </button>
             )}
           </div>
         )}
@@ -351,6 +355,15 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
           <Tracking order={o} />
         </div>
       </div>
+
+      {itinerary && (
+        <ItineraryMap
+          orderId={String(o.id)}
+          reference={o.ref}
+          address={lieu}
+          onClose={() => setItinerary(false)}
+        />
+      )}
     </div>
   );
 }

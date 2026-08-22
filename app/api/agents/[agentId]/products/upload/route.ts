@@ -45,7 +45,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // Liste fermée : `kind` finit dans un nom de fichier, il ne doit pas
     // pouvoir y introduire un séparateur de chemin.
     const kindRaw = String(formData.get("kind") ?? "product");
-    const kind = ["product", "logo", "menu", "banner"].includes(kindRaw) ? kindRaw : "product";
+    const kind = [
+      "product", "logo", "menu", "banner",
+      // Natures de la médiathèque : elles ne servent qu'à nommer le fichier.
+      "category", "gallery", "services", "flyers",
+    ].includes(kindRaw)
+      ? kindRaw
+      : "product";
     const filename = `${agentId.replace(/-/g, "")}_${kind}_${Date.now()}.${ext}`;
     const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
 

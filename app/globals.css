@@ -36,6 +36,10 @@
   font-display: swap;
 }
 
+/* Feuille de Leaflet : chargée globalement, pas depuis le composant. Un chunk
+   CSS qui arrive après la carte laisse les tuiles se répandre hors du cadre. */
+@import "leaflet/dist/leaflet.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
