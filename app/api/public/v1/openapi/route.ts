@@ -87,6 +87,33 @@ export async function GET(req: NextRequest) {
                           },
                         },
                       },
+                      merchant: {
+                        type: "object",
+                        description:
+                          "Coordonnées du marchand : nom, WhatsApp, adresse, position (lat/lng) " +
+                          "et barème de livraison (zones comprises).",
+                        properties: {
+                          name: { type: "string", nullable: true },
+                          whatsapp: { type: "string", nullable: true },
+                          location: { type: "string", nullable: true },
+                          lat: { type: "number", nullable: true },
+                          lng: { type: "number", nullable: true },
+                          delivery: {
+                            type: "object",
+                            properties: {
+                              enabled: { type: "boolean" },
+                              fee: { type: "number" },
+                              zones: {
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  properties: { name: { type: "string" }, fee: { type: "number" } },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
                       media: {
                         type: "array",
                         description: "Visuels du marchand : logo, banner, category, gallery, menu.",
@@ -152,8 +179,12 @@ export async function GET(req: NextRequest) {
                     },
                     delivery: {
                       type: "object",
+                      description:
+                        "Adresse en clair, et position GPS quand le client l'a partagée : " +
+                        "Camille en déduit le libellé du lieu et le lien de carte pour le livreur.",
                       properties: {
                         address: { type: "string" },
+                        details: { type: "string", description: "Bloc, étage, bureau…" },
                         lat: { type: "number" },
                         lng: { type: "number" },
                       },

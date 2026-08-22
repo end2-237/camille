@@ -78,19 +78,59 @@ export async function GET(req: NextRequest) {
     let merchant: Record<string, unknown> = {};
     let media: unknown[] = [];
     try {
+      // to_jsonb : latitude, delivery_zones et media arrivent par des migrations
+      // distinctes. Les lire ainsi évite qu'une base en retard fasse échouer
+      // toute la requête pour une colonne absente.
       const m = await query(
         `SELECT business_name, whatsapp_number, location, website_url, sector,
-                (to_jsonb(a)->'media') AS media
+                (to_jsonb(a)->'media')            AS media,
+                (to_jsonb(a)->>'latitude')        AS latitude,
+                (to_jsonb(a)->>'longitude')       AS longitude,
+                (to_jsonb(a)->>'delivery_enabled') AS delivery_enabled,
+                (to_jsonb(a)->>'delivery_fee')     AS delivery_fee,
+                (to_jsonb(a)->'delivery_zones')    AS delivery_zones
            FROM camille.agents a WHERE id = $1`,
         [auth.key.agent_id]
       );
       const a = m.rows[0] || {};
+
+      const num = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      // Les zones sont saisies librement par le marchand : on ne renvoie que
+      // celles qui ont un nom, sous une forme unique {name, fee}.
+      let zones: { name: string; fee: number }[] = [];
+      try {
+        const raw = Array.isArray(a.delivery_zones)
+          ? a.delivery_zones
+          : JSON.parse(String(a.delivery_zones || "[]"));
+        zones = (Array.isArray(raw) ? raw : [])
+          .map((z: Record<string, unknown>) => ({
+            name: String(z?.zone ?? z?.name ?? "").trim(),
+            fee: num(z?.fee ?? z?.price) ?? 0,
+          }))
+          .filter((z: { name: string }) => z.name);
+      } catch {
+        zones = [];
+      }
+
       merchant = {
         name: a.business_name || null,
         whatsapp: a.whatsapp_number || null,
         location: a.location || null,
         website: a.website_url || null,
         sector: a.sector || null,
+        // Coordonnées de la boutique : le site peut situer le marchand et
+        // mesurer la distance jusqu'au client, au lieu de les coder en dur.
+        lat: num(a.latitude),
+        lng: num(a.longitude),
+        delivery: {
+          enabled: a.delivery_enabled === null ? true : a.delivery_enabled !== "false",
+          fee: num(a.delivery_fee) ?? 0,
+          zones,
+        },
       };
       // Visuels destinés à être montrés. On ne renvoie que les natures
       // publiques : les médias de prospection interne n'ont rien à faire sur
