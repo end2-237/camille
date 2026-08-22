@@ -37,6 +37,8 @@ export type NewOrder = {
   deliveryFee?: number;
   /** "whatsapp" | "site" — d'où vient la commande. */
   source?: string;
+  /** Créneau de livraison demandé (ISO). Absent = dès que possible. */
+  scheduledAt?: string | Date | null;
 };
 
 export type CreatedOrder = {
@@ -50,6 +52,7 @@ export type CreatedOrder = {
   clientText: string;
   ownerText: string;
   ownerChatId: string | null;
+  scheduledAt: string | null;
 };
 
 function makeRef() {
@@ -271,22 +274,33 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
   const placeLabel = lat != null && lng != null ? await reverseGeocode(lat, lng) : "";
   const source = input.source === "site" ? "site" : "whatsapp";
 
+  // Créneau demandé. Une date illisible ou déjà passée ne vaut pas mieux que
+  // pas de créneau du tout : on préfère « dès que possible » à une promesse
+  // fausse imprimée sur le bon de commande.
+  let scheduledAt: Date | null = null;
+  if (input.scheduledAt) {
+    const d = new Date(input.scheduledAt as string);
+    if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now() - 60_000) scheduledAt = d;
+  }
+
   let orderId: string | null = null;
   try {
     const ins = await query(
       `INSERT INTO camille.orders
          (ref, agent_id, session_name, contact_phone, items, total, currency, note,
-          customer_name, address, lat, lng, place_label, delivery_fee, source)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          customer_name, address, lat, lng, place_label, delivery_fee, source, scheduled_at)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING id`,
       [ref, input.agentId, input.session ?? null, input.phone ?? null, JSON.stringify(items),
        total, currency, note || null, customerName || null, address || null, lat, lng,
-       placeLabel || null, deliveryFee, source]
+       placeLabel || null, deliveryFee, source, scheduledAt]
     );
     orderId = ins.rows[0]?.id ?? null;
   } catch (e) {
-    // `source` peut manquer si migration_api_keys.sql n'est pas passée :
-    // on réessaie sans, plutôt que de perdre la commande.
+    // `source` et `scheduled_at` peuvent manquer si migration_api_keys.sql ou
+    // migration_site_integration.sql ne sont pas passées : on réessaie sans,
+    // plutôt que de perdre la commande. Le créneau est alors répété dans les
+    // messages, il n'est jamais perdu pour le commerçant.
     if ((e as { code?: string }).code === "42703") {
       const ins = await query(
         `INSERT INTO camille.orders
@@ -329,11 +343,17 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
     ? `Sous-total : ${money(subtotal, currency)}\nLivraison : ${money(deliveryFee, currency)}\n`
     : "";
 
+  // Le créneau, écrit en toutes lettres : c'est la première question du client.
+  const creneau = scheduledAt
+    ? scheduledAt.toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
+    : "";
+
   const clientText =
     `✅ Commande enregistrée — n° ${ref}\n\n${lignes}\n\n` +
     fees +
     `Total : ${money(total, currency)}\n` +
     `Statut : En traitement 🔄\n` +
+    (creneau ? `Livraison prévue : ${creneau}\n` : "") +
     (note ? `Mode : ${note}\n` : "") +
     (placeLabel || address ? `Livraison : ${placeLabel || address}\n` : "") +
     // Promettre un contact « tout de suite » à 2h du matin, c'est promettre ce
@@ -356,6 +376,7 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
     `\n\n${lignes}\n\n` +
     fees +
     `Total : ${money(total, currency)}\n` +
+    (creneau ? `⏰ À livrer : ${creneau}\n` : "") +
     (note ? `Service : ${note}\n` : "") +
     (customerName ? `Client : ${customerName}\n` : "") +
     `Tél : ${String(input.phone || "").replace(/@c\.us$/, "")}\n` +
@@ -418,5 +439,26 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
     }
   }
 
-  return { ok: true, id: orderId, ref, subtotal, deliveryFee, total, currency, clientText, ownerText, ownerChatId };
+  // ── Fiche client ─────────────────────────────────────────────────────────
+  // Le nom et l'adresse donnés ici ont coûté un effort au client : les jeter
+  // l'oblige à les redonner à la commande suivante. Best-effort : sur une base
+  // non migrée, la commande reste enregistrée, c'est ce qui compte.
+  if (input.phone) {
+    query(
+      `INSERT INTO camille.contacts (agent_id, phone, display_name, orders_count, last_order_at)
+            VALUES ($1, $2, NULLIF($3, ''), 1, NOW())
+       ON CONFLICT (agent_id, phone) DO UPDATE
+            SET display_name  = COALESCE(camille.contacts.display_name, EXCLUDED.display_name),
+                orders_count  = camille.contacts.orders_count + 1,
+                last_order_at = NOW(),
+                updated_at    = NOW()`,
+      [input.agentId, input.phone, customerName]
+    ).catch(() => {});
+  }
+
+  return {
+    ok: true, id: orderId, ref, subtotal, deliveryFee, total, currency,
+    clientText, ownerText, ownerChatId,
+    scheduledAt: scheduledAt ? scheduledAt.toISOString() : null,
+  };
 }

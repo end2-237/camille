@@ -9,8 +9,11 @@
 //   curl -X POST https://camille.vps.buyticle.com/api/public/v1/orders \
 //     -H "X-Camille-Key: cam_sk_xxxxx" -H "Content-Type: application/json" \
 //     -d '{"items":[{"name":"Burger","qty":2,"price":1000}],
-//          "customer":{"name":"Eman","phone":"237699887766"},
-//          "delivery":{"address":"Bonaberi"}}'
+//          "customer":{"name":"Eman","phone":"237699887766","company":"Enko"},
+//          "delivery":{"address":"Bonaberi"},
+//          "scheduled_at":"2026-09-07T11:20:00Z"}'
+//
+// scheduled_at : créneau demandé. Omis = dès que possible.
 //
 // Clé SECRÈTE obligatoire : appel serveur à serveur uniquement.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,9 +128,42 @@ export async function POST(req: NextRequest) {
     note: String(b.note || ""),
     deliveryFee,
     source: "site",
+    scheduledAt: b.scheduled_at ?? delivery.scheduled_at ?? null,
   });
 
   if (!created.ok) return json({ error: created.error }, 500, req);
+
+  // Le site connaît souvent l'e-mail, l'entreprise et l'adresse complète —
+  // choses que la conversation WhatsApp ne donne jamais. On les garde sur la
+  // fiche client pour que la commande suivante parte d'un formulaire déjà
+  // rempli. Best-effort : la commande est déjà enregistrée.
+  if (customer.email || customer.company || delivery.address) {
+    query(
+      `INSERT INTO camille.contacts (agent_id, phone, display_name, email, company, addresses)
+            VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), $6::jsonb)
+       ON CONFLICT (agent_id, phone) DO UPDATE
+            SET display_name = COALESCE(camille.contacts.display_name, EXCLUDED.display_name),
+                email        = COALESCE(EXCLUDED.email,   camille.contacts.email),
+                company      = COALESCE(EXCLUDED.company, camille.contacts.company),
+                addresses    = CASE
+                                 WHEN jsonb_array_length(EXCLUDED.addresses) = 0 THEN camille.contacts.addresses
+                                 WHEN camille.contacts.addresses @> EXCLUDED.addresses THEN camille.contacts.addresses
+                                 ELSE camille.contacts.addresses || EXCLUDED.addresses
+                               END,
+                updated_at   = NOW()`,
+      [
+        auth.key.agent_id, phone,
+        String(customer.name || ""), String(customer.email || ""), String(customer.company || ""),
+        JSON.stringify(delivery.address
+          ? [{ label: String(delivery.label || "Livraison").slice(0, 40),
+               address: String(delivery.address).slice(0, 200),
+               details: String(delivery.details || "").slice(0, 120),
+               lat: Number.isFinite(Number(delivery.lat)) ? Number(delivery.lat) : null,
+               lng: Number.isFinite(Number(delivery.lng)) ? Number(delivery.lng) : null }]
+          : []),
+      ]
+    ).catch(() => {});
+  }
 
   // Accusé de réception au client sur WhatsApp, exactement comme pour une
   // commande née dans la conversation. Best-effort : la commande existe déjà.
@@ -161,6 +197,7 @@ export async function POST(req: NextRequest) {
       total: created.total,
       currency: created.currency,
       status: "nouvelle",
+      scheduled_at: created.scheduledAt,
     },
     whatsapp_notified: notified,
   }, 201, req);

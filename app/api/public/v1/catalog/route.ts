@@ -9,6 +9,12 @@
 //
 // Paramètres : q (recherche), category, limit (1-100), offset.
 // Clé publique suffisante — utilisable directement depuis le navigateur.
+//
+// La réponse porte aussi de quoi HABILLER le site sans y coder d'images :
+//   categories[] : chaque rayon avec son nombre d'articles et une vignette
+//                  reprise du premier produit qui en a une ;
+//   media[]      : les visuels déclarés par le marchand (logo, bannières,
+//                  visuels de rayon) — ils priment sur la vignette déduite.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest } from "next/server";
 import { query } from "@/lib/db";
@@ -70,10 +76,12 @@ export async function GET(req: NextRequest) {
     // dur un numéro WhatsApp, qui devient faux dès que le marchand en change.
     // C'est l'agent qui fait autorité, pas le site.
     let merchant: Record<string, unknown> = {};
+    let media: unknown[] = [];
     try {
       const m = await query(
-        `SELECT business_name, whatsapp_number, location, website_url, sector
-           FROM camille.agents WHERE id = $1`,
+        `SELECT business_name, whatsapp_number, location, website_url, sector,
+                (to_jsonb(a)->'media') AS media
+           FROM camille.agents a WHERE id = $1`,
         [auth.key.agent_id]
       );
       const a = m.rows[0] || {};
@@ -84,13 +92,58 @@ export async function GET(req: NextRequest) {
         website: a.website_url || null,
         sector: a.sector || null,
       };
+      // Visuels destinés à être montrés. On ne renvoie que les natures
+      // publiques : les médias de prospection interne n'ont rien à faire sur
+      // la vitrine du marchand.
+      const SHOWABLE = new Set(["logo", "banner", "category", "gallery", "menu"]);
+      const raw = Array.isArray(a.media) ? a.media : [];
+      media = raw
+        .filter((x: Record<string, unknown>) => x && SHOWABLE.has(String(x.kind)) && x.url)
+        .map((x: Record<string, unknown>) => ({
+          kind: String(x.kind),
+          url: String(x.url),
+          caption: x.caption ? String(x.caption) : null,
+        }));
     } catch {
       // Le catalogue reste utile même si ce complément échoue.
+    }
+
+    // Les rayons, avec une vignette déduite du catalogue : le site n'a alors
+    // aucune image à héberger, et un rayon renommé ne laisse pas une vignette
+    // orpheline derrière lui. Un visuel déclaré par le marchand (media
+    // kind=category, caption = nom du rayon) prend le dessus.
+    let categories: unknown[] = [];
+    try {
+      const c = await query(
+        `SELECT category,
+                COUNT(*)::int AS count,
+                (ARRAY_AGG(image_url ORDER BY sort_order ASC, created_at DESC)
+                   FILTER (WHERE image_url IS NOT NULL AND image_url <> ''))[1] AS image
+           FROM camille.products
+          WHERE agent_id = $1 AND category IS NOT NULL AND category <> ''
+          GROUP BY category
+          ORDER BY MIN(sort_order), category`,
+        [auth.key.agent_id]
+      );
+      const declared = new Map(
+        (media as { kind: string; url: string; caption: string | null }[])
+          .filter((m) => m.kind === "category" && m.caption)
+          .map((m) => [String(m.caption).toLowerCase(), m.url])
+      );
+      categories = c.rows.map((row: Record<string, unknown>) => ({
+        name: row.category,
+        count: Number(row.count) || 0,
+        image: declared.get(String(row.category).toLowerCase()) || row.image || null,
+      }));
+    } catch {
+      // Un catalogue sans rayons reste un catalogue.
     }
 
     return json({
       products,
       merchant,
+      media,
+      categories,
       total: countRes.rows[0]?.n ?? r.rows.length,
       limit,
       offset,

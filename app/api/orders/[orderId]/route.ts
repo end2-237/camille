@@ -1,14 +1,18 @@
 // PATCH /api/orders/[orderId] — fait avancer une commande dans son cycle de vie.
-// nouvelle (à traiter) → en_traitement → livree ; annulee possible à tout moment.
-// "traitee" est conservé : les commandes créées avant l'ajout du cycle l'utilisent.
+// nouvelle → en_traitement → en_livraison → livree ; annulee possible à tout
+// moment. "traitee" est conservé : les commandes créées avant l'ajout du cycle
+// l'utilisent. Chaque changement prévient le site du marchand s'il a déclaré
+// un webhook.
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { sendOrderDocument, sendThankYou } from "@/lib/facturation";
 import { restoreStock } from "@/lib/orders";
+import { ORDER_STATUSES, statusLabel, statusStep } from "@/lib/orderStatus";
+import { notify } from "@/lib/webhooks";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
-const ALLOWED = ["nouvelle", "en_traitement", "livree", "traitee", "annulee"];
+const ALLOWED: readonly string[] = ORDER_STATUSES;
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const user = await getUserFromRequest(req);
@@ -27,8 +31,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     UPDATE camille.orders o
        SET status        = $1,
            note          = COALESCE($2, o.note),
-           processing_at = CASE WHEN $1 IN ('en_traitement','livree','traitee')
+           processing_at = CASE WHEN $1 IN ('en_traitement','en_livraison','livree','traitee')
                                 THEN COALESCE(o.processing_at, NOW()) ELSE o.processing_at END,
+           dispatched_at = CASE WHEN $1 IN ('en_livraison','livree')
+                                THEN COALESCE(o.dispatched_at, NOW()) ELSE o.dispatched_at END,
            delivered_at  = CASE WHEN $1 = 'livree'
                                 THEN COALESCE(o.delivered_at, NOW()) ELSE o.delivered_at END,
            updated_at    = NOW()
@@ -36,8 +42,9 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
      WHERE o.agent_id = a.id AND a.user_id = $3 AND o.id = $4
      RETURNING o.*`;
 
-  // Repli si les colonnes de suivi n'ont pas encore été migrées : le changement
-  // de statut doit marcher quand même, on perd juste l'horodatage des étapes.
+  // Repli si les colonnes de suivi n'ont pas encore été migrées (dispatched_at
+  // vient de migration_site_integration.sql) : le changement de statut doit
+  // marcher quand même, on perd juste l'horodatage des étapes.
   const withoutTracking = `
     UPDATE camille.orders o
        SET status = $1, note = COALESCE($2, o.note), updated_at = NOW()
@@ -93,6 +100,26 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
   const order = r.rows[0];
 
+  // Le site du marchand apprend le changement au moment où il arrive, plutôt
+  // que de sonder Camille en boucle. Best-effort et non bloquant : un site
+  // injoignable ne doit pas retenir le commerçant.
+  if (before.status !== status) {
+    notify(String(order.agent_id), "order.status_changed", {
+      ref: order.ref,
+      status,
+      status_label: statusLabel(status),
+      step: statusStep(status),
+      previous_status: before.status ?? null,
+      total: Number(order.total) || 0,
+      currency: order.currency || "XAF",
+      customer_phone: order.contact_phone ?? null,
+      scheduled_at: order.scheduled_at ?? null,
+      processing_at: order.processing_at ?? null,
+      dispatched_at: order.dispatched_at ?? null,
+      delivered_at: order.delivered_at ?? null,
+    }).catch(() => {});
+  }
+
   // Annulation : la marchandise retourne en rayon.
   if (status === "annulee" && before.status && before.status !== "annulee") {
     const its = Array.isArray(before.items)
@@ -105,7 +132,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   // en PDF au client. On ATTEND le resultat pour pouvoir le remonter dans l'app,
   // mais un echec ne remet jamais en cause le changement de statut.
   let doc: Awaited<ReturnType<typeof sendOrderDocument>> | undefined;
-  if (status === "en_traitement" && !order.doc_url) {
+  if ((status === "en_traitement" || status === "en_livraison") && !order.doc_url) {
     doc = await sendOrderDocument(orderId);
   }
 
