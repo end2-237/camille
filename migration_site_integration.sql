@@ -10,6 +10,11 @@
 -- n'est réécrite. Une base non migrée continue de fonctionner — le code
 -- retombe sur les chemins sans ces colonnes (erreur 42703 rattrapée).
 --
+-- Elle porte aussi, par sécurité, les deux colonnes de présentation dont
+-- dépendent les profils marchands (media, doc_settings) : elles viennent de
+-- migrations plus anciennes qui n'ont pas forcément été appliquées partout, et
+-- les redemander ici ne coûte rien.
+--
 -- Idempotent. À appliquer sur le Postgres de camille, APRÈS migration_orders.sql
 -- et migration_contacts.sql.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -46,6 +51,21 @@ COMMENT ON COLUMN camille.agents.webhook_url IS
   'URL HTTPS avertie des changements de statut de commande. NULL = désactivé.';
 COMMENT ON COLUMN camille.agents.webhook_secret IS
   'Secret partagé : signe le corps en HMAC-SHA256 (en-tête X-Camille-Signature).';
+
+-- ── 2 bis. Présentation du marchand ─────────────────────────────────────────
+-- media : visuels montrables — [{kind, url, caption}] avec kind parmi
+--   logo · banner · category · gallery · menu · services · flyers.
+-- Le catalogue public les renvoie ; un visuel kind=category dont le caption
+-- porte le nom d'un rayon remplace la vignette déduite des produits.
+ALTER TABLE camille.agents ADD COLUMN IF NOT EXISTS media jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+-- doc_settings : identité imprimée sur les bons de commande (name, tagline,
+-- address, phone, email, rccm, niu, logo_url, color). Vide = repli sur
+-- business_name / location / whatsapp_number.
+ALTER TABLE camille.agents ADD COLUMN IF NOT EXISTS doc_settings jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+COMMENT ON COLUMN camille.agents.media IS
+  'Visuels de l''agent : [{kind, url, caption}]. kind ∈ logo, banner, category, gallery, menu, services, flyers.';
 
 -- ── 3. Fiche client ─────────────────────────────────────────────────────────
 -- camille.contacts ne portait que l'état de la conversation WhatsApp (langue,
