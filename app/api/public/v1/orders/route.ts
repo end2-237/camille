@@ -14,6 +14,9 @@
 //          "scheduled_at":"2026-09-07T11:20:00Z"}'
 //
 // scheduled_at : créneau demandé. Omis = dès que possible.
+// payment      : moyen de paiement annoncé, montré au commerçant (aucun encaissement).
+// mode         : "livraison" (défaut) ou "retrait".
+// promo        : code saisi par le client, à vérifier par le commerçant.
 //
 // Clé SECRÈTE obligatoire : appel serveur à serveur uniquement.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,6 +132,12 @@ export async function POST(req: NextRequest) {
     deliveryFee,
     source: "site",
     scheduledAt: b.scheduled_at ?? delivery.scheduled_at ?? null,
+    // Le contexte que seul le site connaît : comment le client compte payer,
+    // s'il se fait livrer ou s'il vient chercher, le code qu'il a saisi.
+    // Camille n'encaisse toujours rien — elle le montre au commerçant.
+    paymentMethod: b.payment ?? b.payment_method ?? null,
+    fulfillment: b.mode ?? b.fulfillment ?? (delivery.address ? "livraison" : null),
+    promoCode: b.promo ?? b.promo_code ?? null,
   });
 
   if (!created.ok) return json({ error: created.error }, 500, req);

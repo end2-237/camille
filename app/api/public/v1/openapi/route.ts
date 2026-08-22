@@ -195,6 +195,18 @@ export async function GET(req: NextRequest) {
                       description: "Créneau demandé. Omis = dès que possible. Une date passée est ignorée.",
                     },
                     note: { type: "string" },
+                    payment: {
+                      type: "string",
+                      description:
+                        "Moyen de paiement ANNONCÉ par le client, montré au commerçant. " +
+                        "Camille n'encaisse rien.",
+                      example: "Orange Money",
+                    },
+                    mode: {
+                      type: "string", enum: ["livraison", "retrait"],
+                      description: "Livraison (défaut) ou retrait sur place.",
+                    },
+                    promo: { type: "string", description: "Code promo saisi, à vérifier par le commerçant" },
                   },
                 },
                 example: {
@@ -202,6 +214,8 @@ export async function GET(req: NextRequest) {
                   customer: { name: "Eman Soga", phone: "237699887766" },
                   delivery: { address: "Bonaberi, face marché", lat: 4.0511, lng: 9.7679 },
                   scheduled_at: "2026-09-07T11:20:00Z",
+                  payment: "Orange Money",
+                  mode: "livraison",
                   note: "Sans oignon",
                 },
               },
@@ -239,6 +253,61 @@ export async function GET(req: NextRequest) {
             "401": { description: "Clé absente, invalide ou révoquée" },
             "403": { description: "Clé publique utilisée, ou domaine non autorisé" },
             "503": { description: "Intégration non configurée (migration absente)" },
+          },
+        },
+      },
+      "/api/public/v1/events": {
+        post: {
+          summary: "Mesurer le trafic du site",
+          description:
+            "Clé PUBLIQUE : l'appel part du navigateur du visiteur. Sert à voir dans " +
+            "Camille ce qui est regardé sans être acheté. Rien de nominatif n'est " +
+            "enregistré : ni IP, ni cookie tiers, ni adresse — le visiteur n'est qu'un " +
+            "identifiant aléatoire posé par le site. Pour ne rien coder, colle la balise " +
+            "<script src=\"/api/public/v1/track\" data-key=\"cam_pk_…\" defer></script>.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    events: {
+                      type: "array", maxItems: 20,
+                      items: {
+                        type: "object",
+                        properties: {
+                          kind: {
+                            type: "string",
+                            enum: ["page_view", "product_view", "add_to_cart", "checkout_start", "order", "search"],
+                            default: "page_view",
+                          },
+                          path: { type: "string", description: "Chemin visité, sans le domaine" },
+                          title: { type: "string" },
+                          referrer: { type: "string", description: "Seul le domaine est conservé" },
+                          visitor: { type: "string", description: "Identifiant anonyme, stable ~30 jours" },
+                          session: { type: "string", description: "Visite en cours" },
+                          device: { type: "string", enum: ["mobile", "tablet", "desktop"] },
+                          meta: { type: "object", description: "{ product_id, name, value… }" },
+                        },
+                      },
+                    },
+                  },
+                },
+                example: {
+                  events: [
+                    { kind: "page_view", path: "/menus/petits-dejeuners", referrer: "https://www.google.com/", visitor: "a1b2c3", session: "s9f8" },
+                    { kind: "product_view", path: "/menus/petits-dejeuners/pd-1", meta: { name: "Omelette complète" }, visitor: "a1b2c3", session: "s9f8" },
+                  ],
+                },
+              },
+            },
+          },
+          responses: {
+            "202": { description: "Événements enregistrés (ou ignorés : robot)" },
+            "400": { description: "Corps invalide" },
+            "401": { description: "Clé absente ou invalide" },
+            "503": { description: "Mesure non installée — migration_site_traffic.sql" },
           },
         },
       },

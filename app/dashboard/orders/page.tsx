@@ -9,6 +9,8 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { authHeaders } from "@/lib/auth-client";
 import dynamic from "next/dynamic";
 
+import OrderDetail, { MapPreview } from "@/components/OrderDetail";
+
 // La carte ne se charge que si le vendeur ouvre un itinéraire.
 const ItineraryMap = dynamic(() => import("@/components/ItineraryMap"), { ssr: false });
 
@@ -19,7 +21,10 @@ type Order = {
   customer_name?: string | null; contact_phone?: string | null;
   address?: string | null; place_label?: string | null;
   lat?: number | null; lng?: number | null;
-  processing_at?: string | null; delivered_at?: string | null;
+  processing_at?: string | null; dispatched_at?: string | null; delivered_at?: string | null;
+  scheduled_at?: string | null; delivery_fee?: number | null; source?: string | null;
+  payment_method?: string | null; fulfillment?: string | null; promo_code?: string | null;
+  doc_number?: string | null; doc_url?: string | null;
   shop_lat?: number | null; shop_lng?: number | null;
   created_at: string;
 };
@@ -43,21 +48,6 @@ const TABS: { key: string; label: string; match: (s?: string) => boolean }[] = [
   { key: "annulee",  label: "Annulées",  match: (s) => s === "annulee" },
 ];
 
-// Aperçu carto sans clé d'API : on calcule la tuile qui contient le point et on
-// place le marqueur à sa position exacte dedans.
-// Tuiles CARTO : tile.openstreetmap.org renvoie 403 aux clients applicatifs.
-const TILE = 256;
-const ZOOM = 16;
-const TILE_HOST = "https://a.basemaps.cartocdn.com/rastertiles/voyager";
-
-function tileOf(lat: number, lng: number) {
-  const n = 2 ** ZOOM;
-  const x = ((lng + 180) / 360) * n;
-  const la = (lat * Math.PI) / 180;
-  const y = ((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2) * n;
-  return { tx: Math.floor(x), ty: Math.floor(y), fx: x - Math.floor(x), fy: y - Math.floor(y) };
-}
-
 // WhatsApp adresse parfois les contacts par LID : un identifiant interne, pas
 // un numéro. Les LID observés font 15 chiffres ou plus ; aucun numéro mobile
 // réel n'atteint cette longueur. Un lien wa.me construit dessus est mort.
@@ -75,6 +65,8 @@ export default function OrdersPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [diag, setDiag] = useState<{ ready: boolean; checks: { ok: boolean; label: string; detail?: string; fix?: string }[] } | null>(null);
+  // La commande ouverte en fiche détaillée.
+  const [detail, setDetail] = useState<Order | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true); setErr("");
@@ -210,14 +202,24 @@ export default function OrdersPage() {
         </div>
       ) : (
         <div style={{ display: "grid", gap: 12 }}>
-          {list.map((o) => <OrderCard key={o.id} order={o} onChange={change} />)}
+          {list.map((o) => <OrderCard key={o.id} order={o} onChange={change} onOpen={setDetail} />)}
         </div>
+      )}
+
+      {detail && (
+        <OrderDetail
+          order={detail}
+          onClose={() => setDetail(null)}
+          onChange={(o, status) => change(o as Order, status)}
+        />
       )}
     </div>
   );
 }
 
-function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, s: string) => void }) {
+function OrderCard({ order: o, onChange, onOpen }: {
+  order: Order; onChange: (o: Order, s: string) => void; onOpen: (o: Order) => void;
+}) {
   const items: Item[] = Array.isArray(o.items)
     ? o.items
     : (() => { try { return JSON.parse(String(o.items || "[]")); } catch { return []; } })();
@@ -280,11 +282,28 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
 
           <div style={{ fontSize: 15, fontWeight: 800, color: "var(--cl-ink)" }}>{money(o.total, o.currency)}</div>
           <div style={{ fontSize: 12, color: "var(--cl-sub)", marginTop: 3 }}>
-            {o.customer_name ? `${o.customer_name} · ` : ""}{phone} ·{" "}
+            {o.customer_name ? `${o.customer_name} · ` : ""}{phone} · commandée le{" "}
             {new Date(o.created_at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
           </div>
+          {/* Le créneau demandé : c'est lui qui dicte l'ordre de préparation. */}
+          {o.scheduled_at && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#8A5A00", marginTop: 3 }}>
+              ⏰ À {o.fulfillment === "retrait" ? "retirer" : "livrer"}{" "}
+              {new Date(o.scheduled_at).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </div>
+          )}
+          {o.payment_method && (
+            <div style={{ fontSize: 12, color: "var(--cl-sub)", marginTop: 3 }}>
+              💳 {o.payment_method}
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+            <button onClick={() => onOpen(o)}
+              style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-ink)" }}>
+              Voir le détail
+            </button>
             {phone && isRealPhone(phone) && (
               <a href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer"
                 style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700,
@@ -326,7 +345,7 @@ function OrderCard({ order: o, onChange }: { order: Order; onChange: (o: Order, 
         {/* Livraison */}
         {lieu && (
           <div style={{ flex: "0 1 260px", minWidth: 220 }}>
-            {hasGeo && <MapPreview lat={Number(o.lat)} lng={Number(o.lng)} />}
+            {hasGeo && <MapPreview lat={Number(o.lat)} lng={Number(o.lng)} radius="10px 10px 0 0" />}
             <a
               href={hasGeo
                 ? `https://www.google.com/maps?q=${o.lat},${o.lng}`
@@ -399,25 +418,6 @@ function Tracking({ order: o }: { order: Order }) {
         );
       })}
       {cancelled && <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: "#c0392b" }}>Commande annulée</div>}
-    </div>
-  );
-}
-
-function MapPreview({ lat, lng }: { lat: number; lng: number }) {
-  const height = 120;
-  const { tx, ty, fx, fy } = tileOf(lat, lng);
-  const uris = [-1, 0, 1].map((d) => `${TILE_HOST}/${ZOOM}/${tx + d}/${ty}.png`);
-  return (
-    <div style={{ position: "relative", height, overflow: "hidden", background: "#E8E8E8",
-      border: "1px solid var(--cl-line)", borderBottom: "none", borderRadius: "10px 10px 0 0" }}>
-      <div style={{ display: "flex", position: "absolute", top: -(fy * TILE - height / 2), left: 0 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {uris.map((u) => <img key={u} src={u} alt="" width={TILE} height={TILE} />)}
-      </div>
-      <div style={{ position: "absolute", left: TILE + fx * TILE - 7, top: height / 2 - 20, fontSize: 22 }}>📍</div>
-      <div style={{ position: "absolute", right: 4, bottom: 1, fontSize: 8, color: "#5A5A5A" }}>
-        © OpenStreetMap · CARTO
-      </div>
     </div>
   );
 }

@@ -595,7 +595,11 @@ await fetch("${base}/api/public/v1/orders", {
   }),
 });
 // -> le client recoit son accuse sur WhatsApp,
-//    la commande apparait dans l'app, le vendeur est notifie.`}
+//    la commande apparait dans l'app, le vendeur est notifie.
+
+// 3. Mesurer le trafic du site (une balise a coller avant </body>)
+// <script src="${base}/api/public/v1/track" data-key="cam_pk_..." defer></script>
+// -> visiteurs, pages vues et taux de conversion dans l'onglet "Trafic du site".`}
         </pre>
       </details>
     </div>

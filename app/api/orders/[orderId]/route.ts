@@ -14,6 +14,62 @@ import { notify } from "@/lib/webhooks";
 type RouteContext = { params: Promise<{ orderId: string }> };
 const ALLOWED: readonly string[] = ORDER_STATUSES;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/orders/[orderId] — le détail complet d'une commande.
+//
+// La liste ne montre que l'essentiel ; c'est ici qu'on trouve le reste, et
+// notamment ce qui n'était affiché nulle part : l'heure exacte de la commande,
+// le créneau demandé, le moyen de paiement annoncé, les frais, la provenance,
+// et ce que l'on sait du client (e-mail, entreprise, commandes précédentes).
+// ─────────────────────────────────────────────────────────────────────────────
+export async function GET(req: NextRequest, { params }: RouteContext) {
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+  const { orderId } = await params;
+
+  const sql = `SELECT o.*,
+                      a.latitude       AS shop_lat,
+                      a.longitude      AS shop_lng,
+                      a.business_name  AS shop_name,
+                      a.location       AS shop_location
+                 FROM camille.orders o
+                 JOIN camille.agents a ON a.id = o.agent_id
+                WHERE o.id = $1 AND a.user_id = $2`;
+
+  let order: Record<string, unknown> | undefined;
+  try {
+    order = (await query(sql, [orderId, user.id])).rows[0];
+  } catch (e) {
+    // Coordonnées de boutique absentes (migration_agent_geo.sql) : la commande
+    // reste consultable, seul l'itinéraire manque.
+    if ((e as { code?: string }).code !== "42703") throw e;
+    order = (
+      await query(sql.replace(/,\s*a\.latitude[\s\S]*?a\.location\s+AS shop_location/, ""), [orderId, user.id])
+    ).rows[0];
+  }
+
+  if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 });
+
+  // La fiche client : ce que le site a appris de lui, et son historique.
+  // Best-effort — une base sans camille.contacts enrichie ne doit pas priver
+  // le vendeur du détail de sa commande.
+  let customer: Record<string, unknown> | null = null;
+  const phone = String(order.contact_phone || "").replace(/@(c\.us|lid|s\.whatsapp\.net)$/, "");
+  if (phone) {
+    try {
+      const c = await query(
+        `SELECT display_name, email, company, addresses, orders_count, last_order_at
+           FROM camille.contacts WHERE agent_id = $1 AND phone = $2`,
+        [order.agent_id, phone]
+      );
+      customer = c.rows[0] ?? null;
+    } catch { /* colonnes non migrées : on s'en passe */ }
+  }
+
+  return NextResponse.json({ order, customer });
+}
+
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });

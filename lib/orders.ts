@@ -39,6 +39,12 @@ export type NewOrder = {
   source?: string;
   /** Créneau de livraison demandé (ISO). Absent = dès que possible. */
   scheduledAt?: string | Date | null;
+  /** Moyen de paiement ANNONCÉ par le client. Camille n'encaisse rien. */
+  paymentMethod?: string | null;
+  /** "livraison" | "retrait" — le client se fait livrer ou vient chercher. */
+  fulfillment?: string | null;
+  /** Code promo saisi sur le site, à vérifier par le commerçant. */
+  promoCode?: string | null;
 };
 
 export type CreatedOrder = {
@@ -273,6 +279,9 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
   const lng = coord(input.lng, 180);
   const placeLabel = lat != null && lng != null ? await reverseGeocode(lat, lng) : "";
   const source = input.source === "site" ? "site" : "whatsapp";
+  const paymentMethod = String(input.paymentMethod ?? "").slice(0, 60) || null;
+  const fulfillment = input.fulfillment === "retrait" ? "retrait" : input.fulfillment ? "livraison" : null;
+  const promoCode = String(input.promoCode ?? "").slice(0, 40) || null;
 
   // Créneau demandé. Une date illisible ou déjà passée ne vaut pas mieux que
   // pas de créneau du tout : on préfère « dès que possible » à une promesse
@@ -288,19 +297,22 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
     const ins = await query(
       `INSERT INTO camille.orders
          (ref, agent_id, session_name, contact_phone, items, total, currency, note,
-          customer_name, address, lat, lng, place_label, delivery_fee, source, scheduled_at)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          customer_name, address, lat, lng, place_label, delivery_fee, source, scheduled_at,
+          payment_method, fulfillment, promo_code)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING id`,
       [ref, input.agentId, input.session ?? null, input.phone ?? null, JSON.stringify(items),
        total, currency, note || null, customerName || null, address || null, lat, lng,
-       placeLabel || null, deliveryFee, source, scheduledAt]
+       placeLabel || null, deliveryFee, source, scheduledAt,
+       paymentMethod, fulfillment, promoCode]
     );
     orderId = ins.rows[0]?.id ?? null;
   } catch (e) {
-    // `source` et `scheduled_at` peuvent manquer si migration_api_keys.sql ou
-    // migration_site_integration.sql ne sont pas passées : on réessaie sans,
-    // plutôt que de perdre la commande. Le créneau est alors répété dans les
-    // messages, il n'est jamais perdu pour le commerçant.
+    // `source`, `scheduled_at` et le contexte de paiement peuvent manquer si
+    // migration_api_keys.sql, migration_site_integration.sql ou
+    // migration_site_traffic.sql ne sont pas passées : on réessaie sans, plutôt
+    // que de perdre la commande. Le créneau et le mode de paiement sont alors
+    // répétés dans les messages, ils ne sont jamais perdus pour le commerçant.
     if ((e as { code?: string }).code === "42703") {
       const ins = await query(
         `INSERT INTO camille.orders
@@ -377,6 +389,7 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
     fees +
     `Total : ${money(total, currency)}\n` +
     (creneau ? `⏰ À livrer : ${creneau}\n` : "") +
+    (paymentMethod ? `💳 Paiement annoncé : ${paymentMethod}\n` : "") +
     (note ? `Service : ${note}\n` : "") +
     (customerName ? `Client : ${customerName}\n` : "") +
     `Tél : ${String(input.phone || "").replace(/@c\.us$/, "")}\n` +
