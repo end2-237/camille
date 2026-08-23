@@ -24,6 +24,7 @@ type Order = {
   processing_at?: string | null; dispatched_at?: string | null; delivered_at?: string | null;
   scheduled_at?: string | null; delivery_fee?: number | null; source?: string | null;
   payment_method?: string | null; fulfillment?: string | null; promo_code?: string | null;
+  company_code?: string | null; company_name?: string | null;
   doc_number?: string | null; doc_url?: string | null;
   shop_lat?: number | null; shop_lng?: number | null;
   created_at: string;
@@ -290,6 +291,11 @@ function OrderCard({ order: o, onChange, onOpen }: {
             <div style={{ fontSize: 12, fontWeight: 700, color: "#8A5A00", marginTop: 3 }}>
               ⏰ À {o.fulfillment === "retrait" ? "retirer" : "livrer"}{" "}
               {new Date(o.scheduled_at).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </div>
+          )}
+          {o.company_name && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#1D4ED8", marginTop: 3 }}>
+              🏢 {o.company_name} · {o.company_code}
             </div>
           )}
           {o.payment_method && (

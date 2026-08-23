@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp } from "lucide-react";
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp, Building2 } from "lucide-react";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
 import { ThemeToggle }  from "@/components/ui/ThemeToggle";
@@ -170,6 +170,9 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
               <NavItem href={`/dashboard/${activeAgentId}/settings`} label="Config"
                 icon={<Settings className="w-3.5 h-3.5" />}
                 active={pathname.endsWith("/settings")} collapsed={collapsed} />
+              <NavItem href={`/dashboard/${activeAgentId}/entreprises`} label="Comptes entreprise"
+                icon={<Building2 className="w-3.5 h-3.5" />}
+                active={pathname.endsWith("/entreprises")} collapsed={collapsed} />
               <NavItem href={`/dashboard/${activeAgentId}/trafic`} label="Trafic du site"
                 icon={<TrendingUp className="w-3.5 h-3.5" />}
                 active={pathname.endsWith("/trafic")} collapsed={collapsed} />

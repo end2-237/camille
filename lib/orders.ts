@@ -45,6 +45,8 @@ export type NewOrder = {
   fulfillment?: string | null;
   /** Code promo saisi sur le site, à vérifier par le commerçant. */
   promoCode?: string | null;
+  /** Compte entreprise auquel rattacher la commande, déjà vérifié par l'appelant. */
+  company?: { id: string; code: string; name: string } | null;
 };
 
 export type CreatedOrder = {
@@ -298,13 +300,14 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
       `INSERT INTO camille.orders
          (ref, agent_id, session_name, contact_phone, items, total, currency, note,
           customer_name, address, lat, lng, place_label, delivery_fee, source, scheduled_at,
-          payment_method, fulfillment, promo_code)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          payment_method, fulfillment, promo_code, company_id, company_code, company_name)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        RETURNING id`,
       [ref, input.agentId, input.session ?? null, input.phone ?? null, JSON.stringify(items),
        total, currency, note || null, customerName || null, address || null, lat, lng,
        placeLabel || null, deliveryFee, source, scheduledAt,
-       paymentMethod, fulfillment, promoCode]
+       paymentMethod, fulfillment, promoCode,
+       input.company?.id ?? null, input.company?.code ?? null, input.company?.name ?? null]
     );
     orderId = ins.rows[0]?.id ?? null;
   } catch (e) {
@@ -389,6 +392,7 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
     fees +
     `Total : ${money(total, currency)}\n` +
     (creneau ? `⏰ À livrer : ${creneau}\n` : "") +
+    (input.company ? `🏢 Compte entreprise : ${input.company.name} (${input.company.code})\n` : "") +
     (paymentMethod ? `💳 Paiement annoncé : ${paymentMethod}\n` : "") +
     (note ? `Service : ${note}\n` : "") +
     (customerName ? `Client : ${customerName}\n` : "") +

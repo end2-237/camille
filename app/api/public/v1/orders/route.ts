@@ -17,6 +17,9 @@
 // payment      : moyen de paiement annoncé, montré au commerçant (aucun encaissement).
 // mode         : "livraison" (défaut) ou "retrait".
 // promo        : code saisi par le client, à vérifier par le commerçant.
+// company_code : code du compte entreprise de l'employé. La commande est
+//                rattachée à l'entreprise ; en prépayé, sa provision est
+//                décomptée et une commande sans provision est refusée.
 //
 // Clé SECRÈTE obligatoire : appel serveur à serveur uniquement.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,6 +27,7 @@ import { NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { authenticate, json, preflight } from "@/lib/publicApi";
 import { createOrder, type NewOrderItem } from "@/lib/orders";
+import { canAfford, findByCode, post as postLedger, type CompanyAccount } from "@/lib/companyAccounts";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -120,6 +124,32 @@ export async function POST(req: NextRequest) {
     if (hit) deliveryFee = Number(hit.fee ?? hit.price) || deliveryFee;
   }
 
+  // ── Compte entreprise ─────────────────────────────────────────────────────
+  // L'employé commande avec son propre téléphone ; le code dit à quelle
+  // société rattacher la commande, et donc qui paie. On vérifie AVANT de
+  // créer : refuser une commande sans provision vaut mieux que livrer puis
+  // réclamer.
+  let company: CompanyAccount | null = null;
+  const rawCompanyCode = b.company_code ?? b.companyCode ?? null;
+  if (rawCompanyCode) {
+    try {
+      company = await findByCode(auth.key.agent_id, String(rawCompanyCode));
+    } catch (e) {
+      if ((e as { code?: string }).code !== "42P01") throw e;
+      return json(
+        { error: "Comptes entreprise non installés — applique migration_company_accounts.sql" },
+        503, req
+      );
+    }
+    if (!company) return json({ error: "Code entreprise inconnu.", company_code: String(rawCompanyCode) }, 404, req);
+
+    const montant = items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 1), 0) + (Number.isFinite(deliveryFee) ? deliveryFee : 0);
+    const verdict = await canAfford(company, montant);
+    if (!verdict.ok) {
+      return json({ error: verdict.reason, company: { code: company.code, name: company.name } }, 402, req);
+    }
+  }
+
   const created = await createOrder({
     agentId: auth.key.agent_id,
     items,
@@ -138,9 +168,30 @@ export async function POST(req: NextRequest) {
     paymentMethod: b.payment ?? b.payment_method ?? null,
     fulfillment: b.mode ?? b.fulfillment ?? (delivery.address ? "livraison" : null),
     promoCode: b.promo ?? b.promo_code ?? null,
+    company: company ? { id: company.id, code: company.code, name: company.name } : null,
   });
 
   if (!created.ok) return json({ error: created.error }, 500, req);
+
+  // La consommation est inscrite au grand livre : c'est ce qui fait baisser la
+  // provision et ce qui rend le relevé de fin de mois vérifiable. La commande
+  // existe déjà — un échec ici ne la remet pas en cause.
+  let companySnapshot: { code: string; name: string; billing_mode: string; balance: number | null } | null = null;
+  if (company) {
+    const balance = await postLedger(company, {
+      kind: "debit",
+      amount: created.total,
+      orderId: created.id,
+      orderRef: created.ref,
+      label: `Commande ${created.ref}`,
+    }).catch(() => null);
+    companySnapshot = {
+      code: company.code,
+      name: company.name,
+      billing_mode: company.billing_mode,
+      balance: company.billing_mode === "prepaid" ? balance : null,
+    };
+  }
 
   // Le site connaît souvent l'e-mail, l'entreprise et l'adresse complète —
   // choses que la conversation WhatsApp ne donne jamais. On les garde sur la
@@ -208,6 +259,7 @@ export async function POST(req: NextRequest) {
       status: "nouvelle",
       scheduled_at: created.scheduledAt,
     },
+    ...(companySnapshot ? { company: companySnapshot } : {}),
     whatsapp_notified: notified,
   }, 201, req);
 }

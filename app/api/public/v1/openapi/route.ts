@@ -207,6 +207,14 @@ export async function GET(req: NextRequest) {
                       description: "Livraison (défaut) ou retrait sur place.",
                     },
                     promo: { type: "string", description: "Code promo saisi, à vérifier par le commerçant" },
+                    company_code: {
+                      type: "string",
+                      description:
+                        "Code du compte entreprise de l'employé. La commande est rattachée à " +
+                        "l'entreprise ; en prépayé, la provision est décomptée et une commande " +
+                        "sans provision est refusée (402).",
+                      example: "ENK-7K2M",
+                    },
                   },
                 },
                 example: {
@@ -251,8 +259,57 @@ export async function GET(req: NextRequest) {
             },
             "400": { description: "Requête incomplète — le message précise le champ" },
             "401": { description: "Clé absente, invalide ou révoquée" },
+            "402": { description: "Compte entreprise sans provision suffisante, ou plafond atteint" },
             "403": { description: "Clé publique utilisée, ou domaine non autorisé" },
+            "404": { description: "Code entreprise inconnu" },
             "503": { description: "Intégration non configurée (migration absente)" },
+          },
+        },
+      },
+      "/api/public/v1/companies/{code}": {
+        get: {
+          summary: "Reconnaître un compte entreprise",
+          description:
+            "L'employé saisit le code de sa société ; le site l'affiche avant de commander. " +
+            "Clé SECRÈTE obligatoire : un code est court donc devinable, et une clé de " +
+            "navigateur permettrait de balayer l'alphabet pour lire le nom et la provision " +
+            "des entreprises clientes.",
+          parameters: [
+            { name: "code", in: "path", required: true, schema: { type: "string" }, example: "ENK-7K2M" },
+          ],
+          responses: {
+            "200": {
+              description: "Compte reconnu",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      found: { type: "boolean" },
+                      company: {
+                        type: "object",
+                        properties: {
+                          code: { type: "string" },
+                          name: { type: "string" },
+                          status: { type: "string", enum: ["active", "suspended"] },
+                          billing_mode: { type: "string", enum: ["prepaid", "monthly"] },
+                          balance: { type: "number", nullable: true, description: "Provision restante (prépayé)" },
+                          monthly_cap: { type: "number", nullable: true },
+                          month_to_date: { type: "number", description: "Consommé depuis le 1er du mois" },
+                          orders_this_month: { type: "integer" },
+                          contact_name: { type: "string", nullable: true },
+                          address: { type: "string", nullable: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": { description: "Clé absente ou invalide" },
+            "403": { description: "Clé publique utilisée" },
+            "404": { description: "Code inconnu" },
+            "503": { description: "Comptes entreprise non installés (migration absente)" },
           },
         },
       },

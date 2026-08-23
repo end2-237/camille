@@ -29,6 +29,7 @@ export type OrderRow = {
   lat?: number | null; lng?: number | null;
   delivery_fee?: number | null; source?: string | null;
   payment_method?: string | null; fulfillment?: string | null; promo_code?: string | null;
+  company_code?: string | null; company_name?: string | null;
   scheduled_at?: string | null; processing_at?: string | null;
   dispatched_at?: string | null; delivered_at?: string | null;
   doc_number?: string | null; doc_url?: string | null;
@@ -215,6 +216,17 @@ export default function OrderDetail({
               </a>
             )}
           </Block>
+
+          {/* L'entreprise qui paie, quand un employé a commandé avec son code */}
+          {(order.company_name || order.company_code) && (
+            <Block title="Compte entreprise">
+              <Line label="Entreprise" value={order.company_name || "—"} strong />
+              <Line label="Code" value={order.company_code || "—"} />
+              <p style={{ marginTop: 6, fontSize: 11.5, color: "var(--cl-sub)" }}>
+                Commande rattachée au compte de l&apos;entreprise : c&apos;est elle qui règle, pas l&apos;employé.
+              </p>
+            </Block>
+          )}
 
           {/* Client */}
           <Block title="Client">
