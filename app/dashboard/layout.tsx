@@ -5,8 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Bot, Plus, LogOut, ChevronLeft,
+  Bot, Plus, LogOut, ChevronLeft, ChevronDown, Users, Wallet, Globe,
   Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp, Building2 } from "lucide-react";
+import { authHeaders }  from "@/lib/auth-client";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
 import { ThemeToggle }  from "@/components/ui/ThemeToggle";
@@ -37,6 +38,25 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
   useEffect(() => { if (!isDesktop) onCloseMobile(); /* eslint-disable-next-line */ }, [pathname]);
 
   const displayName = user?.full_name ?? user?.email ?? "Utilisateur";
+
+  // L'agent affiché : celui de l'URL, sinon le premier du compte.
+  const activeAgentId = pathname.match(/\/dashboard\/([0-9a-fA-F-]{8,})/)?.[1] || agents[0]?.id;
+
+  // « Gestion du site » n'a de sens que pour un agent dont le site est branché.
+  // Une clé d'API vivante est le signe le plus sûr : c'est elle qui fait
+  // exister l'intégration.
+  const [hasSite, setHasSite] = useState(false);
+  useEffect(() => {
+    if (!activeAgentId) { setHasSite(false); return; }
+    let alive = true;
+    fetch(`/api/agents/${activeAgentId}/api-keys`, { headers: { ...authHeaders() } })
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setHasSite(Array.isArray(d.keys) && d.keys.some((k: { revoked_at?: string | null }) => !k.revoked_at));
+      })
+      .catch(() => { if (alive) setHasSite(false); });
+    return () => { alive = false; };
+  }, [activeAgentId]);
 
   const statusColor = (s: string) =>
     s === "active" ? "#34D399" : s === "paused" ? "#FBBF24" : "var(--border-strong)";
@@ -128,18 +148,72 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
           icon={<Bot className="w-3.5 h-3.5" />}
           active={false} collapsed={collapsed}
           badge={mounted ? agents.length : undefined} />
-        <NavItem href="/dashboard/orders" label="Commandes"
-          icon={<Receipt className="w-3.5 h-3.5" />}
-          active={pathname === "/dashboard/orders"} collapsed={collapsed} />
+
+        {/* Trois familles au lieu d'une liste qui s'allongeait à chaque
+            fonctionnalité : ce qu'on vend, ce que ça rapporte, et le site —
+            ce dernier seulement quand il existe. */}
+        <NavGroup
+          label="Catalogue & ventes"
+          icon={<Package className="w-3.5 h-3.5" />}
+          collapsed={collapsed}
+          items={[
+            { href: "/dashboard/orders", label: "Commandes", icon: <Receipt className="w-3.5 h-3.5" />, active: pathname === "/dashboard/orders" },
+            ...(activeAgentId
+              ? [
+                  { href: `/dashboard/${activeAgentId}/catalog`, label: "Catalogue", icon: <Package className="w-3.5 h-3.5" />, active: pathname.endsWith("/catalog") },
+                  { href: `/dashboard/${activeAgentId}/clientele`, label: "Clientèle", icon: <Users className="w-3.5 h-3.5" />, active: pathname.endsWith("/clientele") },
+                  // Sans site branché, les visuels servent quand même à la
+                  // conversation et au bon de commande : ils restent ici.
+                  ...(hasSite
+                    ? []
+                    : [{ href: `/dashboard/${activeAgentId}/medias`, label: "Médias", icon: <ImageIcon className="w-3.5 h-3.5" />, active: pathname.endsWith("/medias") }]),
+                ]
+              : []),
+          ]}
+        />
+
+        <NavGroup
+          label="Chiffre d'affaires"
+          icon={<BarChart2 className="w-3.5 h-3.5" />}
+          collapsed={collapsed}
+          items={[
+            { href: "/dashboard/stats", label: "Statistiques", icon: <BarChart2 className="w-3.5 h-3.5" />, active: pathname === "/dashboard/stats" },
+            ...(activeAgentId
+              ? [{ href: `/dashboard/${activeAgentId}/entreprises`, label: "Comptes entreprise", icon: <Building2 className="w-3.5 h-3.5" />, active: pathname.endsWith("/entreprises") }]
+              : []),
+            { href: "/dashboard/billing", label: "Facturation", icon: <CreditCard className="w-3.5 h-3.5" />, active: pathname === "/dashboard/billing" },
+          ]}
+        />
+
+        {activeAgentId && hasSite && (
+          <NavGroup
+            label="Gestion du site"
+            icon={<Globe className="w-3.5 h-3.5" />}
+            collapsed={collapsed}
+            items={[
+              { href: `/dashboard/${activeAgentId}/trafic`, label: "Trafic du site", icon: <TrendingUp className="w-3.5 h-3.5" />, active: pathname.endsWith("/trafic") },
+              { href: `/dashboard/${activeAgentId}/medias`, label: "Médias", icon: <ImageIcon className="w-3.5 h-3.5" />, active: pathname.endsWith("/medias") },
+              { href: `/dashboard/${activeAgentId}/integrations`, label: "Intégrations", icon: <Plug className="w-3.5 h-3.5" />, active: pathname.endsWith("/integrations") },
+            ]}
+          />
+        )}
+
+        {/* Pas encore de site : le lien reste visible seul, sinon on ne
+            pourrait jamais en brancher un. */}
+        {activeAgentId && !hasSite && (
+          <NavItem href={`/dashboard/${activeAgentId}/integrations`} label="Intégrations"
+            icon={<Plug className="w-3.5 h-3.5" />}
+            active={pathname.endsWith("/integrations")} collapsed={collapsed} />
+        )}
+
         <NavItem href="/dashboard/notifications" label="Notifications"
           icon={<Bell className="w-3.5 h-3.5" />}
           active={pathname === "/dashboard/notifications"} collapsed={collapsed} />
-        <NavItem href="/dashboard/stats" label="Statistiques"
-          icon={<BarChart2 className="w-3.5 h-3.5" />}
-          active={pathname === "/dashboard/stats"} collapsed={collapsed} />
-        <NavItem href="/dashboard/billing" label="Plans & Facturation"
-          icon={<CreditCard className="w-3.5 h-3.5" />}
-          active={pathname === "/dashboard/billing"} collapsed={collapsed} />
+        {activeAgentId && (
+          <NavItem href={`/dashboard/${activeAgentId}/settings`} label="Config"
+            icon={<Settings className="w-3.5 h-3.5" />}
+            active={pathname.endsWith("/settings")} collapsed={collapsed} />
+        )}
 
         {/* Console d'exploitation. Le lien ne s'affiche que pour un
             administrateur, mais c'est la route serveur qui protège vraiment :
@@ -156,32 +230,6 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
               active={pathname === "/dashboard/insights"} collapsed={collapsed} />
           </>
         )}
-
-        {(() => {
-          const activeAgentId = pathname.match(/\/dashboard\/([0-9a-fA-F-]{8,})/)?.[1] || agents[0]?.id;
-          return activeAgentId ? (
-            <>
-              <NavItem href={`/dashboard/${activeAgentId}/catalog`} label="Catalogue"
-                icon={<Package className="w-3.5 h-3.5" />}
-                active={pathname.endsWith("/catalog")} collapsed={collapsed} />
-              <NavItem href={`/dashboard/${activeAgentId}/medias`} label="Médias"
-                icon={<ImageIcon className="w-3.5 h-3.5" />}
-                active={pathname.endsWith("/medias")} collapsed={collapsed} />
-              <NavItem href={`/dashboard/${activeAgentId}/settings`} label="Config"
-                icon={<Settings className="w-3.5 h-3.5" />}
-                active={pathname.endsWith("/settings")} collapsed={collapsed} />
-              <NavItem href={`/dashboard/${activeAgentId}/entreprises`} label="Comptes entreprise"
-                icon={<Building2 className="w-3.5 h-3.5" />}
-                active={pathname.endsWith("/entreprises")} collapsed={collapsed} />
-              <NavItem href={`/dashboard/${activeAgentId}/trafic`} label="Trafic du site"
-                icon={<TrendingUp className="w-3.5 h-3.5" />}
-                active={pathname.endsWith("/trafic")} collapsed={collapsed} />
-              <NavItem href={`/dashboard/${activeAgentId}/integrations`} label="Intégrations"
-                icon={<Plug className="w-3.5 h-3.5" />}
-                active={pathname.endsWith("/integrations")} collapsed={collapsed} />
-            </>
-          ) : null;
-        })()}
 
         {mounted && agents.length > 0 && (
           <div className="pt-3">
@@ -285,6 +333,83 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
         )}
       </div>
     </motion.aside>
+  );
+}
+
+type NavEntry = { href: string; label: string; icon: React.ReactNode; active: boolean };
+
+/**
+ * Une famille de pages, repliée par défaut.
+ *
+ * La barre latérale grandissait d'un lien à chaque fonctionnalité ; à douze
+ * entrées, plus personne ne lisait la liste. Un groupe s'ouvre au clic, se
+ * souvient de son état, et s'ouvre tout seul quand on est dans une de ses
+ * pages. Barre réduite, il redevient une icône qui mène à sa première page —
+ * un menu déroulant sans libellé ne s'explore pas.
+ */
+function NavGroup({ label, icon, items, collapsed }: {
+  label: string; icon: React.ReactNode; items: NavEntry[]; collapsed: boolean;
+}) {
+  const activeInside = items.some((i) => i.active);
+  const [open, setOpen] = useState(activeInside);
+
+  useEffect(() => {
+    if (activeInside) { setOpen(true); return; }
+    try {
+      const saved = localStorage.getItem(`cml-nav-${label}`);
+      if (saved != null) setOpen(saved === "1");
+    } catch { /* sans stockage, le groupe s'ouvre au clic */ }
+  }, [activeInside, label]);
+
+  function toggle() {
+    setOpen((o) => {
+      try { localStorage.setItem(`cml-nav-${label}`, o ? "0" : "1"); } catch { /* sans conséquence */ }
+      return !o;
+    });
+  }
+
+  if (!items.length) return null;
+  if (collapsed) {
+    return <NavItem href={items[0].href} label={label} icon={icon} active={activeInside} collapsed />;
+  }
+
+  return (
+    <div>
+      <button
+        onClick={toggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 rounded-lg text-xs transition-all duration-150 hover:bg-[var(--bg-subtle)]"
+        style={{
+          border: "1px solid transparent",
+          padding: "7px 10px",
+          color: activeInside ? "var(--text-primary)" : "var(--text-tertiary)",
+        }}
+      >
+        <span className="flex-shrink-0" style={{ opacity: activeInside ? 1 : 0.6 }}>{icon}</span>
+        <span className="flex-1 truncate whitespace-nowrap text-left font-medium">{label}</span>
+        <ChevronDown className="w-3 h-3 flex-shrink-0 transition-transform duration-200"
+          style={{ transform: open ? "rotate(180deg)" : "none", opacity: 0.5 }} />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className="ml-[13px] mt-0.5 space-y-0.5 border-l pl-2" style={{ borderColor: "var(--border-subtle)" }}>
+              {items.map((item) => (
+                <NavItem key={item.href} href={item.href} label={item.label} icon={item.icon}
+                  active={item.active} collapsed={false} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
