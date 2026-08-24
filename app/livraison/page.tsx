@@ -17,7 +17,7 @@ import Link from "next/link";
 import { authHeaders, getStoredToken } from "@/lib/auth-client";
 import { toast } from "sonner";
 import CourierRide, { type Ride } from "@/components/CourierRide";
-import { Bike, Check, Copy, Loader2, MapPin, Package, RefreshCw } from "lucide-react";
+import { Bike, Check, Copy, LayoutDashboard, Loader2, MapPin, Package, RefreshCw } from "lucide-react";
 
 const money = (n: number, c: string) => `${Number(n || 0).toLocaleString("fr-FR")} ${c || "XAF"}`;
 const heure = (v: string | null) =>
@@ -92,11 +92,18 @@ export default function LivraisonPage() {
               : "Aucune boutique ne t'a encore rattaché."}
           </p>
         </div>
-        <button onClick={load}
-          className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--cl-line)] bg-white px-4 text-[12.5px] font-semibold">
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          Actualiser
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Un commerçant qui livre lui-même doit pouvoir rentrer chez lui. */}
+          <Link href="/dashboard"
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[var(--cl-line)] bg-white px-4 text-[12.5px] font-semibold">
+            <LayoutDashboard className="h-3.5 w-3.5" /> Tableau de bord
+          </Link>
+          <button onClick={load}
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--cl-line)] bg-white px-4 text-[12.5px] font-semibold">
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Actualiser
+          </button>
+        </div>
       </header>
 
       {warning && (

@@ -58,6 +58,23 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
     return () => { alive = false; };
   }, [activeAgentId]);
 
+  // L'espace livreur : un compte rattaché à une boutique doit le trouver sans
+  // qu'on lui donne une adresse à taper. Le badge dit combien de courses
+  // attendent — c'est ce qui fait revenir sur la page.
+  const [courses, setCourses] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/courier/orders", { headers: { ...authHeaders() } })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return;
+        // Un compte sans rattachement n'a pas d'espace livreur à montrer.
+        setCourses(Array.isArray(d.missions) && d.missions.length ? (d.orders?.length ?? 0) : null);
+      })
+      .catch(() => { if (alive) setCourses(null); });
+    return () => { alive = false; };
+  }, [pathname]);
+
   const statusColor = (s: string) =>
     s === "active" ? "#34D399" : s === "paused" ? "#FBBF24" : "var(--border-strong)";
 
@@ -215,6 +232,15 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
             icon={<Settings className="w-3.5 h-3.5" />}
             active={pathname.endsWith("/settings")} collapsed={collapsed} />
         )}
+
+        {/* L'espace livreur, hors du tableau de bord : c'est un autre métier,
+            et un autre écran. Toujours visible — un commerçant qui livre
+            lui-même s'en sert aussi — avec le compte des courses en attente
+            dès qu'une boutique a rattaché ce compte. */}
+        <NavItem href="/livraison" label="Espace livreur"
+          icon={<Bike className="w-3.5 h-3.5" />}
+          active={false} collapsed={collapsed}
+          badge={courses ?? undefined} />
 
         {/* Console d'exploitation. Le lien ne s'affiche que pour un
             administrateur, mais c'est la route serveur qui protège vraiment :
