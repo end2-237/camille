@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Cookie, X, ShieldCheck, BarChart2 } from "lucide-react";
 
@@ -10,18 +11,23 @@ type Consent = { necessary: true; analytics: boolean };
 const STORAGE_KEY = "camille_cookie_consent";
 
 export function CookieBanner() {
+  const pathname = usePathname();
   const [visible, setVisible]   = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [analytics, setAnalytics] = useState(false);
 
   useEffect(() => {
+    // L'écran du livreur se pilote par le bas — démarrer la course, marquer la
+    // livraison. Un bandeau posé dessus, au feu rouge, empêche le seul geste
+    // qui compte. La demande de consentement l'attend sur une autre page.
+    if (pathname.startsWith("/livraison")) return;
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (!stored) setTimeout(() => setVisible(true), 1200);
     } catch {
       setVisible(true);
     }
-  }, []);
+  }, [pathname]);
 
   function save(consent: Consent) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(consent)); } catch {}

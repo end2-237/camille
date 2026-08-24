@@ -53,7 +53,7 @@ export function Navbar() {
   useEffect(() => { setOpen(false); }, [pathname]);
 
   // Le dashboard a sa propre barre ; ailleurs (accueil inclus) → nav du site.
-  if (pathname.startsWith("/dashboard")) return null;
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/livraison")) return null;
 
   return (
     <>

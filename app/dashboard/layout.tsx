@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft, ChevronDown, Users, Wallet, Globe,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp, Building2 } from "lucide-react";
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp, Building2, Bike } from "lucide-react";
 import { authHeaders }  from "@/lib/auth-client";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -162,6 +162,7 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
               ? [
                   { href: `/dashboard/${activeAgentId}/catalog`, label: "Catalogue", icon: <Package className="w-3.5 h-3.5" />, active: pathname.endsWith("/catalog") },
                   { href: `/dashboard/${activeAgentId}/clientele`, label: "Clientèle", icon: <Users className="w-3.5 h-3.5" />, active: pathname.endsWith("/clientele") },
+                  { href: `/dashboard/${activeAgentId}/livreurs`, label: "Livreurs", icon: <Bike className="w-3.5 h-3.5" />, active: pathname.endsWith("/livreurs") },
                   // Sans site branché, les visuels servent quand même à la
                   // conversation et au bon de commande : ils restent ici.
                   ...(hasSite
