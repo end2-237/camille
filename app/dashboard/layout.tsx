@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft, ChevronDown, Users, Wallet, Globe,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp, Building2, Bike } from "lucide-react";
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp, Building2, Bike, Route } from "lucide-react";
 import { authHeaders }  from "@/lib/auth-client";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -175,6 +175,9 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
           collapsed={collapsed}
           items={[
             { href: "/dashboard/orders", label: "Commandes", icon: <Receipt className="w-3.5 h-3.5" />, active: pathname === "/dashboard/orders" },
+            ...(activeAgentId
+              ? [{ href: `/dashboard/${activeAgentId}/suivi`, label: "Suivi des livraisons", icon: <Route className="w-3.5 h-3.5" />, active: pathname.endsWith("/suivi") }]
+              : []),
             ...(activeAgentId
               ? [
                   { href: `/dashboard/${activeAgentId}/catalog`, label: "Catalogue", icon: <Package className="w-3.5 h-3.5" />, active: pathname.endsWith("/catalog") },
