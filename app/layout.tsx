@@ -52,6 +52,14 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
     creator: COMPANY.twitter,
   },
+  // Installable : c'est la condition du push web sur iPhone. La balise Apple
+  // reste nécessaire pour les iOS qui ne lisent pas encore le manifeste.
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Camille",
+    statusBarStyle: "black-translucent",
+  },
   robots: {
     index: true,
     follow: true,
@@ -79,6 +87,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning évite le flash SSR/CSR du ThemeProvider
     <html lang="fr" data-theme="light" suppressHydrationWarning>
       <body suppressHydrationWarning>
+        {/* iOS avant 17 ne lit pas le manifeste : sans cette balise, l'icône
+            ajoutée à l'écran d'accueil rouvre un simple onglet — et Safari n'y
+            donne pas les notifications. React la remonte dans <head>. */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <ThemeProvider>
           {/* Ambient glow — adapté par le thème */}
           <div

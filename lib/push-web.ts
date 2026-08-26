@@ -19,9 +19,38 @@ const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 export type EtatPush =
   | "non-configure"   // clé VAPID absente du déploiement
   | "non-supporte"    // navigateur sans service worker ou sans push
+  | "a-installer"     // iPhone : possible, mais depuis l'écran d'accueil
   | "refuse"          // l'utilisateur a dit non (ou le navigateur bloque)
   | "a-activer"       // possible, pas encore demandé
   | "actif";
+
+/** Marque un refus explicite : sans elle, le rattachement silencieux rallumait
+ *  ce que le commerçant venait d'éteindre. */
+const REFUS = "camille_push_off";
+
+function refuseIci(): boolean {
+  try { return localStorage.getItem(REFUS) === "1"; } catch { return false; }
+}
+
+function noterRefus(oui: boolean) {
+  try { oui ? localStorage.setItem(REFUS, "1") : localStorage.removeItem(REFUS); } catch { /* sans stockage */ }
+}
+
+/** Un iPhone ou un iPad — y compris l'iPad qui se fait passer pour un Mac. */
+export function estIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+/** L'application est ouverte depuis l'écran d'accueil, pas dans un onglet. */
+export function estInstalle(): boolean {
+  if (typeof window === "undefined") return false;
+  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return iosStandalone || window.matchMedia?.("(display-mode: standalone)").matches === true;
+}
 
 export function pushConfigure(): boolean {
   return VAPID.length > 20;
@@ -36,12 +65,39 @@ export function pushSupporte(): boolean {
   );
 }
 
-export function etatPush(): EtatPush {
+/**
+ * L'état réel, lu du navigateur ET de la souscription.
+ *
+ * Se fier à `Notification.permission` seule ne marchait pas : l'autorisation ne
+ * se retire pas depuis la page, si bien que « Désactiver ici » revenait à
+ * « activé » au rechargement suivant — et le rattachement silencieux
+ * re-souscrivait dans la foulée. C'est la souscription qui dit la vérité.
+ *
+ * Sur iPhone, Safari ne donne le push qu'à une application ajoutée à l'écran
+ * d'accueil : dans un onglet, ce n'est pas « navigateur incompatible », c'est
+ * « pas encore installée ».
+ */
+export async function lireEtatPush(): Promise<EtatPush> {
   if (!pushConfigure()) return "non-configure";
-  if (!pushSupporte()) return "non-supporte";
+  if (!pushSupporte()) return estIOS() && !estInstalle() ? "a-installer" : "non-supporte";
   if (Notification.permission === "denied") return "refuse";
-  if (Notification.permission === "granted") return "actif";
-  return "a-activer";
+  if (Notification.permission !== "granted") return "a-activer";
+  return (await souscriptionCourante()) ? "actif" : "a-activer";
+}
+
+/** La souscription enregistrée sur cet appareil, si elle existe. */
+async function souscriptionCourante(): Promise<PushSubscription | null> {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/push-sw.js");
+    return (await reg?.pushManager.getSubscription()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Ce navigateur a-t-il été éteint volontairement ? */
+export function pushRefuseIci(): boolean {
+  return refuseIci();
 }
 
 /**
@@ -92,6 +148,8 @@ export async function activerPushWeb(demander = true): Promise<EtatPush> {
         applicationServerKey: base64UrlVersOctets(VAPID),
       }));
 
+    noterRefus(false);
+
     const r = await fetch("/api/push/register", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -109,6 +167,9 @@ export async function activerPushWeb(demander = true): Promise<EtatPush> {
 
 /** Désactive ce navigateur. L'autorisation, elle, reste au navigateur. */
 export async function desactiverPushWeb(): Promise<void> {
+  // On note le refus avant tout : même si la désinscription échoue, ce
+  // navigateur ne doit pas être rallumé au prochain chargement.
+  noterRefus(true);
   try {
     const reg = await navigator.serviceWorker.getRegistration("/push-sw.js");
     const sub = await reg?.pushManager.getSubscription();

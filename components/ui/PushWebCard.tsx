@@ -10,21 +10,31 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
-import { Bell, BellOff, BellRing, Loader2 } from "lucide-react";
+import { Bell, BellOff, BellRing, Loader2, Share } from "lucide-react";
 import { toast } from "sonner";
-import { activerPushWeb, desactiverPushWeb, etatPush, type EtatPush } from "@/lib/push-web";
+import {
+  activerPushWeb, desactiverPushWeb, lireEtatPush, pushRefuseIci, type EtatPush,
+} from "@/lib/push-web";
 
 export function PushWebCard() {
   const [etat, setEtat] = useState<EtatPush | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const initial = etatPush();
-    setEtat(initial);
-    // Autorisation déjà accordée : on rattache le jeton sans rien demander. Un
-    // jeton FCM tourne, et un navigateur autorisé mais non enregistré serait
-    // silencieux sans que rien ne le signale.
-    if (initial === "actif") activerPushWeb(false).then(setEtat);
+    let vivant = true;
+    lireEtatPush().then((initial) => {
+      if (!vivant) return;
+      setEtat(initial);
+      // Autorisation déjà accordée : on rattache le jeton sans rien demander —
+      // un jeton tourne, et un navigateur autorisé mais non enregistré serait
+      // silencieux sans que rien ne le signale. Sauf si ce navigateur a été
+      // éteint volontairement : on ne rallume pas ce que le commerçant a
+      // éteint.
+      if (initial === "actif" || (initial === "a-activer" && !pushRefuseIci() && Notification.permission === "granted")) {
+        activerPushWeb(false).then((suite) => vivant && setEtat(suite));
+      }
+    });
+    return () => { vivant = false; };
   }, []);
 
   if (etat === null || etat === "non-configure") return null;
@@ -52,7 +62,8 @@ export function PushWebCard() {
     "actif":        { Icon: BellRing, titre: "Notifications activées",        texte: "Tu les reçois même quand le site est fermé." },
     "a-activer":    { Icon: Bell,     titre: "Recevoir les alertes hors du site", texte: "Commande reçue, agent déconnecté, rupture de stock — comme sur le téléphone." },
     "refuse":       { Icon: BellOff,  titre: "Notifications bloquées",        texte: "Le navigateur les refuse pour ce site. À réactiver dans ses réglages, à côté de la barre d'adresse." },
-    "non-supporte": { Icon: BellOff,  titre: "Navigateur non compatible",     texte: "Les notifications hors onglet demandent un navigateur récent. Le journal ci-dessous reste à jour." },
+    "a-installer":  { Icon: Share,    titre: "Ajoutez Camille à votre écran d'accueil", texte: "Sur iPhone, les notifications arrivent une fois l'application installée : bouton Partager, puis « Sur l'écran d'accueil ». Ouvrez-la ensuite depuis l'icône et revenez ici." },
+    "non-supporte": { Icon: BellOff,  titre: "Navigateur non compatible",     texte: "Les notifications hors onglet demandent un navigateur récent — sur iPhone, iOS 16.4 au minimum. Le journal ci-dessous reste à jour." },
     "non-configure":{ Icon: BellOff,  titre: "",                              texte: "" },
   }[etat];
 
