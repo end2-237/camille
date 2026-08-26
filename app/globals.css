@@ -44,6 +44,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Leaflet dans une page, pas au-dessus d'elle ─────────────────────────────
+   Leaflet pose ses panneaux à z-index 400 et ses contrôles à 1000. Dans une
+   page ordinaire cela ne se voit pas ; dans le tableau de bord, la carte
+   passait par-dessus la barre du haut et le tiroir de navigation — sur
+   téléphone, le menu s'ouvrait DERRIÈRE la carte.
+
+   L'isolation crée un contexte d'empilement : les z-index de Leaflet se
+   comptent alors à l'intérieur du cadre, et le cadre lui-même reste au niveau
+   du contenu. */
+.leaflet-container {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    TOKENS PARTAGÉS (thème-agnostic)
    ══════════════════════════════════════════════════════════════════════════ */

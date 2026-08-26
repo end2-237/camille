@@ -155,7 +155,9 @@ export default function TrackingMap({
     "flex h-[34px] w-[34px] items-center justify-center bg-white text-[#5B5766] transition hover:text-[#101012]";
 
   return (
-    <div className={`relative ${className}`}>
+    // « isolate » : les boutons de la carte se rangent dans ce cadre, et non
+    // par-dessus la barre du haut ou le tiroir de navigation.
+    <div className={`relative isolate overflow-hidden ${className}`}>
       <div ref={holder} className="absolute inset-0" style={{ background: "#EDEDF2" }} />
 
       {/* Les commandes de la carte, posées comme dans le modèle : plein écran
