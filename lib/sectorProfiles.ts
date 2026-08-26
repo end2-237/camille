@@ -105,6 +105,17 @@ export function sectorProfile(sector?: BusinessSector | string | null): SectorPr
   return DEFAULT;
 }
 
+/**
+ * Ce commerce sert-il des repas ?
+ *
+ * Le menu du jour n'a de sens que là : une boutique de téléphones n'a pas de
+ * plat du jour, et lui proposer l'interrupteur ne ferait qu'encombrer sa fiche
+ * produit. L'hôtellerie est incluse — un hôtel a une cuisine et une carte.
+ */
+export function sertDesRepas(sector?: BusinessSector | string | null): boolean {
+  return sector === "food_beverage" || sector === "hospitality";
+}
+
 /** Welcome effectif : message personnalisé s'il existe, sinon le défaut du secteur. */
 export function resolveWelcome(
   sector: BusinessSector | string | null | undefined,

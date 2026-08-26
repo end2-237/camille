@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search, Upload, ImageIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search, Upload, ImageIcon, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import { ProductCard, type Product } from "@/components/catalog/ProductCard";
 import { authHeaders } from "@/lib/auth-client";
+import { sertDesRepas } from "@/lib/sectorProfiles";
 
 type Draft = Omit<Partial<Product>, "price" | "price_max" | "stock" | "min_order"> & {
   price?: string | number | null;
@@ -26,6 +27,9 @@ export default function CatalogPage() {
   const [saving, setSaving]     = useState(false);
   const [copied, setCopied]     = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Le menu du jour ne concerne que la restauration : ailleurs, l'interrupteur
+  // n'apparaît pas du tout.
+  const [restauration, setRestauration] = useState(false);
 
   const publicLink = typeof window !== "undefined" ? `${window.location.origin}/catalog/${agentId}` : "";
 
@@ -40,6 +44,37 @@ export default function CatalogPage() {
   }, [agentId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`/api/agents/${agentId}`, { headers: { ...authHeaders() } });
+        const d = await r.json();
+        setRestauration(sertDesRepas(d?.agent?.business_context?.sector));
+      } catch {
+        /* secteur inconnu : on n'affiche pas l'interrupteur, c'est le bon défaut */
+      }
+    })();
+  }, [agentId]);
+
+  /** L'interrupteur du menu du jour : un clic, pas un formulaire à rouvrir. */
+  async function basculerMenuDuJour(p: Product) {
+    const suivant = !p.daily_menu;
+    setProducts((prev) => prev.map((x) => (x.id === p.id ? { ...x, daily_menu: suivant } : x)));
+    try {
+      const r = await fetch(`/api/agents/${agentId}/products/${p.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ daily_menu: suivant }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || "Échec de l'enregistrement");
+      toast.success(suivant ? `« ${p.name} » est au menu du jour` : `« ${p.name} » retiré du menu du jour`);
+    } catch (e) {
+      setProducts((prev) => prev.map((x) => (x.id === p.id ? { ...x, daily_menu: !suivant } : x)));
+      toast.error(e instanceof Error ? e.message : "Échec de l'enregistrement");
+    }
+  }
 
   const filtered = q.trim()
     ? products.filter((p) => (p.name + " " + (p.category ?? "")).toLowerCase().includes(q.toLowerCase()))
@@ -61,6 +96,7 @@ export default function CatalogPage() {
       images: (editing.images ?? []).filter(Boolean),
       product_url: (editing.product_url ?? "").trim() || null,
       active: editing.active ?? true,
+      daily_menu: restauration ? editing.daily_menu ?? false : undefined,
       tags: (editing.tagsStr ?? "").split(",").map((t) => t.trim()).filter(Boolean),
       variants: (editing.variants ?? [])
         .map((v) => ({
@@ -206,7 +242,33 @@ export default function CatalogPage() {
               key={p.id}
               product={p}
               footer={
-                <div className="flex items-center gap-2">
+                <div className="space-y-2">
+                  {restauration && (
+                    <button
+                      onClick={() => basculerMenuDuJour(p)}
+                      aria-pressed={!!p.daily_menu}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12.5px] font-semibold"
+                      style={{
+                        border: `1px solid ${p.daily_menu ? "#E8A6B4" : "var(--cl-line)"}`,
+                        background: p.daily_menu ? "#FFF3F6" : "#fff",
+                        color: p.daily_menu ? "#8E2A47" : "var(--cl-ink-soft)",
+                      }}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <UtensilsCrossed className="h-3.5 w-3.5" /> Au menu du jour
+                      </span>
+                      <span
+                        className="relative inline-flex h-[18px] w-[32px] flex-shrink-0 items-center rounded-full transition"
+                        style={{ background: p.daily_menu ? "#E8A6B4" : "var(--cl-line)" }}
+                      >
+                        <span
+                          className="absolute h-[14px] w-[14px] rounded-full bg-white transition-all"
+                          style={{ left: p.daily_menu ? 16 : 2 }}
+                        />
+                      </span>
+                    </button>
+                  )}
+                  <div className="flex items-center gap-2">
                   <button
                     onClick={() => setEditing({
                       ...p,
@@ -229,6 +291,7 @@ export default function CatalogPage() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
+                  </div>
                 </div>
               }
             />
@@ -407,6 +470,22 @@ export default function CatalogPage() {
                 <input type="checkbox" checked={editing.active ?? true} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} />
                 Produit actif (visible dans le catalogue et par l'agent)
               </label>
+              {restauration && (
+                <label className="flex items-start gap-2 text-[13px]" style={{ color: "var(--cl-ink)" }}>
+                  <input
+                    type="checkbox"
+                    checked={editing.daily_menu ?? false}
+                    onChange={(e) => setEditing({ ...editing, daily_menu: e.target.checked })}
+                    className="mt-[3px]"
+                  />
+                  <span>
+                    Au menu du jour
+                    <span className="mt-0.5 block text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+                      Mis en avant sur votre site et annoncé comme plat du jour. À décocher quand il quitte la carte du jour.
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t px-5 py-4" style={{ borderColor: "var(--cl-line)" }}>

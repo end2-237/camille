@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     const PUBLIC_FIELDS = [
       "id", "name", "description", "price", "price_max", "currency", "stock",
       "category", "subcategory", "image_url", "images", "variants",
-      "product_url", "tags", "min_order", "rating",
+      "product_url", "tags", "min_order", "rating", "daily_menu",
     ];
     const products = r.rows.map((row: Record<string, unknown>) => {
       const out: Record<string, unknown> = {};

@@ -41,34 +41,49 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Le nom du produit est requis" }, { status: 400 });
   }
 
+  const colonnes = [
+    "agent_id", "name", "description", "price", "price_max", "currency", "category", "tags",
+    "stock", "min_order", "rating", "image_url", "product_url", "active", "sort_order",
+    "variants", "images", "daily_menu",
+  ];
+  const inserer = (cols: string[], valeurs: unknown[]) =>
+    query(
+      `INSERT INTO camille.products (${cols.join(", ")})
+       VALUES (${cols.map((_, i) => `$${i + 1}`).join(",")})
+       RETURNING *`,
+      valeurs
+    );
+
   let r;
   try {
-    r = await query(
-      `INSERT INTO camille.products
-         (agent_id, name, description, price, price_max, currency, category, tags,
-          stock, min_order, rating, image_url, product_url, active, sort_order, variants, images)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-       RETURNING *`,
-      [
-        agentId,
-        String(b.name).trim(),
-        coerce("description", b.description),
-        coerce("price", b.price),
-        coerce("price_max", b.price_max),
-        coerce("currency", b.currency),
-        coerce("category", b.category),
-        coerce("tags", b.tags),
-        coerce("stock", b.stock),
-        coerce("min_order", b.min_order),
-        coerce("rating", b.rating),
-        coerce("image_url", b.image_url),
-        coerce("product_url", b.product_url),
-        coerce("active", b.active),
-        coerce("sort_order", b.sort_order),
-        coerce("variants", b.variants),
-        coerce("images", b.images),
-      ]
-    );
+    const valeurs = [
+      agentId,
+      String(b.name).trim(),
+      coerce("description", b.description),
+      coerce("price", b.price),
+      coerce("price_max", b.price_max),
+      coerce("currency", b.currency),
+      coerce("category", b.category),
+      coerce("tags", b.tags),
+      coerce("stock", b.stock),
+      coerce("min_order", b.min_order),
+      coerce("rating", b.rating),
+      coerce("image_url", b.image_url),
+      coerce("product_url", b.product_url),
+      coerce("active", b.active),
+      coerce("sort_order", b.sort_order),
+      coerce("variants", b.variants),
+      coerce("images", b.images),
+      coerce("daily_menu", b.daily_menu),
+    ];
+    try {
+      r = await inserer(colonnes, valeurs);
+    } catch (e) {
+      // Le menu du jour arrive par une migration : sur une base qui ne l'a pas
+      // encore, un produit doit quand même pouvoir être créé.
+      if ((e as { code?: string }).code !== "42703") throw e;
+      r = await inserer(colonnes.slice(0, -1), valeurs.slice(0, -1));
+    }
   } catch (e) {
     return NextResponse.json(
       { error: "Création impossible", detail: (e as Error).message },

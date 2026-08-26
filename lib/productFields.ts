@@ -14,6 +14,7 @@
 /** Colonnes NOT NULL et la valeur qui tient lieu de « vide » pour chacune. */
 const NOT_NULL: Record<string, unknown> = {
   description: "",
+  daily_menu: false,
   currency: "XAF",
   min_order: 1,
   active: true,

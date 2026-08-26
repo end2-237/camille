@@ -11,7 +11,7 @@ type RouteContext = { params: Promise<{ agentId: string; productId: string }> };
 const FIELDS = new Set([
   "name", "description", "price", "price_max", "currency", "category",
   "tags", "stock", "min_order", "rating", "image_url", "product_url", "active", "sort_order",
-  "variants", "images",
+  "variants", "images", "daily_menu",
 ]);
 
 async function assertOwner(req: NextRequest, agentId: string) {
@@ -54,6 +54,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     // une contrainte violée vient de ce qui a été envoyé, pas d'une panne.
     const msg = (e as Error).message;
     console.error("[PATCH product]", productId, msg);
+    // La colonne du menu du jour arrive par une migration : tant qu'elle n'est
+    // pas appliquée, autant le dire clairement plutôt que de renvoyer l'erreur
+    // brute de Postgres.
+    if ((e as { code?: string }).code === "42703" && "daily_menu" in body) {
+      return NextResponse.json(
+        { error: "Le menu du jour n'est pas encore activé sur cette base (migration_daily_menu.sql)" },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
       { error: "Enregistrement impossible", detail: msg },
       { status: 400 }

@@ -20,6 +20,8 @@ export interface Product {
   product_url?: string | null;
   variants?: { name: string; options: VariantOption[] }[];
   active?: boolean;
+  /** Au menu du jour — n'existe que pour les activités de restauration. */
+  daily_menu?: boolean;
 }
 
 // Une option de variation : texte simple OU { valeur + image liée }
@@ -51,6 +53,14 @@ export function ProductCard({ product, footer }: { product: Product; footer?: Re
         {Array.isArray(product.images) && product.images.length > 0 && (
           <span className="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: "rgba(25,23,27,0.6)" }}>
             +{product.images.length} 📷
+          </span>
+        )}
+        {product.daily_menu && (
+          <span
+            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold"
+            style={{ background: "#FFE8EF", color: "#8E2A47" }}
+          >
+            Menu du jour
           </span>
         )}
         {product.image_url ? (
