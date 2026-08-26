@@ -46,7 +46,10 @@ export function Ecran({ aside, carte }: { aside: React.ReactNode; carte: React.R
       >
         {aside}
       </aside>
-      <div className="h-[38vh] w-full shrink-0 lg:h-auto lg:flex-1">{carte}</div>
+      {/* « lg:h-auto » laissait la cellule sans hauteur définie : la carte, qui
+          se mesure en pourcentage de son parent, se retrouvait haute de zéro —
+          d'où le rectangle blanc avec ses seuls boutons de zoom. */}
+      <div className="h-[38vh] w-full shrink-0 lg:h-full lg:flex-1">{carte}</div>
     </div>
   );
 }

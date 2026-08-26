@@ -7,8 +7,10 @@
 // violet clair, ce qui reste en violet plein. C'est ce qui fait qu'on lit la
 // course d'un coup d'œil au lieu de chercher le point sur une ligne uniforme.
 //
-// Fond de carte CARTO (données OpenStreetMap) : le rendu clair du modèle, sans
-// clé d'API. tile.openstreetmap.org refuse les clients applicatifs.
+// Fond de carte servi par Camille elle-même (/api/tiles) : les tuiles venaient
+// d'un domaine tiers et n'arrivaient pas toujours — la carte restait blanche,
+// avec ses boutons de zoom pour seul décor. Un seul chemin, notre domaine, et
+// le serveur se charge d'aller chercher OpenStreetMap.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from "react";
@@ -43,6 +45,7 @@ export default function TrackingMap({
   const holder = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const couche = useRef<any>(null);
+  const observateur = useRef<ResizeObserver | null>(null);
   const [pret, setPret] = useState(false);
 
   // La carte se crée une fois ; seuls ses calques changent ensuite.
@@ -58,19 +61,30 @@ export default function TrackingMap({
         scrollWheelZoom: true,
       }).setView([4.05, 9.7], 13);
 
-      L.tileLayer("https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        maxZoom: 20,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO',
+      L.tileLayer("/api/tiles/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(instance);
 
       couche.current = L.layerGroup().addTo(instance);
       map.current = instance;
       setPret(true);
       window.setTimeout(() => instance.invalidateSize(), 120);
+
+      // Un cadre qui change de taille — passage en plein écran, rotation du
+      // téléphone, colonne repliée — laissait la carte sur ses anciennes
+      // mesures, et les tuiles à côté de la fenêtre.
+      if (typeof ResizeObserver !== "undefined" && holder.current) {
+        const obs = new ResizeObserver(() => instance.invalidateSize());
+        obs.observe(holder.current);
+        observateur.current = obs;
+      }
     })();
 
     return () => {
       annule = true;
+      observateur.current?.disconnect();
+      observateur.current = null;
       map.current?.remove();
       map.current = null;
     };

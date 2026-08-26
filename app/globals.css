@@ -54,7 +54,10 @@
    comptent alors à l'intérieur du cadre, et le cadre lui-même reste au niveau
    du contenu. */
 .leaflet-container {
-  position: relative;
+  /* Pas de « position » ici : le conteneur de la carte est posé en absolu par
+     la page, et le forcer en relatif lui retirait sa hauteur — d'où la carte
+     blanche, tuiles chargées mais peintes hors du cadre. Le z-index et
+     l'isolement suffisent à la garder sous la barre et le tiroir. */
   z-index: 0;
   isolation: isolate;
 }

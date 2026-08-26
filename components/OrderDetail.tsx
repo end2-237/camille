@@ -357,10 +357,10 @@ function Line({ label, value, strong, big }: { label: string; value: string; str
 
 // Aperçu carto sans clé d'API : on calcule la tuile qui contient le point et on
 // place le marqueur à sa position exacte dedans.
-// Tuiles CARTO : tile.openstreetmap.org renvoie 403 aux clients applicatifs.
+// Tuiles servies par Camille (/api/tiles), comme la carte du suivi.
 const TILE = 256;
 const ZOOM = 16;
-const TILE_HOST = "https://a.basemaps.cartocdn.com/rastertiles/voyager";
+const TILE_HOST = "/api/tiles";
 
 export function MapPreview({ lat, lng, height = 120, radius = "10px" }: {
   lat: number; lng: number; height?: number; radius?: string;
@@ -381,7 +381,7 @@ export function MapPreview({ lat, lng, height = 120, radius = "10px" }: {
       </div>
       <div style={{ position: "absolute", left: TILE + fx * TILE - 7, top: height / 2 - 20, fontSize: 22 }}>📍</div>
       <div style={{ position: "absolute", right: 4, bottom: 1, fontSize: 8, color: "#5A5A5A" }}>
-        © OpenStreetMap · CARTO
+        © OpenStreetMap
       </div>
     </div>
   );
