@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search, Upload, ImageIcon, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
-import { ProductCard, type Product } from "@/components/catalog/ProductCard";
+import { JOURS, ProductCard, type Product } from "@/components/catalog/ProductCard";
 import { authHeaders } from "@/lib/auth-client";
 import { sertDesRepas } from "@/lib/sectorProfiles";
 
@@ -97,6 +97,9 @@ export default function CatalogPage() {
       product_url: (editing.product_url ?? "").trim() || null,
       active: editing.active ?? true,
       daily_menu: restauration ? editing.daily_menu ?? false : undefined,
+      available_days: restauration
+        ? (editing.available_days ?? []).filter((j) => j >= 1 && j <= 6).sort()
+        : undefined,
       tags: (editing.tagsStr ?? "").split(",").map((t) => t.trim()).filter(Boolean),
       variants: (editing.variants ?? [])
         .map((v) => ({
@@ -485,6 +488,41 @@ export default function CatalogPage() {
                     </span>
                   </span>
                 </label>
+              )}
+              {restauration && (
+                <Field label="Jours où ce plat est servi">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 2, 3, 4, 5, 6].map((j) => {
+                      const actifs = editing.available_days ?? [];
+                      const coche = actifs.includes(j);
+                      return (
+                        <button
+                          key={j}
+                          type="button"
+                          onClick={() =>
+                            setEditing({
+                              ...editing,
+                              available_days: coche ? actifs.filter((x) => x !== j) : [...actifs, j].sort(),
+                            })
+                          }
+                          aria-pressed={coche}
+                          className="rounded-lg px-3 py-1.5 text-[12.5px] font-semibold"
+                          style={{
+                            border: `1px solid ${coche ? "#7C5AF8" : "var(--cl-line)"}`,
+                            background: coche ? "#F1ECFF" : "#fff",
+                            color: coche ? "#4B32B5" : "var(--cl-ink-soft)",
+                          }}
+                        >
+                          {JOURS[j]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+                    Le site annonce alors la prochaine date au client — « disponible jeudi » — au lieu de
+                    le laisser deviner. Aucun jour coché : le plat reste commandable sur demande.
+                  </p>
+                </Field>
               )}
             </div>
 

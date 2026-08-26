@@ -21,7 +21,7 @@ const NOT_NULL: Record<string, unknown> = {
   sort_order: 0,
 };
 
-const JSON_FIELDS = new Set(["tags", "variants", "images"]);
+const JSON_FIELDS = new Set(["tags", "variants", "images", "available_days"]);
 
 // Colonnes numériques. Une saisie non numérique — « 1 000 », « dix », une
 // coquille — arrivait telle quelle jusqu'à Postgres, qui refusait la requête

@@ -41,11 +41,15 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Le nom du produit est requis" }, { status: 400 });
   }
 
-  const colonnes = [
+  // Les deux dernières colonnes arrivent par migration_daily_menu.sql : sur une
+  // base qui ne l'a pas encore, on réinsère sans elles plutôt que d'empêcher la
+  // création d'un produit.
+  const BASE = [
     "agent_id", "name", "description", "price", "price_max", "currency", "category", "tags",
     "stock", "min_order", "rating", "image_url", "product_url", "active", "sort_order",
-    "variants", "images", "daily_menu",
+    "variants", "images",
   ];
+  const colonnes = [...BASE, "daily_menu", "available_days"];
   const inserer = (cols: string[], valeurs: unknown[]) =>
     query(
       `INSERT INTO camille.products (${cols.join(", ")})
@@ -75,14 +79,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       coerce("variants", b.variants),
       coerce("images", b.images),
       coerce("daily_menu", b.daily_menu),
+      coerce("available_days", b.available_days),
     ];
     try {
       r = await inserer(colonnes, valeurs);
     } catch (e) {
-      // Le menu du jour arrive par une migration : sur une base qui ne l'a pas
-      // encore, un produit doit quand même pouvoir être créé.
       if ((e as { code?: string }).code !== "42703") throw e;
-      r = await inserer(colonnes.slice(0, -1), valeurs.slice(0, -1));
+      r = await inserer(BASE, valeurs.slice(0, BASE.length));
     }
   } catch (e) {
     return NextResponse.json(

@@ -22,6 +22,8 @@ export interface Product {
   active?: boolean;
   /** Au menu du jour — n'existe que pour les activités de restauration. */
   daily_menu?: boolean;
+  /** Jours de service, 1 = lundi … 6 = samedi. Vide = pas de jour fixe. */
+  available_days?: number[];
 }
 
 // Une option de variation : texte simple OU { valeur + image liée }
@@ -38,8 +40,12 @@ function fmtPrice(p: Product): string {
   return b != null && b > a ? `${n(a)}–${n(b)} ${cur}` : `${n(a)} ${cur}`;
 }
 
+/** Lundi = 1 … Samedi = 6, écrits comme on les dit. */
+export const JOURS = ["", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+
 export function ProductCard({ product, footer }: { product: Product; footer?: React.ReactNode }) {
   const tags = Array.isArray(product.tags) ? product.tags : [];
+  const jours = Array.isArray(product.available_days) ? product.available_days : [];
   return (
     <div
       className="flex flex-col overflow-hidden rounded-xl"
@@ -133,6 +139,14 @@ export function ProductCard({ product, footer }: { product: Product; footer?: Re
               </div>
             ))}
           </div>
+        )}
+
+        {/* Jours de service : ce qui permet au site d'annoncer une date au
+            client plutôt qu'un vague « sur demande ». */}
+        {jours.length > 0 && (
+          <p className="mt-2.5 text-[11px]" style={{ color: "var(--cl-ink-soft)" }}>
+            Servi&nbsp;: {jours.slice().sort().map((j) => JOURS[j]).filter(Boolean).join(" · ")}
+          </p>
         )}
 
         {/* Tags */}

@@ -20,6 +20,17 @@ ALTER TABLE camille.products
 COMMENT ON COLUMN camille.products.daily_menu IS
   'Le produit fait partie du menu du jour (activités de restauration)';
 
+-- Les jours de la semaine où le plat est servi (1 = lundi … 6 = samedi).
+--
+-- Un plat qui n'est pas au menu aujourd'hui n'est pas pour autant en rupture :
+-- il revient jeudi. Sans cette colonne, le site ne pouvait que dire « sur
+-- demande » ; avec elle, il annonce une date, parce que la cuisine l'a dite.
+ALTER TABLE camille.products
+  ADD COLUMN IF NOT EXISTS available_days JSONB NOT NULL DEFAULT '[]';
+
+COMMENT ON COLUMN camille.products.available_days IS
+  'Jours de service du plat, 1 = lundi … 6 = samedi (activités de restauration)';
+
 -- On ne lit jamais que les produits marqués d'un agent : un index partiel
 -- suffit, et ne coûte rien aux catalogues qui n'utilisent pas le menu du jour.
 CREATE INDEX IF NOT EXISTS products_daily_menu_idx

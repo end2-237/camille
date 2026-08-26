@@ -11,7 +11,7 @@ type RouteContext = { params: Promise<{ agentId: string; productId: string }> };
 const FIELDS = new Set([
   "name", "description", "price", "price_max", "currency", "category",
   "tags", "stock", "min_order", "rating", "image_url", "product_url", "active", "sort_order",
-  "variants", "images", "daily_menu",
+  "variants", "images", "daily_menu", "available_days",
 ]);
 
 async function assertOwner(req: NextRequest, agentId: string) {
@@ -57,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     // La colonne du menu du jour arrive par une migration : tant qu'elle n'est
     // pas appliquée, autant le dire clairement plutôt que de renvoyer l'erreur
     // brute de Postgres.
-    if ((e as { code?: string }).code === "42703" && "daily_menu" in body) {
+    if ((e as { code?: string }).code === "42703" && ("daily_menu" in body || "available_days" in body)) {
       return NextResponse.json(
         { error: "Le menu du jour n'est pas encore activé sur cette base (migration_daily_menu.sql)" },
         { status: 400 }
