@@ -62,7 +62,7 @@ export function PushWebCard() {
     "actif":        { Icon: BellRing, titre: "Notifications activées",        texte: "Tu les reçois même quand le site est fermé." },
     "a-activer":    { Icon: Bell,     titre: "Recevoir les alertes hors du site", texte: "Commande reçue, agent déconnecté, rupture de stock — comme sur le téléphone." },
     "refuse":       { Icon: BellOff,  titre: "Notifications bloquées",        texte: "Le navigateur les refuse pour ce site. À réactiver dans ses réglages, à côté de la barre d'adresse." },
-    "a-installer":  { Icon: Share,    titre: "Ajoutez Camille à votre écran d'accueil", texte: "Sur iPhone, les notifications arrivent une fois l'application installée : bouton Partager, puis « Sur l'écran d'accueil ». Ouvrez-la ensuite depuis l'icône et revenez ici." },
+    "a-installer":  { Icon: Share,    titre: "Ajoutez Camille à votre écran d'accueil", texte: "Sur iPhone, les notifications n'arrivent qu'à l'application installée : bouton Partager, puis « Sur l'écran d'accueil ». Ouvrez-la ensuite depuis l'icône et appuyez sur Activer. Si l'icône est déjà là mais s'ouvre comme un onglet, elle date d'avant la mise à jour : supprimez-la et rajoutez-la." },
     "non-supporte": { Icon: BellOff,  titre: "Navigateur non compatible",     texte: "Les notifications hors onglet demandent un navigateur récent — sur iPhone, iOS 16.4 au minimum. Le journal ci-dessous reste à jour." },
     "non-configure":{ Icon: BellOff,  titre: "",                              texte: "" },
   }[etat];
