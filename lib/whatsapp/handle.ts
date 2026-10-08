@@ -17,6 +17,7 @@
 import { query } from "@/lib/db";
 import { sectorProfile, sertDesRepas } from "@/lib/sectorProfiles";
 import * as meta from "./meta";
+import { avecAgent } from "./identifiants";
 import { repondreBoutique } from "./boutique";
 import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
 
@@ -281,6 +282,12 @@ export async function handleIncoming(msg: IncomingMessage): Promise<void> {
     return;
   }
 
+  // Tout ce qui suit parle à Meta au nom de CET agent : son numéro, son jeton,
+  // son catalogue (ou ceux de l'application s'il n'a pas connecté le sien).
+  return avecAgent(agent.id, () => traiterPourAgent(msg, agent, phone));
+}
+
+async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: string): Promise<void> {
   if (await humainEnCours(agent.id, phone)) {
     console.log("[meta] humain en cours pour", phone, "— l'agent se tait");
     return;

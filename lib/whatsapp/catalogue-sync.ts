@@ -30,6 +30,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { query } from "@/lib/db";
 import * as meta from "./meta";
+import { avecAgent } from "./identifiants";
 import { lirePrix } from "./prix";
 import { decider } from "./appariement";
 import { grouperVariantes, idsAttendus, produitParent, type AxeVariante } from "./variantes";
@@ -111,9 +112,17 @@ async function produitsCamille(agentId: string): Promise<Ligne[]> {
 
 // ── La réconciliation ───────────────────────────────────────────────────────
 
+/** Au nom de l'agent : son catalogue et son jeton s'il a connecté son WhatsApp. */
 export async function reconcilier(
   agentId: string,
   options: { lien?: string; marque?: string } = {}
+): Promise<Rapport> {
+  return avecAgent(agentId, () => reconcilierPour(agentId, options));
+}
+
+async function reconcilierPour(
+  agentId: string,
+  options: { lien?: string; marque?: string }
 ): Promise<Rapport> {
   const rapport: Rapport = { ok: true, pousses: 0, importes: 0, relies: 0, variations: 0, avertissements: [] };
 
@@ -288,6 +297,17 @@ export async function pousserUn(
        images?: string[] | null },
   options: { lien?: string; marque?: string } = {}
 ): Promise<void> {
+  return avecAgent(agentId, () => pousserUnPour(agentId, p, options));
+}
+
+async function pousserUnPour(
+  agentId: string,
+  p: { id: string; name: string; description?: string | null; price?: number | null;
+       currency?: string | null; image_url?: string | null; stock?: number | null;
+       category?: string | null; active?: boolean | null; variants?: AxeVariante[] | null;
+       images?: string[] | null },
+  options: { lien?: string; marque?: string }
+): Promise<void> {
   if (!meta.metaConfigured().ok) return;
   if (p.active === false || !p.image_url || p.price == null) return;
 
@@ -331,7 +351,12 @@ export async function pousserUn(
  * le pire des deux mondes — on a encaissé l'attente du client sans la
  * marchandise.
  */
-export async function retirerUn(retailerIds: string | string[] | null | undefined): Promise<void> {
+export async function retirerUn(
+  retailerIds: string | string[] | null | undefined,
+  /** L'agent dont le catalogue est concerné ; sans lui, le catalogue de l'application. */
+  agentId?: string
+): Promise<void> {
+  if (agentId) return avecAgent(agentId, () => retirerUn(retailerIds));
   const ids = (Array.isArray(retailerIds) ? retailerIds : [retailerIds]).filter(Boolean) as string[];
   if (!ids.length || !meta.metaConfigured().ok) return;
   const r = await meta.supprimerDuCatalogue(ids);

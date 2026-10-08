@@ -119,6 +119,6 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
   } catch { /* lecture impossible : l'identifiant Camille sert de repli */ aRetirer.push(productId); }
 
   await query("DELETE FROM camille.products WHERE id = $1 AND agent_id = $2", [productId, agentId]);
-  retirerUn([...new Set(aRetirer)]).catch(() => {});
+  retirerUn([...new Set(aRetirer)], agentId).catch(() => {});
   return NextResponse.json({ success: true });
 }

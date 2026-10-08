@@ -15,6 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { query } from "@/lib/db";
 import * as meta from "./meta";
+import { avecAgent } from "./identifiants";
 
 const CORE_URL = (process.env.CAMILLE_CORE_URL ?? "https://camille-core.vps.buyticle.com").replace(/\/$/, "");
 const CORE_KEY = process.env.CAMILLE_CORE_API_KEY ?? "";
@@ -90,7 +91,7 @@ export async function envoyerTexte(
   if (!chatId) return { ok: false, transport: "core", error: "aucun destinataire" };
   const { transport, session } = await transportDe(agentId, opts.session);
   if (transport === "meta") {
-    const r = await meta.sendText(chatId, text);
+    const r = await avecAgent(agentId, () => meta.sendText(chatId, text));
     return { ok: r.ok, transport, error: r.error };
   }
   return viaCore("sendText", session, { chatId, text });
@@ -106,7 +107,7 @@ export async function envoyerDocument(
   if (!chatId) return { ok: false, transport: "core", error: "aucun destinataire" };
   const { transport, session } = await transportDe(agentId, opts.session);
   if (transport === "meta") {
-    const r = await meta.sendDocument(chatId, doc.url, doc.name, doc.caption);
+    const r = await avecAgent(agentId, () => meta.sendDocument(chatId, doc.url, doc.name, doc.caption));
     return { ok: r.ok, transport, error: r.error };
   }
   return viaCore("sendFile", session, {

@@ -5,6 +5,7 @@
 import { query } from "@/lib/db";
 import * as meta from "./meta";
 import { transportDe, type EnvoiResult } from "./envoi";
+import { avecAgent } from "./identifiants";
 import { annonce, urlAnimation, type CommandeSuivie } from "./suivi";
 
 export type CommandeComplete = CommandeSuivie & {
@@ -86,6 +87,10 @@ export async function chargerCommande(
 export async function annoncerStatut(orderId: string): Promise<EnvoiResult> {
   const o = await chargerCommande({ id: orderId });
   if (!o) return { ok: false, transport: "meta", error: "commande introuvable" };
+  return avecAgent(String(o.agent_id), () => annoncerPour(o));
+}
+
+async function annoncerPour(o: CommandeComplete): Promise<EnvoiResult> {
   const { transport } = await transportDe(String(o.agent_id), (o as { session_name?: string }).session_name);
   if (transport !== "meta") return { ok: false, transport, skipped: true };
 

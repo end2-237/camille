@@ -15,6 +15,7 @@ import { query } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth-server";
 import { sectorProfile } from "@/lib/sectorProfiles";
 import * as meta from "@/lib/whatsapp/meta";
+import { avecAgent, identifiantsAgent } from "@/lib/whatsapp/identifiants";
 import { modeDeVente, type Agent } from "@/lib/whatsapp/handle";
 
 /**
@@ -86,7 +87,10 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Le catalogue Meta ─────────────────────────────────────────────────────
-  const cat = await meta.listCatalog();
+  // Lu avec les identifiants de l'agent diagnostiqué (les siens s'il a
+  // connecté son WhatsApp, sinon ceux de l'application).
+  const source = agentId ? (await identifiantsAgent(agentId)).source : "env";
+  const cat = agentId ? await avecAgent(agentId, () => meta.listCatalog()) : await meta.listCatalog();
   if (!cat.ok) problemes.push(`Catalogue Meta illisible : ${cat.error}`);
   else if (!cat.items.length) problemes.push("Le catalogue Meta ne renvoie aucun produit.");
 
@@ -125,6 +129,8 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     config,
+    // « agent » : ce commerçant a connecté son propre WhatsApp (Embedded Signup).
+    identifiants: source,
     webhook: {
       url: "https://camille.vps.buyticle.com/api/whatsapp/meta/webhook",
       verify_token_present: Boolean(process.env.WHATSAPP_VERIFY_TOKEN),

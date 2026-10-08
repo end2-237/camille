@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import * as meta from "@/lib/whatsapp/meta";
+import { avecAgent } from "@/lib/whatsapp/identifiants";
 import { reconcilier } from "@/lib/whatsapp/catalogue-sync";
 
 /** L'agent appartient-il bien à l'utilisateur connecté ? */
@@ -53,7 +54,8 @@ export async function GET(req: NextRequest) {
 
   const [cam, met] = await Promise.all([
     query(PRODUITS, [agentId]).catch(() => ({ rows: [] })),
-    meta.listCatalog(),
+    // Le catalogue DE CET AGENT, s'il a connecté son WhatsApp.
+    avecAgent(agentId, () => meta.listCatalog()),
   ]);
 
   // La colonne arrive par migration_meta_transport.sql : son absence ne doit

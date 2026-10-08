@@ -806,6 +806,36 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("pas d'heure → null", lire("le plus vite possible"), null);
 }
 
+// ═══ multi-commerçants — le jeton de chacun, au bon endroit ═══════════════
+{
+  groupe("embedded signup — coffre des jetons, identifiants par commerçant");
+  const { chiffrer, dechiffrer, coffrePret } = await import(`${DIST}/whatsapp/coffre.js`);
+  const K = "a".repeat(64), K2 = "b".repeat(64);
+  const c = chiffrer("EAAG-jeton-secret", K);
+  chk("le jeton n'apparaît pas en clair", !c.includes("jeton") && c.startsWith("v1:"));
+  eq("il se relit avec la bonne clé", dechiffrer(c, K), "EAAG-jeton-secret");
+  eq("une autre clé ne le lit pas", dechiffrer(c, K2), null);
+  const altere = c.slice(0, -4) + (c.slice(-4) === "AAAA" ? "BBBB" : "AAAA");
+  eq("une valeur altérée est refusée, pas déchiffrée de travers", dechiffrer(altere, K), null);
+  chk("deux chiffrements du même jeton diffèrent (IV aléatoire)", chiffrer("x", K) !== chiffrer("x", K));
+  eq("clé absente ou trop courte → coffre pas prêt", [coffrePret(""), coffrePret("abc"), coffrePret(K)], [false, false, true]);
+  let leve = false; try { chiffrer("x", ""); } catch { leve = true; }
+  chk("sans clé, on refuse de ranger un jeton", leve);
+
+  const { courant, avecIdentifiants } = await import(`${DIST}/whatsapp/contexte-meta.js`);
+  process.env.WHATSAPP_TOKEN = "jeton-app"; process.env.PHONE_NUMBER_ID = "111";
+  eq("hors contexte : les identifiants de l'application (comme avant)", [courant().token, courant().source], ["jeton-app", "env"]);
+  const A = { token: "jeton-A", phoneId: "AAA", catalogId: "catA", wabaId: "wA", source: "agent" };
+  const B = { token: "jeton-B", phoneId: "BBB", catalogId: "catB", wabaId: "wB", source: "agent" };
+  const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+  const vus = await Promise.all([
+    avecIdentifiants(A, async () => { await attendre(15); return courant().phoneId; }),
+    avecIdentifiants(B, async () => { await attendre(5); const x = courant().phoneId; await attendre(15); return x + courant().phoneId; }),
+  ]);
+  eq("deux commerçants en même temps : chacun garde SES identifiants", vus, ["AAA", "BBBBBB"]);
+  eq("après coup, on revient à l'application", courant().phoneId, "111");
+}
+
 // ═══ voix — un vocal devient un message écrit ══════════════════════════════
 {
   groupe("voix — transcription des vocaux");

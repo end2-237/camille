@@ -15,11 +15,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { articlesPour, imagesSupplementaires, type AxeVariante } from "./variantes";
+import { courant } from "./contexte-meta";
 
 const GRAPH = (process.env.GRAPH_VERSION || "v26.0").replace(/^\/?/, "");
-const TOKEN = process.env.WHATSAPP_TOKEN || "";
-const PHONE_ID = process.env.PHONE_NUMBER_ID || "";
-const CATALOG_ID = process.env.CATALOG_ID || "";
+// Les identifiants ne sont plus des constantes : chaque appel lit ceux du
+// commerçant en cours (contexte-meta.ts), et retombe sur l'environnement hors
+// de tout contexte — le comportement d'avant l'Embedded Signup.
+const jeton = () => courant().token;
+const numero = () => courant().phoneId;
+const catalogueId = () => courant().catalogId;
+const waba = () => courant().wabaId;
 
 export type MetaResult = { ok: boolean; id?: string; error?: string; status?: number };
 
@@ -37,13 +42,13 @@ export function normalizePhone(raw: string): string {
  * désactivait des jetons valides faute de lire le corps de la réponse.
  */
 async function post(path: string, body: unknown): Promise<MetaResult> {
-  if (!TOKEN || !PHONE_ID) {
+  if (!jeton() || !numero()) {
     return { ok: false, error: "WHATSAPP_TOKEN ou PHONE_NUMBER_ID absent de l'environnement" };
   }
   try {
     const res = await fetch(`https://graph.facebook.com/${GRAPH}/${path}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${jeton()}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     const txt = await res.text();
@@ -80,7 +85,7 @@ async function post(path: string, body: unknown): Promise<MetaResult> {
 }
 
 const send = (to: string, payload: Record<string, unknown>) =>
-  post(`${PHONE_ID}/messages`, {
+  post(`${numero()}/messages`, {
     messaging_product: "whatsapp",
     recipient_type: "individual",
     to: normalizePhone(to),
@@ -162,9 +167,13 @@ const MEDIA_TTL = 20 * 24 * 3600 * 1000;
 
 /** L'identifiant Meta de ce média, téléversé au besoin. `null` si impossible. */
 export async function mediaId(url: string, type = "video/mp4"): Promise<string | null> {
-  const garde = MEDIAS.get(url);
+  // Un identifiant de média appartient au numéro qui l'a téléversé : la clé
+  // du cache porte donc le numéro, sinon un commerçant enverrait l'identifiant
+  // d'un autre — refusé par Meta.
+  const cleMedia = `${numero()}|${url}`;
+  const garde = MEDIAS.get(cleMedia);
   if (garde && garde.expire > Date.now()) return garde.id;
-  if (!TOKEN || !PHONE_ID) return null;
+  if (!jeton() || !numero()) return null;
 
   try {
     const src = await fetch(url);
@@ -185,9 +194,9 @@ export async function mediaId(url: string, type = "video/mp4"): Promise<string |
     form.append("type", type);
     form.append("file", new Blob([octets], { type }), url.split("/").pop() || "media.mp4");
 
-    const res = await fetch(`https://graph.facebook.com/${GRAPH}/${PHONE_ID}/media`, {
+    const res = await fetch(`https://graph.facebook.com/${GRAPH}/${numero()}/media`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${TOKEN}` },
+      headers: { Authorization: `Bearer ${jeton()}` },
       body: form,
     });
     const j = await res.json().catch(() => ({}));
@@ -195,7 +204,7 @@ export async function mediaId(url: string, type = "video/mp4"): Promise<string |
       console.error("[meta] téléversement refusé :", JSON.stringify(j).slice(0, 300));
       return null;
     }
-    MEDIAS.set(url, { id: String(j.id), expire: Date.now() + MEDIA_TTL });
+    MEDIAS.set(cleMedia, { id: String(j.id), expire: Date.now() + MEDIA_TTL });
     console.log(`[meta] vidéo téléversée une fois (${Math.round(octets.byteLength / 1048576)} Mo) → id ${j.id}`);
     return String(j.id);
   } catch (e) {
@@ -216,10 +225,10 @@ export async function telechargerMedia(
   id: string,
   maxOctets = 16 * 1024 * 1024
 ): Promise<{ octets: ArrayBuffer; mime: string } | null> {
-  if (!TOKEN || !id) return null;
+  if (!jeton() || !id) return null;
   try {
     const info = await fetch(`https://graph.facebook.com/${GRAPH}/${encodeURIComponent(id)}`, {
-      headers: { Authorization: `Bearer ${TOKEN}` },
+      headers: { Authorization: `Bearer ${jeton()}` },
     });
     const j = (await info.json().catch(() => ({}))) as { url?: string; mime_type?: string; file_size?: number };
     if (!info.ok || !j.url) {
@@ -230,7 +239,7 @@ export async function telechargerMedia(
       console.warn(`[meta] média reçu trop lourd (${Math.round(j.file_size / 1048576)} Mo) — ignoré`);
       return null;
     }
-    const fichier = await fetch(j.url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const fichier = await fetch(j.url, { headers: { Authorization: `Bearer ${jeton()}` } });
     if (!fichier.ok) {
       console.error("[meta] téléchargement du média refusé :", fichier.status);
       return null;
@@ -303,7 +312,7 @@ export function sendLocation(
  * délai côté camille-core.
  */
 export function markReadTyping(messageId: string): Promise<MetaResult> {
-  return post(`${PHONE_ID}/messages`, {
+  return post(`${numero()}/messages`, {
     messaging_product: "whatsapp",
     status: "read",
     message_id: messageId,
@@ -378,7 +387,7 @@ export function sendList(
  * PANIER WhatsApp natif sans qu'on ait à interpréter « oui je veux ça ».
  */
 export function sendProduct(
-  to: string, retailerId: string, body?: string, catalogId = CATALOG_ID
+  to: string, retailerId: string, body?: string, catalogId = catalogueId()
 ): Promise<MetaResult> {
   return send(to, {
     type: "interactive",
@@ -399,7 +408,7 @@ export function sendProduct(
 export function sendProductList(
   to: string, header: string, body: string,
   sections: { title: string; retailerIds: string[] }[],
-  footer?: string, catalogId = CATALOG_ID
+  footer?: string, catalogId = catalogueId()
 ): Promise<MetaResult> {
   return send(to, {
     type: "interactive",
@@ -435,7 +444,7 @@ export function sendProductList(
  *     message — pas seulement sa carte.
  */
 export function sendCarousel(
-  to: string, body: string, retailerIds: string[], catalogId = CATALOG_ID
+  to: string, body: string, retailerIds: string[], catalogId = catalogueId()
 ): Promise<MetaResult> {
   const ids = retailerIds.slice(0, 10);
   if (ids.length < 2) {
@@ -473,7 +482,7 @@ export function sendCarousel(
  * sans rien parce qu'un produit sur cinq est fantôme.
  */
 export async function sendCarouselRobuste(
-  to: string, body: string, retailerIds: string[], catalogId = CATALOG_ID
+  to: string, body: string, retailerIds: string[], catalogId = catalogueId()
 ): Promise<MetaResult & { rejetes?: string[] }> {
   let ids = retailerIds.slice(0, 10);
   const rejetes: string[] = [];
@@ -540,7 +549,6 @@ export function sendTemplate(
 // le commerçant qui doit aller les créer dans les outils de Meta — ou nous qui
 // les créons à la main pour chacun.
 
-const WABA = process.env.WABA_ID || "";
 
 export type Template = {
   id?: string;
@@ -552,15 +560,15 @@ export type Template = {
 };
 
 /** Les modèles du compte, avec leur statut d'approbation. */
-export async function listTemplates(wabaId = WABA): Promise<{
+export async function listTemplates(wabaId = waba()): Promise<{
   ok: boolean; templates: Template[]; error?: string;
 }> {
-  if (!TOKEN || !wabaId) return { ok: false, templates: [], error: "WHATSAPP_TOKEN ou WABA_ID absent" };
+  if (!jeton() || !wabaId) return { ok: false, templates: [], error: "WHATSAPP_TOKEN ou WABA_ID absent" };
   try {
     const res = await fetch(
       `https://graph.facebook.com/${GRAPH}/${wabaId}/message_templates` +
         `?fields=id,name,status,category,language,components&limit=100`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } }
+      { headers: { Authorization: `Bearer ${jeton()}` } }
     );
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -590,9 +598,9 @@ export async function createTemplate(
     examples?: string[];
     footer?: string;
   },
-  wabaId = WABA
+  wabaId = waba()
 ): Promise<{ ok: boolean; id?: string; status?: string; error?: string }> {
-  if (!TOKEN || !wabaId) return { ok: false, error: "WHATSAPP_TOKEN ou WABA_ID absent" };
+  if (!jeton() || !wabaId) return { ok: false, error: "WHATSAPP_TOKEN ou WABA_ID absent" };
 
   // Meta impose : minuscules, chiffres et tirets bas uniquement.
   const name = input.name.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 512);
@@ -618,7 +626,7 @@ export async function createTemplate(
   try {
     const res = await fetch(`https://graph.facebook.com/${GRAPH}/${wabaId}/message_templates`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${jeton()}`, "Content-Type": "application/json" },
       body: JSON.stringify({ name, language: input.language || "fr", category: input.category, components }),
     });
     const j = await res.json().catch(() => ({}));
@@ -653,13 +661,13 @@ export async function createTemplate(
  * pas un nom, on en choisit un autre.
  */
 export async function deleteTemplate(
-  name: string, wabaId = WABA
+  name: string, wabaId = waba()
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!TOKEN || !wabaId) return { ok: false, error: "WHATSAPP_TOKEN ou WABA_ID absent" };
+  if (!jeton() || !wabaId) return { ok: false, error: "WHATSAPP_TOKEN ou WABA_ID absent" };
   try {
     const res = await fetch(
       `https://graph.facebook.com/${GRAPH}/${wabaId}/message_templates?name=${encodeURIComponent(name)}`,
-      { method: "DELETE", headers: { Authorization: `Bearer ${TOKEN}` } }
+      { method: "DELETE", headers: { Authorization: `Bearer ${jeton()}` } }
     );
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -723,17 +731,17 @@ export type MetaCatalogItem = {
  * ou un produit en `out of stock` fait échouer l'envoi d'une fiche, et le
  * message d'erreur de Meta ne dit pas lequel.
  */
-export async function listCatalog(catalogId = CATALOG_ID, limit = 50): Promise<{
+export async function listCatalog(catalogId = catalogueId(), limit = 50): Promise<{
   ok: boolean; items: MetaCatalogItem[]; error?: string;
 }> {
-  if (!TOKEN || !catalogId) return { ok: false, items: [], error: "WHATSAPP_TOKEN ou CATALOG_ID absent" };
+  if (!jeton() || !catalogId) return { ok: false, items: [], error: "WHATSAPP_TOKEN ou CATALOG_ID absent" };
   try {
     const fields =
       "retailer_id,name,price,availability,image_url,description,capability_to_review_status," +
       "product_group{id},color,size,pattern,material,custom_label_0";
     const res = await fetch(
       `https://graph.facebook.com/${GRAPH}/${catalogId}/products?fields=${fields}&limit=${limit}`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } }
+      { headers: { Authorization: `Bearer ${jeton()}` } }
     );
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -823,8 +831,8 @@ export async function syncCatalogue(
   produits: ProduitASyncer[],
   options: { catalogId?: string; lien?: string; marque?: string } = {}
 ): Promise<{ ok: boolean; envoyes: number; avertissements: string[]; error?: string }> {
-  const catalogId = options.catalogId || CATALOG_ID;
-  if (!TOKEN || !catalogId) {
+  const catalogId = options.catalogId || catalogueId();
+  if (!jeton() || !catalogId) {
     return { ok: false, envoyes: 0, avertissements: [], error: "WHATSAPP_TOKEN ou CATALOG_ID absent" };
   }
   if (!produits.length) return { ok: true, envoyes: 0, avertissements: [] };
@@ -879,7 +887,7 @@ export async function syncCatalogue(
   try {
     const res = await fetch(`https://graph.facebook.com/${GRAPH}/${catalogId}/items_batch`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${jeton()}`, "Content-Type": "application/json" },
       body: JSON.stringify({ item_type: "PRODUCT_ITEM", requests }),
     });
     const j = await res.json().catch(() => ({}));
@@ -914,16 +922,16 @@ export async function syncCatalogue(
  * la commande tombe, et le commerçant n'a rien à vendre.
  */
 export async function supprimerDuCatalogue(
-  retailerIds: string[], catalogId = CATALOG_ID
+  retailerIds: string[], catalogId = catalogueId()
 ): Promise<{ ok: boolean; supprimes: number; error?: string }> {
-  if (!TOKEN || !catalogId) return { ok: false, supprimes: 0, error: "WHATSAPP_TOKEN ou CATALOG_ID absent" };
+  if (!jeton() || !catalogId) return { ok: false, supprimes: 0, error: "WHATSAPP_TOKEN ou CATALOG_ID absent" };
   const ids = retailerIds.filter(Boolean);
   if (!ids.length) return { ok: true, supprimes: 0 };
 
   try {
     const res = await fetch(`https://graph.facebook.com/${GRAPH}/${catalogId}/items_batch`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${jeton()}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         item_type: "PRODUCT_ITEM",
         requests: ids.map((id) => ({ method: "DELETE", data: { id } })),
@@ -948,12 +956,12 @@ export function metaConfigured(): {
   ok: boolean; phone_number_id: string; catalog_id: string; graph: string; token: string;
 } {
   return {
-    ok: Boolean(TOKEN && PHONE_ID),
-    phone_number_id: PHONE_ID || "(absent)",
-    catalog_id: CATALOG_ID || "(absent)",
+    ok: Boolean(jeton() && numero()),
+    phone_number_id: numero() || "(absent)",
+    catalog_id: catalogueId() || "(absent)",
     graph: GRAPH,
     // Les quatre derniers caractères suffisent à vérifier qu'on parle du bon
     // jeton sans l'exposer dans un journal ou une réponse d'API.
-    token: TOKEN ? `…${TOKEN.slice(-4)} (${TOKEN.length} car.)` : "(absent)",
+    token: jeton() ? `…${jeton().slice(-4)} (${jeton().length} car.)` : "(absent)",
   };
 }
