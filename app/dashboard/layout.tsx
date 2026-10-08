@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Plus, LogOut, ChevronLeft, ChevronDown, Users, Wallet, Globe,
-  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp, Building2, Bike, Route, MessageSquare } from "lucide-react";
+  Search, Bell, HelpCircle, Command, LayoutDashboard, ExternalLink, CreditCard, BarChart2, Menu, Package, Settings, Plug, Receipt, ShieldCheck, Activity, ImageIcon, TrendingUp, Building2, Bike, Route, MessageSquare, MessageCircle } from "lucide-react";
 import { authHeaders }  from "@/lib/auth-client";
 import { useAuth }      from "@/hooks/useAuth";
 import { useAgents }    from "@/hooks/useAgents";
@@ -191,6 +191,8 @@ function Sidebar({ collapsedProp, onToggle, isDesktop, mobileOpen, onCloseMobile
                   // Un seul catalogue, vu de deux endroits. La réconciliation
                   // existait sans bouton pour la lancer — donc elle n'existait pas.
                   { href: `/dashboard/${activeAgentId}/catalog-sync`, label: "Catalogue WhatsApp", icon: <Package className="w-3.5 h-3.5" />, active: pathname.endsWith("/catalog-sync") },
+                  // Le WhatsApp officiel du commerçant (Embedded Signup de Meta).
+                  { href: `/dashboard/${activeAgentId}/whatsapp`, label: "WhatsApp officiel", icon: <MessageCircle className="w-3.5 h-3.5" />, active: pathname.endsWith("/whatsapp") },
                   { href: `/dashboard/${activeAgentId}/clientele`, label: "Clientèle", icon: <Users className="w-3.5 h-3.5" />, active: pathname.endsWith("/clientele") },
                   { href: `/dashboard/${activeAgentId}/livreurs`, label: "Livreurs", icon: <Bike className="w-3.5 h-3.5" />, active: pathname.endsWith("/livreurs") },
                   // Sans site branché, les visuels servent quand même à la
