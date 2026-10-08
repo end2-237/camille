@@ -174,10 +174,11 @@ export function Entete() {
   const { agent } = useAgentCourant();
   const { unread } = useNotifications(20);
   const compacte = useCompacte();
+  const chemin = usePathname();
   return (
     // La boîte extérieure garde sa hauteur (rien ne saute sous elle) ; seule
     // la barre intérieure se replie.
-    <header className="coq-entete sticky top-0 z-40" data-compacte={compacte ? "1" : undefined}>
+    <header className="coq-entete sticky top-0 z-40" data-compacte={compacte ? "1" : undefined} data-accueil={chemin === "/dashboard" ? "1" : undefined}>
       <div className="coq-barre">
       <div className="coq-rang flex items-center justify-between gap-3">
         <Link href="/dashboard" aria-label="Accueil du tableau de bord"><LogoBlanc /></Link>

@@ -13,7 +13,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckCheck, FileText, Megaphone, Plus, RefreshCw, Send, Trash2, Wrench, X } from "lucide-react";
 import { authHeaders } from "@/lib/auth-client";
+import { Bandeau, Bouton, BoutonRond, Pastille, Squelettes, StylesUI, Vide, apparait, type Ton } from "@/components/dashboard/ui";
+import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
 type Template = {
   id?: string;
@@ -24,18 +28,18 @@ type Template = {
 };
 
 /** Ce que le commerçant comprend, par opposition au statut technique de Meta. */
-const ETAT: Record<string, { texte: string; fond: string; encre: string }> = {
-  APPROVED: { texte: "Approuvé", fond: "#E7F8F0", encre: "#1B6E51" },
-  PENDING: { texte: "En attente", fond: "#FDF1DC", encre: "#8A5A00" },
-  IN_APPEAL: { texte: "En appel", fond: "#FDF1DC", encre: "#8A5A00" },
-  REJECTED: { texte: "Refusé", fond: "#F7E8E4", encre: "#A63D28" },
-  PAUSED: { texte: "Suspendu", fond: "#F7E8E4", encre: "#A63D28" },
-  DISABLED: { texte: "Désactivé", fond: "#F2F2F2", encre: "#666" },
+const ETAT: Record<string, { texte: string; ton: Ton }> = {
+  APPROVED: { texte: "Approuvé", ton: "vert" },
+  PENDING: { texte: "En attente", ton: "ambre" },
+  IN_APPEAL: { texte: "En appel", ton: "ambre" },
+  REJECTED: { texte: "Refusé", ton: "rouge" },
+  PAUSED: { texte: "Suspendu", ton: "rouge" },
+  DISABLED: { texte: "Désactivé", ton: "gris" },
 };
 
 const CATEGORIES = [
-  { v: "UTILITY", l: "Utilitaire", aide: "Information liée à une commande du client. C'est ce qu'il faut dans presque tous les cas." },
-  { v: "MARKETING", l: "Marketing", aide: "Promotion, nouveauté. Plus cher, et refusable si le client n'a rien demandé." },
+  { v: "UTILITY", l: "Utilitaire", Icone: Wrench, aide: "Information liée à une commande du client. C'est ce qu'il faut dans presque tous les cas." },
+  { v: "MARKETING", l: "Marketing", Icone: Megaphone, aide: "Promotion, nouveauté. Plus cher, et refusable si le client n'a rien demandé." },
 ];
 
 // Les trois modèles dont tout commerce a besoin. Proposés tels quels pour que
@@ -143,211 +147,216 @@ export default function TemplatesPage() {
     }
   }
 
-  const champ: React.CSSProperties = {
-    width: "100%", padding: "9px 11px", borderRadius: 9, fontSize: 13.5,
-    border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-ink)",
-  };
+  // L'aperçu remplace {{1}}, {{2}}… par les exemples : on voit ce que le
+  // client recevra, pas une formule.
+  const apercu = body.replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => examples[Number(n) - 1] || `{{${n}}}`);
+  const approuves = (templates || []).filter((t) => t.status === "APPROVED").length;
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "28px 20px 80px" }}>
-      <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: "var(--cl-ink)", margin: 0 }}>
-        Modèles de message
-      </h1>
-      <p style={{ color: "var(--cl-sub)", fontSize: 13.5, lineHeight: 1.55, marginTop: 6, maxWidth: "60ch" }}>
-        Passé 24 h sans nouvelle du client, WhatsApp n&apos;autorise que des messages
-        approuvés à l&apos;avance. C&apos;est le cas de l&apos;accusé envoyé le lendemain, du
-        suivi de livraison, et de la réponse à une réclamation.
-      </p>
+    <div className="py-6 lg:py-8">
+      <StylesUI />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <section className="min-w-0">
+          <Bandeau ton="violet" titre="Pourquoi des modèles ?">
+            Passé 24 h sans nouvelle du client, WhatsApp n&apos;accepte que des messages approuvés à l&apos;avance :
+            l&apos;accusé envoyé le lendemain, le suivi de livraison, la réponse à une réclamation.
+          </Bandeau>
 
-      {err ? (
-        <div style={{ marginTop: 14, padding: "11px 13px", borderRadius: 10,
-          background: "#F7E8E4", border: "1px solid #A63D28", fontSize: 13 }}>
-          {err}
-        </div>
-      ) : null}
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>
+              Vos modèles {templates && <span className="text-[13px] font-normal" style={{ color: "var(--cl-ink-faint)" }}>· {approuves} approuvé{approuves > 1 ? "s" : ""} sur {templates.length}</span>}
+            </p>
+            <div className="flex items-center gap-2">
+              <BoutonRond icone={RefreshCw} label="Actualiser" onClick={load} />
+              {!form && <Bouton variante="encre" icone={Plus} onClick={() => setForm(true)}>Créer un modèle</Bouton>}
+            </div>
+          </div>
 
-      {/* ── Les modèles existants ─────────────────────────────────────────── */}
-      <div style={{ marginTop: 22 }}>
-        {templates === null ? (
-          <p style={{ color: "var(--cl-sub)", fontSize: 13 }}>Chargement…</p>
-        ) : templates.length === 0 ? (
-          <p style={{ color: "var(--cl-sub)", fontSize: 13 }}>
-            Aucun modèle pour le moment. Crées-en un ci-dessous.
-          </p>
-        ) : (
-          <div style={{ border: "1px solid var(--cl-line)", borderRadius: 12, overflow: "hidden" }}>
-            {templates.map((t, i) => {
-              const e = ETAT[String(t.status)] || { texte: t.status || "—", fond: "#F2F2F2", encre: "#666" };
-              return (
-                <div key={t.id || t.name} style={{ display: "flex", alignItems: "center", gap: 12,
-                  padding: "11px 14px", background: "#fff",
-                  borderTop: i === 0 ? "none" : "1px solid #F2F2F2" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--cl-ink)" }}>{t.name}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--cl-sub)", marginTop: 1 }}>
-                      {t.category === "UTILITY" ? "Utilitaire" : t.category === "MARKETING" ? "Marketing" : t.category}
-                      {t.language ? ` · ${t.language}` : ""}
+          <div className="mt-4 space-y-3">
+            {err && <Bandeau ton="rouge">{err}</Bandeau>}
+            {note && <Bandeau ton={note.includes("supprimé") ? "vert" : "rouge"}>{note}</Bandeau>}
+          </div>
+
+          <div className="mt-4">
+            {templates === null ? (
+              <Squelettes n={3} hauteur={76} />
+            ) : templates.length === 0 ? (
+              <Vide doodle="reading" titre="Aucun modèle pour le moment." texte="Partez d'un des trois modèles courants : la création ne prend qu'une minute."
+                action={!form ? <Bouton variante="encre" icone={Plus} onClick={() => setForm(true)}>Créer un modèle</Bouton> : undefined} />
+            ) : (
+              <motion.ul layout className="grid gap-3 xl:grid-cols-2">
+                <AnimatePresence initial={false}>
+                  {templates.map((t, i) => {
+                    const e = ETAT[String(t.status)] || { texte: t.status || "—", ton: "gris" as Ton };
+                    const confirme = aSupprimer === t.name;
+                    return (
+                      <motion.li key={t.id || t.name} layout {...apparait(i)} exit={{ opacity: 0, scale: 0.97 }}
+                        className="ui-carte rounded-[24px] p-4">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+                            <FileText className="h-[18px] w-[18px]" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14.5px] font-medium" style={{ color: "var(--cl-ink)" }}>{t.name}</p>
+                            <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+                              {t.category === "UTILITY" ? "Utilitaire" : t.category === "MARKETING" ? "Marketing" : t.category}
+                              {t.language ? ` · ${t.language}` : ""}
+                            </p>
+                          </div>
+                          <Pastille ton={e.ton} point>{e.texte}</Pastille>
+                          {!confirme && (
+                            <BoutonRond icone={Trash2} label="Supprimer ce modèle" onClick={() => { setASupprimer(t.name); setNote(""); }} />
+                          )}
+                        </div>
+                        {/* La seule conséquence irréversible de la suppression, dite avant. */}
+                        <AnimatePresence>
+                          {confirme && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={RESSORT} className="overflow-hidden">
+                              <div className="mt-3 rounded-[18px] p-3.5 text-[13px] leading-relaxed" style={{ background: "#FDF1DC", color: "#6B4500" }}>
+                                Les messages déjà envoyés ne changent pas, mais <strong>Meta garde ce nom bloqué longtemps</strong>.
+                                Pour réécrire ce message plus tard, il faudra un autre nom.
+                                <div className="mt-3 flex gap-2">
+                                  <Bouton variante="danger" icone={Trash2} occupe={busy} disabled={busy} onClick={() => supprimer(t.name)}>Supprimer</Bouton>
+                                  <Bouton variante="clair" onClick={() => setASupprimer("")}>Garder</Bouton>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.li>
+                    );
+                  })}
+                </AnimatePresence>
+              </motion.ul>
+            )}
+          </div>
+
+          {/* ── Création ──────────────────────────────────────────────────── */}
+          <AnimatePresence>
+            {form && (
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={RESSORT}
+                className="ui-carte mt-6 rounded-[28px] p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[18px] font-medium" style={{ color: "var(--cl-ink)" }}>Nouveau modèle</p>
+                    <p className="text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>Partez d&apos;un modèle courant, ou écrivez le vôtre.</p>
+                  </div>
+                  <BoutonRond icone={X} label="Fermer" onClick={() => { setForm(false); setMsg(""); }} />
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {MODELES.map((m) => (
+                    <button key={m.name} onClick={() => prendreModele(m)}
+                      className="rounded-full px-4 py-2 text-[13px] transition-colors"
+                      style={name === m.name ? { background: "var(--cl-ink)", color: "#fff" } : { background: "#F4F2F7", color: "var(--cl-ink)" }}>
+                      {m.l}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-5 grid gap-5">
+                  <label className="grid gap-1.5">
+                    <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Nom</span>
+                    <input id="tpl-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="livraison" className="ui-champ" />
+                    <span className="px-1 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Minuscules, chiffres et tirets bas. Le client ne le voit pas.</span>
+                  </label>
+
+                  {/* La catégorie : deux grands boutons radio plutôt qu'une liste. */}
+                  <div className="grid gap-1.5">
+                    <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Catégorie</span>
+                    <div role="radiogroup" aria-label="Catégorie" className="grid gap-2 sm:grid-cols-2">
+                      {CATEGORIES.map((c) => {
+                        const actif = category === c.v;
+                        return (
+                          <button key={c.v} role="radio" aria-checked={actif} onClick={() => setCategory(c.v)}
+                            className="flex items-start gap-3 rounded-[20px] p-3.5 text-left transition-shadow"
+                            style={{ background: actif ? "var(--cl-accent-soft)" : "#F7F6FA", boxShadow: actif ? "inset 0 0 0 2px var(--cl-accent)" : "none" }}>
+                            <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full"
+                              style={{ boxShadow: `inset 0 0 0 2px ${actif ? "var(--cl-accent)" : "#CFC9DA"}`, background: "#fff" }}>
+                              {actif && <motion.span layoutId="tpl-radio" transition={RESSORT} className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--cl-accent)" }} />}
+                            </span>
+                            <span>
+                              <span className="flex items-center gap-1.5 text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}><c.Icone className="h-4 w-4" /> {c.l}</span>
+                              <span className="mt-0.5 block text-[12px] leading-snug" style={{ color: "var(--cl-ink-faint)" }}>{c.aide}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "4px 9px",
-                    borderRadius: 999, background: e.fond, color: e.encre }}>
-                    {e.texte}
-                  </span>
 
-                  {aSupprimer === t.name ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
-                      <button onClick={() => supprimer(t.name)} disabled={busy}
-                        style={{ padding: "6px 11px", borderRadius: 999, border: "none", background: "#A63D28",
-                          color: "#fff", fontSize: 12, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>
-                        {busy ? "…" : "Confirmer"}
-                      </button>
-                      <button onClick={() => setASupprimer("")}
-                        style={{ padding: "6px 11px", borderRadius: 999, background: "transparent",
-                          border: "1px solid var(--cl-line)", color: "var(--cl-sub)", fontSize: 12, cursor: "pointer" }}>
-                        Annuler
-                      </button>
+                  <label className="grid gap-1.5">
+                    <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Message</span>
+                    <textarea id="tpl-body" value={body} onChange={(e) => setBody(e.target.value)} rows={4}
+                      placeholder="Bonjour {{1}}, ta commande {{2}} vient de partir en livraison 🛵" className="ui-champ" />
+                    <span className="px-1 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+                      Écrivez <code>{"{{1}}"}</code>, <code>{"{{2}}"}</code>… là où viendront le prénom, la référence ou le montant.
+                    </span>
+                  </label>
+
+                  {variables > 0 && (
+                    <div className="grid gap-2">
+                      <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Exemples · {variables} variable{variables > 1 ? "s" : ""}</span>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {Array.from({ length: variables }, (_, i) => (
+                          <input key={i} id={`tpl-ex-${i}`} value={examples[i] || ""} className="ui-champ"
+                            onChange={(e) => { const v = [...examples]; v[i] = e.target.value; setExamples(v); }}
+                            placeholder={`Exemple pour {{${i + 1}}}`} />
+                        ))}
+                      </div>
+                      <span className="px-1 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Meta juge le rendu réel avec ces exemples. Ils ne partent jamais à un client.</span>
                     </div>
-                  ) : (
-                    <button onClick={() => { setASupprimer(t.name); setNote(""); }}
-                      title="Supprimer ce modèle"
-                      style={{ flexShrink: 0, padding: "5px 10px", borderRadius: 999, background: "transparent",
-                        border: "1px solid var(--cl-line)", color: "var(--cl-sub)", fontSize: 12, cursor: "pointer" }}>
-                      Supprimer
-                    </button>
                   )}
+
+                  <label className="grid gap-1.5">
+                    <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Pied de page <span className="font-normal" style={{ color: "var(--cl-ink-faint)" }}>· facultatif</span></span>
+                    <input id="tpl-footer" value={footer} onChange={(e) => setFooter(e.target.value)} placeholder="BUYTICLE · Douala" className="ui-champ" />
+                  </label>
                 </div>
-              );
-            })}
-          </div>
-        )}
 
-        {/* La seule conséquence irréversible de la suppression, dite avant. */}
-        {aSupprimer ? (
-          <div style={{ marginTop: 11, padding: "11px 13px", borderRadius: 10, fontSize: 13, lineHeight: 1.5,
-            background: "#FDF1DC", border: "1px solid #F0D9A8", color: "#6B4500" }}>
-            Supprimer <strong>{aSupprimer}</strong> ? Les messages déjà envoyés ne changent pas, mais{" "}
-            <strong>Meta garde ce nom bloqué longtemps</strong> — bien au-delà de la minute qu&apos;il
-            annonce. Pour réécrire ce message plus tard, il faudra lui donner un autre nom.
-          </div>
-        ) : null}
+                {msg && <div className="mt-4"><Bandeau ton={msg.startsWith("Soumis") ? "vert" : "rouge"}>{msg}</Bandeau></div>}
 
-        {note ? (
-          <div style={{ marginTop: 11, padding: "10px 12px", borderRadius: 9, fontSize: 13, lineHeight: 1.5,
-            background: note.includes("supprimé") ? "#E7F8F0" : "#F7E8E4",
-            border: `1px solid ${note.includes("supprimé") ? "#1B6E51" : "#A63D28"}` }}>
-            {note}
-          </div>
-        ) : null}
-      </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Bouton variante="encre" icone={Send} occupe={busy} onClick={soumettre} disabled={busy || !name.trim() || !body.trim()}>
+                    {busy ? "Envoi…" : "Soumettre à Meta"}
+                  </Bouton>
+                  <Bouton variante="clair" onClick={() => { setForm(false); setMsg(""); }}>Fermer</Bouton>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
 
-      {/* ── Création ──────────────────────────────────────────────────────── */}
-      {!form ? (
-        <button onClick={() => setForm(true)}
-          style={{ marginTop: 18, padding: "11px 18px", borderRadius: 999, border: "none",
-            background: "#101012", color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
-          Créer un modèle
-        </button>
-      ) : (
-        <div style={{ marginTop: 20, padding: 18, border: "1px solid var(--cl-line)", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 4px", color: "var(--cl-ink)" }}>
-            Nouveau modèle
-          </h2>
-          <p style={{ fontSize: 12.5, color: "var(--cl-sub)", margin: "0 0 16px" }}>
-            Pars d&apos;un modèle courant, ou écris le tien.
-          </p>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 18 }}>
-            {MODELES.map((m) => (
-              <button key={m.name} onClick={() => prendreModele(m)}
-                style={{ padding: "7px 12px", borderRadius: 999, fontSize: 12.5, cursor: "pointer",
-                  border: "1px solid var(--cl-line)", background: "#FAFAF8", color: "var(--cl-ink)" }}>
-                {m.l}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ display: "grid", gap: 14 }}>
-            <label style={{ display: "grid", gap: 5 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--cl-ink)" }}>Nom</span>
-              <input id="tpl-name" value={name} onChange={(e) => setName(e.target.value)}
-                placeholder="livraison" style={champ} />
-              <span style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>
-                Minuscules, chiffres et tirets bas. Ce nom ne sera pas vu par le client.
-              </span>
-            </label>
-
-            <label style={{ display: "grid", gap: 5 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--cl-ink)" }}>Catégorie</span>
-              <select id="tpl-cat" value={category} onChange={(e) => setCategory(e.target.value)} style={champ}>
-                {CATEGORIES.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
-              </select>
-              <span style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>
-                {CATEGORIES.find((c) => c.v === category)?.aide}
-              </span>
-            </label>
-
-            <label style={{ display: "grid", gap: 5 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--cl-ink)" }}>Message</span>
-              <textarea id="tpl-body" value={body} onChange={(e) => setBody(e.target.value)} rows={4}
-                placeholder="Bonjour {{1}}, ta commande {{2}} vient de partir en livraison 🛵"
-                style={{ ...champ, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
-              <span style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>
-                Écris <code>{"{{1}}"}</code>, <code>{"{{2}}"}</code>… là où le prénom, la référence ou le
-                montant viendront se placer.
-              </span>
-            </label>
-
-            {variables > 0 ? (
-              <div style={{ display: "grid", gap: 7 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--cl-ink)" }}>
-                  Exemples ({variables} variable{variables > 1 ? "s" : ""})
-                </span>
-                {Array.from({ length: variables }, (_, i) => (
-                  <input key={i} id={`tpl-ex-${i}`} value={examples[i] || ""}
-                    onChange={(e) => {
-                      const v = [...examples]; v[i] = e.target.value; setExamples(v);
-                    }}
-                    placeholder={`exemple pour {{${i + 1}}}`} style={champ} />
-                ))}
-                <span style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>
-                  Meta refuse un modèle dont il ne peut pas juger le rendu réel. Ces exemples ne
-                  sont jamais envoyés à un client.
-                </span>
+        {/* ── À côté : l'aperçu, comme le client le verra ─────────────────── */}
+        <aside className="lg:sticky lg:top-[96px] lg:self-start">
+          <motion.div {...apparait(1)} className="overflow-hidden rounded-[30px]" style={{ background: "#EFE7DD" }}>
+            <div className="flex items-center gap-3 px-5 py-4" style={{ background: "#1F5C4B", color: "#fff" }}>
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-[14px] font-semibold">B</span>
+              <div>
+                <p className="text-[14px] font-medium">Votre boutique</p>
+                <p className="text-[11.5px] text-white/70">Aperçu du modèle</p>
               </div>
-            ) : null}
-
-            <label style={{ display: "grid", gap: 5 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--cl-ink)" }}>
-                Pied de page <span style={{ fontWeight: 400, color: "var(--cl-sub)" }}>· facultatif</span>
-              </span>
-              <input id="tpl-footer" value={footer} onChange={(e) => setFooter(e.target.value)}
-                placeholder="BUYTICLE · Douala" style={champ} />
-            </label>
-          </div>
-
-          {msg ? (
-            <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 9, fontSize: 13,
-              background: msg.startsWith("Soumis") ? "#E7F8F0" : "#F7E8E4",
-              border: `1px solid ${msg.startsWith("Soumis") ? "#1B6E51" : "#A63D28"}` }}>
-              {msg}
             </div>
-          ) : null}
-
-          <div style={{ display: "flex", gap: 9, marginTop: 18 }}>
-            <button onClick={soumettre} disabled={busy || !name.trim() || !body.trim()}
-              style={{ padding: "11px 18px", borderRadius: 999, border: "none", background: "#101012",
-                color: "#fff", fontSize: 13.5, fontWeight: 700,
-                cursor: busy ? "default" : "pointer", opacity: busy || !name.trim() || !body.trim() ? 0.5 : 1 }}>
-              {busy ? "Envoi…" : "Soumettre à Meta"}
-            </button>
-            <button onClick={() => { setForm(false); setMsg(""); }}
-              style={{ padding: "11px 18px", borderRadius: 999, background: "transparent",
-                border: "1px solid var(--cl-line)", color: "var(--cl-ink)", fontSize: 13.5, cursor: "pointer" }}>
-              Fermer
-            </button>
-          </div>
-        </div>
-      )}
+            <div className="min-h-[260px] px-4 py-6">
+              <AnimatePresence mode="wait">
+                <motion.div key={apercu ? "plein" : "vide"} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={RESSORT}
+                  className="max-w-[88%] rounded-[18px] rounded-tl-[6px] bg-white px-4 py-3 shadow-sm">
+                  <p className="whitespace-pre-wrap text-[14px] leading-relaxed" style={{ color: "#111" }}>
+                    {apercu || "Votre message apparaîtra ici, avec les exemples à la place de {{1}}, {{2}}…"}
+                  </p>
+                  {footer && <p className="mt-1.5 text-[12px]" style={{ color: "#8A8A8A" }}>{footer}</p>}
+                  <p className="mt-1 flex items-center justify-end gap-1 text-[11px]" style={{ color: "#8A8A8A" }}>
+                    12:04 <CheckCheck className="h-3.5 w-3.5" style={{ color: "#53BDEB" }} />
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </motion.div>
+          <p className="mt-3 px-2 text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+            L&apos;examen par Meta prend en général quelques minutes, parfois jusqu&apos;à 24 h. Un modèle « Utilitaire » est presque toujours accepté.
+          </p>
+        </aside>
+      </div>
     </div>
   );
 }

@@ -10,7 +10,16 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { authHeaders } from "@/lib/auth-client";
 import dynamic from "next/dynamic";
 
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Bike, CalendarClock, Building2, ChevronRight, CreditCard, FileCheck2, Inbox, MapPin, MessageCircle, Navigation,
+  PackageCheck, RefreshCw, Timer, Wallet, X, Check, CircleDot,
+} from "lucide-react";
 import OrderDetail, { MapPreview } from "@/components/OrderDetail";
+import {
+  Bandeau, Bouton, BoutonRond, Filtres, LienBouton, Pastille, Squelettes, StylesUI, Tuile, Vide, apparait, type Ton,
+} from "@/components/dashboard/ui";
+import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
 // La carte ne se charge que si le vendeur ouvre un itinéraire.
 const ItineraryMap = dynamic(() => import("@/components/ItineraryMap"), { ssr: false });
@@ -32,20 +41,23 @@ type Order = {
 };
 type Agent = { id: string; identity?: { name?: string } };
 
-// Cycle de vie : à traiter → en traitement → livrée. "traitee" est l'ancien
-// statut des commandes créées avant le suivi ; on l'affiche comme "en traitement".
-const ST: Record<string, { label: string; bg: string; fg: string }> = {
-  nouvelle:      { label: "À traiter",     bg: "#F3F7E4", fg: "#4A6B00" },
-  en_traitement: { label: "En traitement", bg: "#FDF1DC", fg: "#8A5A00" },
-  traitee:       { label: "En traitement", bg: "#FDF1DC", fg: "#8A5A00" },
-  livree:        { label: "Livrée",        bg: "#E4F8EC", fg: "#0e6b45" },
-  annulee:       { label: "Annulée",       bg: "#FDECEC", fg: "#c0392b" },
+// Cycle de vie : à traiter → en traitement → (en livraison) → livrée.
+// "traitee" est l'ancien statut des commandes créées avant le suivi ; on
+// l'affiche comme "en traitement".
+const ST: Record<string, { label: string; ton: Ton }> = {
+  nouvelle:      { label: "À traiter",     ton: "ambre" },
+  en_traitement: { label: "En traitement", ton: "violet" },
+  traitee:       { label: "En traitement", ton: "violet" },
+  en_livraison:  { label: "En livraison",  ton: "bleu" },
+  livree:        { label: "Livrée",        ton: "vert" },
+  annulee:       { label: "Annulée",       ton: "rouge" },
 };
 const stOf = (s?: string) => ST[s || "nouvelle"] || ST.nouvelle;
 
-const TABS: { key: string; label: string; match: (s?: string) => boolean }[] = [
+type Onglet = "nouvelle" | "encours" | "livree" | "annulee";
+const TABS: { key: Onglet; label: string; match: (s?: string) => boolean }[] = [
   { key: "nouvelle", label: "À traiter", match: (s) => !s || s === "nouvelle" },
-  { key: "encours",  label: "En cours",  match: (s) => s === "en_traitement" || s === "traitee" },
+  { key: "encours",  label: "En cours",  match: (s) => s === "en_traitement" || s === "traitee" || s === "en_livraison" },
   { key: "livree",   label: "Livrées",   match: (s) => s === "livree" },
   { key: "annulee",  label: "Annulées",  match: (s) => s === "annulee" },
 ];
@@ -56,8 +68,10 @@ const TABS: { key: string; label: string; match: (s?: string) => boolean }[] = [
 const isRealPhone = (p: string) => /^\d{8,14}$/.test(p);
 
 function money(n: number, cur?: string) {
-  return `${Number(n || 0).toLocaleString("fr-FR")} ${cur || "XAF"}`;
+  const c = cur || "XAF";
+  return `${Math.round(Number(n || 0)).toLocaleString("fr-FR")} ${c === "XAF" ? "FCFA" : c}`;
 }
+const quand = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[] | null>(null);
@@ -160,98 +174,91 @@ export default function OrdersPage() {
     .filter((o) => o.status === "livree")
     .reduce((s, o) => s + Number(o.total || 0), 0);
 
+  const livrees = (orders || []).filter((o) => o.status === "livree");
+  const devise = (orders || [])[0]?.currency;
+  const panier = livrees.length ? caTotal / livrees.length : 0;
+
   return (
-    <div style={{ padding: "24px 20px", maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, flexWrap: "wrap", gap: 10 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--cl-ink)" }}>Commandes</h1>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select value={agentId} onChange={(e) => setAgentId(e.target.value)}
-            style={{ padding: "6px 12px", borderRadius: 999, fontSize: 13, cursor: "pointer",
-              border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-ink)" }}>
-            <option value="">Tous les agents</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.identity?.name || a.id.slice(0, 8)}</option>)}
-          </select>
-          <button onClick={load} disabled={busy}
-            style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-ink)" }}>
-            {busy ? "…" : "Actualiser"}
-          </button>
-          <button
+    <div className="py-6 lg:py-8">
+      <StylesUI />
+
+      {/* ── Les chiffres : chaque tuile ouvre son onglet ───────────────────── */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <Tuile rang={0} icone={Inbox} titre="À traiter" valeur={counts.nouvelle ?? 0} fort={(counts.nouvelle ?? 0) > 0}
+          sous={(counts.nouvelle ?? 0) > 0 ? "attendent votre confirmation" : "rien en attente"} onClick={() => setTab("nouvelle")} actif={tab === "nouvelle"} />
+        <Tuile rang={1} icone={Timer} titre="En cours" valeur={counts.encours ?? 0} sous="en préparation ou en route" onClick={() => setTab("encours")} actif={tab === "encours"} />
+        <Tuile rang={2} icone={PackageCheck} titre="Livrées" valeur={counts.livree ?? 0} sous={money(caTotal, devise)} onClick={() => setTab("livree")} actif={tab === "livree"} />
+        <Tuile rang={3} icone={Wallet} titre="Panier moyen" valeur={livrees.length ? money(panier, devise).replace(/\s(FCFA|XAF)$/, "") : "—"} sous={livrees.length ? "FCFA par commande livrée" : "aucune livraison encore"} />
+      </div>
+
+      {/* ── La barre d'outils ─────────────────────────────────────────────── */}
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <Filtres id="commandes" label="Filtrer les commandes" valeur={tab} onChange={setTab}
+          options={TABS.map((t) => ({ cle: t.key, libelle: t.label, compte: counts[t.key] ?? 0, alerte: t.key === "nouvelle" }))} />
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="relative">
+            <span className="sr-only">Agent</span>
+            <select value={agentId} onChange={(e) => setAgentId(e.target.value)}
+              className="h-10 cursor-pointer appearance-none rounded-full bg-white py-0 pl-4 pr-9 text-[13.5px]"
+              style={{ boxShadow: "inset 0 0 0 1px var(--cl-line)", color: "var(--cl-ink)" }}>
+              <option value="">Tous les agents</option>
+              {agents.map((a) => <option key={a.id} value={a.id}>{a.identity?.name || a.id.slice(0, 8)}</option>)}
+            </select>
+            <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90" style={{ color: "var(--cl-ink-faint)" }} />
+          </label>
+          <BoutonRond icone={RefreshCw} label="Actualiser" onClick={load} disabled={busy} tourne={busy} />
+          <Bouton variante="doux" icone={FileCheck2}
             onClick={() => {
               setDiag(null);
               fetch("/api/orders/doc-diagnostic", { headers: { ...authHeaders() } })
                 .then((r) => r.json()).then(setDiag)
                 .catch((e) => setDiag({ ready: false, checks: [{ ok: false, label: "Diagnostic", detail: e.message }] }));
-            }}
-            style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-sub)" }}>
+            }}>
             Vérifier le bon de commande
-          </button>
+          </Bouton>
         </div>
       </div>
-      <p style={{ fontSize: 13, color: "var(--cl-sub)", marginBottom: 20 }}>
-        Commandes enregistrées depuis les conversations WhatsApp. Aucun paiement n&apos;est encaissé ici :
-        vous confirmez avec le client, puis vous marquez la commande traitée.
+
+      <p className="mt-3 text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>
+        Commandes prises dans les conversations WhatsApp. Rien n&apos;est encaissé ici : vous confirmez avec le client, puis vous faites avancer la commande.
       </p>
 
-      {err && (
-        <div style={{ padding: 16, borderRadius: 12, background: "#FDECEC", color: "#c0392b", fontSize: 13.5, marginBottom: 18 }}>
-          {err}
-        </div>
-      )}
-
-      {diag && (
-        <div style={{ padding: 16, borderRadius: 12, marginBottom: 18, fontSize: 13,
-          border: `1px solid ${diag.ready ? "#B7E4C7" : "#F3D5A5"}`,
-          background: diag.ready ? "#E4F8EC" : "#FDF7E7" }}>
-          <strong style={{ display: "block", marginBottom: 8 }}>
-            {diag.ready
-              ? "Tout est prêt — le bon de commande partira au client."
-              : "Configuration incomplète — voici ce qui manque :"}
-          </strong>
-          {diag.checks.map((c, i) => (
-            <div key={i} style={{ marginBottom: 4 }}>
-              {c.ok ? "✅" : "❌"} {c.label}
-              {c.detail && <span style={{ color: "var(--cl-sub)" }}> — {c.detail}</span>}
-              {!c.ok && c.fix && (
-                <div style={{ marginLeft: 20, color: "#8A5A00", fontSize: 12 }}>→ {c.fix}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Récapitulatif */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 22 }}>
-        <Kpi label="À traiter" value={String(counts.nouvelle)} hint="en attente" accent={counts.nouvelle > 0} />
-        <Kpi label="En traitement" value={String(counts.encours)} hint="en cours" />
-        <Kpi label="Livrées" value={String(counts.livree)} hint={money(caTotal, (orders || [])[0]?.currency)} />
+      <div className="mt-4 space-y-3">
+        {err && <Bandeau ton="rouge">{err}</Bandeau>}
+        {diag && (
+          <Bandeau ton={diag.ready ? "vert" : "ambre"}
+            titre={diag.ready ? "Tout est prêt : le bon de commande partira au client." : "Configuration incomplète : voici ce qui manque."}
+            action={<button onClick={() => setDiag(null)} aria-label="Fermer" className="opacity-70 hover:opacity-100"><X className="h-4 w-4" /></button>}>
+            <ul className="mt-2 space-y-1.5">
+              {diag.checks.map((c, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  {c.ok ? <Check className="mt-0.5 h-4 w-4 flex-shrink-0" /> : <X className="mt-0.5 h-4 w-4 flex-shrink-0" />}
+                  <span>
+                    {c.label}{c.detail && <span className="opacity-75"> · {c.detail}</span>}
+                    {!c.ok && c.fix && <span className="block text-[12.5px] opacity-80">{c.fix}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Bandeau>
+        )}
       </div>
 
-      {/* Onglets */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {TABS.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            style={{ padding: "7px 16px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              border: "1px solid var(--cl-line)", background: tab === t.key ? "#101012" : "#fff",
-              color: tab === t.key ? "#fff" : "var(--cl-sub)" }}>
-            {t.label} · {counts[t.key] ?? 0}
-          </button>
-        ))}
+      <div className="mt-5">
+        {orders === null ? (
+          <Squelettes n={3} hauteur={190} />
+        ) : list.length === 0 ? (
+          <Vide doodle="unboxing"
+            titre={tab === "nouvelle" ? "Aucune commande à traiter." : tab === "encours" ? "Rien en préparation." : tab === "livree" ? "Pas encore de livraison." : "Aucune commande annulée."}
+            texte="Les commandes passées dans WhatsApp arrivent ici dès que le client confirme son panier." />
+        ) : (
+          <motion.div layout className="grid gap-4">
+            <AnimatePresence initial={false}>
+              {list.map((o, i) => <OrderCard key={o.id} rang={i} order={o} onChange={change} onOpen={setDetail} photos={photos} />)}
+            </AnimatePresence>
+          </motion.div>
+        )}
       </div>
-
-      {orders === null ? (
-        <p style={{ fontSize: 13.5, color: "var(--cl-sub)" }}>Chargement…</p>
-      ) : list.length === 0 ? (
-        <div style={{ padding: 28, borderRadius: 14, border: "1px dashed var(--cl-line)", textAlign: "center",
-          fontSize: 13.5, color: "var(--cl-sub)" }}>
-          Aucune commande dans cet onglet.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: 12 }}>
-          {list.map((o) => <OrderCard key={o.id} order={o} onChange={change} onOpen={setDetail} photos={photos} />)}
-        </div>
-      )}
 
       {detail && (
         <OrderDetail
@@ -264,9 +271,18 @@ export default function OrdersPage() {
   );
 }
 
-function OrderCard({ order: o, onChange, onOpen, photos = {} }: {
+// ── Une commande ────────────────────────────────────────────────────────────
+
+/** Le geste suivant d'une commande, selon où elle en est. */
+function suivante(s?: string): { statut: string; libelle: string; icone: React.ElementType } | null {
+  if (!s || s === "nouvelle") return { statut: "en_traitement", libelle: "Mettre en traitement", icone: Timer };
+  if (s === "en_traitement" || s === "traitee" || s === "en_livraison") return { statut: "livree", libelle: "Marquer livrée", icone: PackageCheck };
+  return null;
+}
+
+function OrderCard({ order: o, onChange, onOpen, photos = {}, rang = 0 }: {
   order: Order; onChange: (o: Order, s: string) => void; onOpen: (o: Order) => void;
-  photos?: Record<string, string>;
+  photos?: Record<string, string>; rang?: number;
 }) {
   const brutes: Item[] = Array.isArray(o.items)
     ? o.items
@@ -282,211 +298,157 @@ function OrderCard({ order: o, onChange, onOpen, photos = {} }: {
   // L'itinéraire s'ouvre dans la page, sur la commande concernée.
   const [itinerary, setItinerary] = useState(false);
   const lieu = o.place_label || o.address || (hasGeo ? `${Number(o.lat).toFixed(5)}, ${Number(o.lng).toFixed(5)}` : "");
+  const st = stOf(o.status);
+  const next = suivante(o.status);
+  const retrait = o.fulfillment === "retrait";
 
   return (
-    <div style={{ border: "1px solid var(--cl-line)", borderRadius: 14, background: "#fff", overflow: "hidden" }}>
-      <div style={{ display: "flex", gap: 16, padding: 16, flexWrap: "wrap" }}>
-        {/* Détail */}
-        <div style={{ flex: "1 1 320px", minWidth: 260 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <strong style={{ fontSize: 15, color: "var(--cl-ink)" }}>n° {o.ref}</strong>
-            <span style={{ background: stOf(o.status).bg, color: stOf(o.status).fg, borderRadius: 999,
-              padding: "2px 10px", fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3 }}>
-              {stOf(o.status).label.toUpperCase()}
-            </span>
-            {o.note && (
-              <span style={{ background: "#F3F7E4", color: "#4A6B00", borderRadius: 999,
-                padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>
-                {o.note}
-              </span>
-            )}
-          </div>
-
-          <div style={{ marginBottom: 8 }}>
-            {items.map((it, i) => {
-              const q = it.qty || 1, u = Number(it.price || 0);
-              return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0",
-                  borderBottom: i === items.length - 1 ? "none" : "1px solid #F2F2F2" }}>
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    {it.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={it.image} alt="" width={40} height={40}
-                        style={{ borderRadius: 8, objectFit: "cover", background: "#F4F4F4" }} />
-                    ) : (
-                      <div style={{ width: 40, height: 40, borderRadius: 8, background: "#F4F4F4" }} />
-                    )}
-                    <span style={{ position: "absolute", top: -5, right: -5, minWidth: 18, height: 18,
-                      borderRadius: 9, background: "#101012", color: "#C6F24E", fontSize: 10, fontWeight: 800,
-                      display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px",
-                      border: "2px solid #fff" }}>{q}</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--cl-ink)" }}>{it.name}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>
-                      {it.variant ? `${it.variant} · ` : ""}{money(u, o.currency)} l&apos;unité
-                    </div>
-                  </div>
-                  <strong style={{ fontSize: 13.5, color: "var(--cl-ink)", whiteSpace: "nowrap" }}>{money(u * q, o.currency)}</strong>
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--cl-ink)" }}>{money(o.total, o.currency)}</div>
-          <div style={{ fontSize: 12, color: "var(--cl-sub)", marginTop: 3 }}>
-            {o.customer_name ? `${o.customer_name} · ` : ""}{phone} · commandée le{" "}
-            {new Date(o.created_at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-          </div>
-          {/* Le créneau demandé : c'est lui qui dicte l'ordre de préparation. */}
-          {o.scheduled_at && (
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#8A5A00", marginTop: 3 }}>
-              ⏰ À {o.fulfillment === "retrait" ? "retirer" : "livrer"}{" "}
-              {new Date(o.scheduled_at).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-            </div>
-          )}
-          {o.company_name && (
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#1D4ED8", marginTop: 3 }}>
-              🏢 {o.company_name} · {o.company_code}
-            </div>
-          )}
-          {o.payment_method && (
-            <div style={{ fontSize: 12, color: "var(--cl-sub)", marginTop: 3 }}>
-              💳 {o.payment_method}
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-            <button onClick={() => onOpen(o)}
-              style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
-                border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-ink)" }}>
-              Voir le détail
-            </button>
-            {phone && isRealPhone(phone) && (
-              <a href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer"
-                style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700,
-                  background: "#E4F8EC", color: "#0e6b45", textDecoration: "none" }}>
-                Répondre sur WhatsApp
-              </a>
-            )}
-            {phone && !isRealPhone(phone) && (
-              <span title="Commande enregistrée avant la résolution des identifiants WhatsApp"
-                style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 600,
-                  background: "#F1F1F1", color: "var(--cl-sub)" }}>
-                Numéro indisponible
-              </span>
-            )}
-            {(!o.status || o.status === "nouvelle") && (
-              <button onClick={() => onChange(o, "en_traitement")}
-                style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
-                  border: "none", background: "#101012", color: "#fff" }}>
-                Mettre en traitement
-              </button>
-            )}
-            {(o.status === "en_traitement" || o.status === "traitee") && (
-              <button onClick={() => onChange(o, "livree")}
-                style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
-                  border: "none", background: "#C6F24E", color: "#101012" }}>
-                Marquer livrée
-              </button>
-            )}
-            {o.status !== "annulee" && o.status !== "livree" && (
-              <button onClick={() => onChange(o, "annulee")}
-                style={{ padding: "8px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  border: "1px solid var(--cl-line)", background: "#fff", color: "#c0392b" }}>
-                Annuler
-              </button>
-            )}
-          </div>
+    <motion.article layout {...apparait(rang)} exit={{ opacity: 0, scale: 0.98 }}
+      className="ui-carte overflow-hidden rounded-[28px]">
+      {/* En-tête : référence, état, client, montant */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 pt-5 sm:px-6">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+          <span className="text-[17px] font-semibold tracking-[-0.01em]" style={{ color: "var(--cl-ink)" }}>n° {o.ref}</span>
+          <Pastille ton={st.ton} point>{st.label}</Pastille>
+          {retrait && <Pastille ton="gris">À retirer</Pastille>}
+          {o.note && <Pastille ton="violet">{o.note}</Pastille>}
         </div>
-
-        {/* Livraison */}
-        {lieu && (
-          <div style={{ flex: "0 1 260px", minWidth: 220 }}>
-            {hasGeo && <MapPreview lat={Number(o.lat)} lng={Number(o.lng)} radius="10px 10px 0 0" />}
-            <a
-              href={hasGeo
-                ? `https://www.google.com/maps?q=${o.lat},${o.lng}`
-                : `https://www.google.com/maps/search/${encodeURIComponent(lieu)}`}
-              target="_blank" rel="noreferrer"
-              style={{ display: "block", fontSize: 12, color: "var(--cl-ink)", textDecoration: "none",
-                padding: "8px 10px", background: "#FAFAFA", border: "1px solid var(--cl-line)",
-                borderTop: hasGeo ? "none" : "1px solid var(--cl-line)",
-                borderRadius: hasGeo ? "0 0 10px 10px" : 10 }}>
-              📍 {lieu}
-            </a>
-            {hasGeo && (
-              <button
-                onClick={() => setItinerary(true)}
-                style={{ display: "block", width: "100%", textAlign: "center", marginTop: 8, padding: "9px 12px",
-                  borderRadius: 999, background: "#2563EB", color: "#fff", fontSize: 12.5,
-                  fontWeight: 700, border: "none", cursor: "pointer" }}>
-                Lancer l&apos;itinéraire
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Suivi : chaque étape franchie porte son horodatage réel */}
-        <div style={{ flex: "0 1 220px", minWidth: 200 }}>
-          <Tracking order={o} />
+        <div className="text-right">
+          <p className="text-[22px] font-semibold tracking-[-0.02em] tabular-nums" style={{ color: "var(--cl-ink)" }}>{money(o.total, o.currency)}</p>
+          <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>{quand(o.created_at)}</p>
         </div>
       </div>
 
+      <div className="grid gap-5 px-5 pb-5 pt-4 sm:px-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+        {/* Articles et client */}
+        <div className="min-w-0">
+          <ul className="space-y-2">
+            {items.map((it, i) => {
+              const q = it.qty || 1, u = Number(it.price || 0);
+              return (
+                <li key={i} className="flex items-center gap-3 rounded-[18px] p-2 pr-3" style={{ background: "#FAF9FC" }}>
+                  <div className="relative flex-shrink-0">
+                    {it.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={it.image} alt="" width={48} height={48} className="h-12 w-12 rounded-[14px] object-cover" style={{ background: "#EEE" }} />
+                    ) : (
+                      <div className="h-12 w-12 rounded-[14px]" style={{ background: "#EEEBF4" }} />
+                    )}
+                    <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white px-1 text-[10.5px] font-semibold text-white"
+                      style={{ background: "var(--cl-ink)" }}>{q}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>{it.name}</p>
+                    <p className="truncate text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+                      {it.variant ? `${it.variant} · ` : ""}{money(u, o.currency)} l&apos;unité
+                    </p>
+                  </div>
+                  <span className="whitespace-nowrap text-[13.5px] font-medium tabular-nums" style={{ color: "var(--cl-ink)" }}>{money(u * q, o.currency)}</span>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]" style={{ color: "var(--cl-ink-soft)" }}>
+            <span className="font-medium" style={{ color: "var(--cl-ink)" }}>{o.customer_name || "Client"}</span>
+            {phone && <span>{phone}</span>}
+            {o.payment_method && <span className="inline-flex items-center gap-1"><CreditCard className="h-3.5 w-3.5" /> {o.payment_method}</span>}
+            {o.company_name && <span className="inline-flex items-center gap-1" style={{ color: "#1D4ED8" }}><Building2 className="h-3.5 w-3.5" /> {o.company_name} · {o.company_code}</span>}
+          </div>
+          {/* Le créneau demandé : c'est lui qui dicte l'ordre de préparation. */}
+          {o.scheduled_at && (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium" style={{ background: "#FDF1DC", color: "#8A5A00" }}>
+              <CalendarClock className="h-3.5 w-3.5" />
+              À {retrait ? "retirer" : "livrer"} {new Date(o.scheduled_at).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
+        </div>
+
+        {/* Livraison */}
+        <div className="min-w-0">
+          {lieu ? (
+            <div className="overflow-hidden rounded-[20px]" style={{ boxShadow: "inset 0 0 0 1px var(--cl-line-soft)" }}>
+              {hasGeo && <MapPreview lat={Number(o.lat)} lng={Number(o.lng)} radius="20px 20px 0 0" height={110} />}
+              <a href={hasGeo ? `https://www.google.com/maps?q=${o.lat},${o.lng}` : `https://www.google.com/maps/search/${encodeURIComponent(lieu)}`}
+                target="_blank" rel="noreferrer" className="flex items-start gap-2 px-3.5 py-3 text-[12.5px] hover:underline" style={{ color: "var(--cl-ink)" }}>
+                <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" style={{ color: "var(--cl-accent-deep)" }} /> {lieu}
+              </a>
+              {hasGeo && (
+                <div className="px-3 pb-3">
+                  <Bouton variante="doux" icone={Navigation} className="w-full" onClick={() => setItinerary(true)}>Lancer l&apos;itinéraire</Bouton>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex h-full min-h-[90px] items-center justify-center rounded-[20px] px-4 text-center text-[12.5px]" style={{ background: "#FAF9FC", color: "var(--cl-ink-faint)" }}>
+              {retrait ? "Retrait en boutique" : "Pas d'adresse sur cette commande"}
+            </div>
+          )}
+        </div>
+
+        {/* Suivi : chaque étape franchie porte son horodatage réel */}
+        <Tracking order={o} />
+      </div>
+
+      {/* Les gestes */}
+      <div className="flex flex-wrap items-center gap-2 border-t px-5 py-4 sm:px-6" style={{ borderColor: "var(--cl-line-soft)" }}>
+        {next && (
+          <Bouton variante="encre" icone={next.icone} onClick={() => onChange(o, next.statut)}>{next.libelle}</Bouton>
+        )}
+        {phone && isRealPhone(phone) ? (
+          <LienBouton variante="vert" icone={MessageCircle} href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer">Répondre sur WhatsApp</LienBouton>
+        ) : phone ? (
+          <span title="Commande enregistrée avant la résolution des identifiants WhatsApp"
+            className="inline-flex h-10 items-center rounded-full px-4 text-[13px]" style={{ background: "#F4F2F7", color: "var(--cl-ink-faint)" }}>
+            Numéro indisponible
+          </span>
+        ) : null}
+        <Bouton variante="clair" icone={ChevronRight} onClick={() => onOpen(o)}>Voir le détail</Bouton>
+        {o.status !== "annulee" && o.status !== "livree" && (
+          <Bouton variante="danger" icone={X} className="sm:ml-auto" onClick={() => onChange(o, "annulee")}>Annuler</Bouton>
+        )}
+      </div>
+
       {itinerary && (
-        <ItineraryMap
-          orderId={String(o.id)}
-          reference={o.ref}
-          address={lieu}
-          onClose={() => setItinerary(false)}
-        />
+        <ItineraryMap orderId={String(o.id)} reference={o.ref} address={lieu} onClose={() => setItinerary(false)} />
       )}
-    </div>
+    </motion.article>
   );
 }
 
 function Tracking({ order: o }: { order: Order }) {
   const cancelled = o.status === "annulee";
   const steps = [
-    { key: "recue",  label: "Commande reçue", at: o.created_at },
-    { key: "traite", label: "En traitement",  at: o.processing_at },
-    { key: "livree", label: "Livrée",         at: o.delivered_at },
+    { key: "recue",  label: "Reçue",         at: o.created_at,    Icone: Inbox },
+    { key: "traite", label: "En traitement", at: o.processing_at, Icone: Timer },
+    ...(o.dispatched_at || o.status === "en_livraison" ? [{ key: "route", label: "En livraison", at: o.dispatched_at ?? null, Icone: Bike }] : []),
+    { key: "livree", label: "Livrée",        at: o.delivered_at,  Icone: PackageCheck },
   ];
   return (
-    <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cl-sub)", letterSpacing: 0.3, marginBottom: 8 }}>SUIVI</div>
+    <div className="min-w-0 rounded-[20px] p-4" style={{ background: "#FAF9FC" }}>
+      <p className="mb-3 text-[11.5px] font-medium uppercase tracking-[0.12em]" style={{ color: "var(--cl-ink-faint)" }}>Suivi</p>
       {steps.map((sp, i) => {
         const on = !!sp.at;
         const last = i === steps.length - 1;
+        const couleur = cancelled ? "#C2504B" : "var(--cl-accent)";
         return (
-          <div key={sp.key} style={{ display: "flex", gap: 8 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16 }}>
-              <div style={{ width: 11, height: 11, borderRadius: 6, marginTop: 3,
-                background: on ? (cancelled ? "#c0392b" : "#C6F24E") : "#E4E4E4",
-                border: on ? "none" : "1px solid #D8D8D8" }} />
-              {!last && <div style={{ width: 2, flex: 1, minHeight: 18, background: on ? "#C6F24E" : "#EEE" }} />}
+          <div key={sp.key} className="flex gap-3">
+            <div className="flex w-6 flex-col items-center">
+              <motion.span initial={false} animate={{ scale: on ? 1 : 0.85 }} transition={RESSORT}
+                className="flex h-6 w-6 items-center justify-center rounded-full"
+                style={{ background: on ? couleur : "#fff", color: on ? "#fff" : "#C9C4D2", boxShadow: on ? "none" : "inset 0 0 0 1.5px #E2DEE9" }}>
+                {on ? <sp.Icone className="h-3 w-3" /> : <CircleDot className="h-3 w-3" />}
+              </motion.span>
+              {!last && <span className="my-1 w-[2px] flex-1 rounded-full" style={{ minHeight: 14, background: on ? "#D9CEFF" : "#ECE9F1" }} />}
             </div>
-            <div style={{ paddingBottom: last ? 0 : 10 }}>
-              <div style={{ fontSize: 12.5, fontWeight: on ? 700 : 500, color: on ? "var(--cl-ink)" : "var(--cl-sub)" }}>{sp.label}</div>
-              <div style={{ fontSize: 11, color: "var(--cl-sub)" }}>
-                {on ? new Date(sp.at as string).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "En attente"}
-              </div>
+            <div className={last ? "" : "pb-2.5"}>
+              <p className="text-[13px]" style={{ color: on ? "var(--cl-ink)" : "var(--cl-ink-faint)", fontWeight: on ? 500 : 400 }}>{sp.label}</p>
+              <p className="text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>{on ? quand(sp.at as string) : "En attente"}</p>
             </div>
           </div>
         );
       })}
-      {cancelled && <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: "#c0392b" }}>Commande annulée</div>}
-    </div>
-  );
-}
-
-function Kpi({ label, value, hint, accent }: { label: string; value: string; hint?: string; accent?: boolean }) {
-  return (
-    <div style={{ border: "1px solid var(--cl-line)", borderRadius: 14, padding: 16,
-      background: accent ? "#101012" : "#fff" }}>
-      <div style={{ fontSize: 11.5, color: accent ? "rgba(255,255,255,0.6)" : "var(--cl-sub)", fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: accent ? "#C6F24E" : "var(--cl-ink)" }}>{value}</div>
-      {hint && <div style={{ fontSize: 11.5, color: accent ? "rgba(255,255,255,0.5)" : "var(--cl-sub)", marginTop: 2 }}>{hint}</div>}
+      {cancelled && <p className="mt-2 text-[12px] font-medium" style={{ color: "#A63D28" }}>Commande annulée</p>}
     </div>
   );
 }

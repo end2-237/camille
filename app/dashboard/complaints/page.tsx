@@ -26,7 +26,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { BotMessageSquare, CheckCheck, Hand, MessageCircle, RefreshCw, RotateCcw, Store, UserRound, VolumeX } from "lucide-react";
 import { authHeaders } from "@/lib/auth-client";
+import { Bandeau, Bouton, BoutonRond, Filtres, LienBouton, Pastille, Squelettes, StylesUI, Tuile, Vide, apparait } from "@/components/dashboard/ui";
 
 type Complaint = {
   id: string;
@@ -102,136 +105,105 @@ export default function ComplaintsPage() {
   const muets = (liste || []).filter((c) => c.human_takeover).length;
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "28px 20px 80px" }}>
-      <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: "var(--cl-ink)", margin: 0 }}>
-        Réclamations
-      </h1>
-      <p style={{ color: "var(--cl-sub)", fontSize: 13.5, lineHeight: 1.55, marginTop: 6, maxWidth: "62ch" }}>
-        Quand un client réclame, Camille se tait pour lui : répondre par-dessus
-        quelqu&apos;un de l&apos;équipe serait pire que ne rien dire. C&apos;est ici qu&apos;on lui
-        rend la parole, une fois le problème réglé.
-      </p>
-
-      {/* Le compteur n'est pas décoratif : chaque client muet est un client qui
-          n'obtient plus aucune réponse, même pour une question anodine. */}
-      {muets > 0 ? (
-        <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10,
-          background: "#FDF1DC", border: "1px solid #E0B870", fontSize: 13, lineHeight: 1.5 }}>
-          <strong>{muets} client{muets > 1 ? "s" : ""}</strong> {muets > 1 ? "sont" : "est"} entre
-          vos mains : Camille ne leur répond plus, même s&apos;{muets > 1 ? "ils écrivent" : "il écrit"} pour
-          autre chose. Rendez-lui la parole dès que c&apos;est réglé.
-        </div>
-      ) : null}
-
-      {err ? (
-        <div style={{ marginTop: 14, padding: "11px 13px", borderRadius: 10,
-          background: "#F7E8E4", border: "1px solid #A63D28", fontSize: 13 }}>
-          {err}
-        </div>
-      ) : null}
-
-      {/* ── Les deux vues ─────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-        {([["active", "En cours"], ["done", "Réglées"]] as const).map(([v, l]) => (
-          <button key={v} onClick={() => { setListe(null); setFiltre(v); }}
-            style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 13px", borderRadius: 999,
-              cursor: "pointer", border: "1px solid var(--cl-line)",
-              background: filtre === v ? "var(--cl-ink)" : "#fff",
-              color: filtre === v ? "#fff" : "var(--cl-sub)" }}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        {liste === null ? (
-          <p style={{ color: "var(--cl-sub)", fontSize: 13 }}>Chargement…</p>
-        ) : liste.length === 0 ? (
-          <p style={{ color: "var(--cl-sub)", fontSize: 13 }}>
-            {filtre === "active"
-              ? "Aucune réclamation en cours 🙌"
-              : "Aucune réclamation réglée pour l'instant."}
-          </p>
-        ) : (
-          <div style={{ display: "grid", gap: 10 }}>
-            {liste.map((c) => {
-              const occupe = enCours === c.id;
-              return (
-                <div key={c.id} style={{ border: "1px solid var(--cl-line)", borderRadius: 12,
-                  background: "#fff", padding: "13px 15px" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--cl-ink)" }}>
-                      {c.phone || "numéro inconnu"}
-                    </span>
-                    <span style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>
-                      {c.business_name} · {depuis(c.created_at)}
-                    </span>
-                    <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 700,
-                      padding: "3px 9px", borderRadius: 999,
-                      background: c.human_takeover ? "#FDF1DC" : "#E7F8F0",
-                      color: c.human_takeover ? "#8A5A00" : "#1B6E51" }}>
-                      {c.human_takeover ? "Camille est muette" : "Camille répond"}
-                    </span>
-                  </div>
-
-                  <p style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--cl-ink)",
-                    margin: "9px 0 0", whiteSpace: "pre-wrap" }}>
-                    « {messageDe(c)} »
-                  </p>
-
-                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                    {/* Le geste que l'application ne savait pas faire. */}
-                    {c.human_takeover ? (
-                      <button disabled={occupe} onClick={() => agir(c.id, { takeover: false })}
-                        style={{ fontSize: 12.5, fontWeight: 700, padding: "7px 13px", borderRadius: 9,
-                          border: "none", background: "var(--cl-ink)", color: "#fff",
-                          cursor: occupe ? "wait" : "pointer", opacity: occupe ? 0.6 : 1 }}>
-                        {occupe ? "…" : "Rendre la main à Camille"}
-                      </button>
-                    ) : (
-                      <button disabled={occupe} onClick={() => agir(c.id, { takeover: true })}
-                        style={{ fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 9,
-                          border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-sub)",
-                          cursor: occupe ? "wait" : "pointer" }}>
-                        {occupe ? "…" : "Je m'en occupe moi-même"}
-                      </button>
-                    )}
-
-                    {c.status !== "done" ? (
-                      <button disabled={occupe} onClick={() => agir(c.id, { status: "done" })}
-                        style={{ fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 9,
-                          border: "1px solid var(--cl-line)", background: "#fff",
-                          color: "var(--cl-sub)", cursor: occupe ? "wait" : "pointer" }}>
-                        C&apos;est réglé
-                      </button>
-                    ) : (
-                      <button disabled={occupe} onClick={() => agir(c.id, { status: "active" })}
-                        style={{ fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 9,
-                          border: "1px solid var(--cl-line)", background: "#fff",
-                          color: "var(--cl-sub)", cursor: occupe ? "wait" : "pointer" }}>
-                        Rouvrir
-                      </button>
-                    )}
-
-                    <a href={`https://wa.me/${c.phone}`} target="_blank" rel="noreferrer"
-                      style={{ fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 9,
-                        border: "1px solid var(--cl-line)", color: "var(--cl-sub)",
-                        textDecoration: "none", marginLeft: "auto" }}>
-                      Écrire au client
-                    </a>
-                  </div>
-                </div>
-              );
-            })}
+    <div className="py-6 lg:py-8">
+      <StylesUI />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Filtres id="reclamations" label="Afficher" valeur={filtre}
+              onChange={(v) => { setListe(null); setFiltre(v); }}
+              options={[{ cle: "active", libelle: "En cours" }, { cle: "done", libelle: "Réglées" }]} />
+            <BoutonRond icone={RefreshCw} label="Actualiser" onClick={charger} />
           </div>
-        )}
-      </div>
 
-      <p style={{ color: "var(--cl-sub)", fontSize: 12, lineHeight: 1.55, marginTop: 26, maxWidth: "62ch" }}>
-        « C&apos;est réglé » rend aussi la parole à Camille et prévient le client.
-        « Je m&apos;en occupe moi-même » la fait taire sans clore le dossier — utile
-        quand vous voulez suivre ce client de bout en bout.
-      </p>
+          <div className="mt-4 space-y-3">
+            {/* Le compteur n'est pas décoratif : chaque client muet est un client
+                qui n'obtient plus aucune réponse, même pour une question anodine. */}
+            {muets > 0 && (
+              <Bandeau ton="ambre" titre={`${muets} client${muets > 1 ? "s sont" : " est"} entre vos mains.`}>
+                Camille ne {muets > 1 ? "leur" : "lui"} répond plus, même s&apos;{muets > 1 ? "ils écrivent" : "il écrit"} pour autre chose.
+                Rendez-lui la parole dès que c&apos;est réglé.
+              </Bandeau>
+            )}
+            {err && <Bandeau ton="rouge">{err}</Bandeau>}
+          </div>
+
+          <div className="mt-5">
+            {liste === null ? (
+              <Squelettes n={3} hauteur={150} />
+            ) : liste.length === 0 ? (
+              <Vide doodle={filtre === "active" ? "meditating" : "reading"}
+                titre={filtre === "active" ? "Aucune réclamation en cours." : "Aucune réclamation réglée pour l'instant."}
+                texte={filtre === "active" ? "Quand un client se plaint ou demande à parler à quelqu'un, son dossier apparaît ici." : undefined} />
+            ) : (
+              <motion.div layout className="grid gap-3">
+                <AnimatePresence initial={false}>
+                  {liste.map((c, i) => {
+                    const occupe = enCours === c.id;
+                    return (
+                      <motion.article key={c.id} layout {...apparait(i)} exit={{ opacity: 0, x: -24 }}
+                        className="ui-carte rounded-[28px] p-5 sm:p-6">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+                            <UserRound className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[15px] font-semibold" style={{ color: "var(--cl-ink)" }}>{c.phone || "Numéro inconnu"}</p>
+                            <p className="flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+                              <Store className="h-3.5 w-3.5" /> {c.business_name} · {depuis(c.created_at)}
+                            </p>
+                          </div>
+                          {c.human_takeover
+                            ? <Pastille ton="ambre" point>Camille est muette</Pastille>
+                            : <Pastille ton="vert" point>Camille répond</Pastille>}
+                        </div>
+
+                        {/* Le message du client, en bulle : c'est ce qu'on vient lire. */}
+                        <div className="mt-4 rounded-[22px] rounded-tl-[8px] px-4 py-3 text-[14px] leading-relaxed"
+                          style={{ background: "#F4F2F7", color: "var(--cl-ink)", whiteSpace: "pre-wrap" }}>
+                          {messageDe(c)}
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          {/* Le geste que l'application ne savait pas faire. */}
+                          {c.human_takeover ? (
+                            <Bouton variante="encre" icone={BotMessageSquare} occupe={occupe} disabled={occupe}
+                              onClick={() => agir(c.id, { takeover: false })}>Rendre la main à Camille</Bouton>
+                          ) : (
+                            <Bouton variante="doux" icone={Hand} occupe={occupe} disabled={occupe}
+                              onClick={() => agir(c.id, { takeover: true })}>Je m&apos;en occupe moi-même</Bouton>
+                          )}
+                          {c.status !== "done" ? (
+                            <Bouton variante="clair" icone={CheckCheck} disabled={occupe} onClick={() => agir(c.id, { status: "done" })}>C&apos;est réglé</Bouton>
+                          ) : (
+                            <Bouton variante="clair" icone={RotateCcw} disabled={occupe} onClick={() => agir(c.id, { status: "active" })}>Rouvrir</Bouton>
+                          )}
+                          <LienBouton variante="vert" icone={MessageCircle} className="sm:ml-auto" href={`https://wa.me/${c.phone}`} target="_blank" rel="noreferrer">
+                            Écrire au client
+                          </LienBouton>
+                        </div>
+                      </motion.article>
+                    );
+                  })}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </div>
+        </section>
+
+        {/* ── À côté : où en est-on, et ce que font les deux gestes ─────────── */}
+        <aside className="space-y-4 lg:sticky lg:top-[96px] lg:self-start">
+          <Tuile icone={VolumeX} titre="Clients sans réponse" valeur={muets} fort={muets > 0}
+            sous={muets > 0 ? "Camille attend votre feu vert" : "Camille répond à tout le monde"} />
+          <motion.div {...apparait(1)} className="ui-carte rounded-[28px] p-5">
+            <p className="text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>Les deux gestes</p>
+            <div className="mt-3 space-y-3 text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+              <p><span className="font-medium" style={{ color: "var(--cl-ink)" }}>C&apos;est réglé</span> classe le dossier, rend la parole à Camille et prévient le client.</p>
+              <p><span className="font-medium" style={{ color: "var(--cl-ink)" }}>Je m&apos;en occupe moi-même</span> fait taire Camille sans classer le dossier : utile pour suivre un client de bout en bout.</p>
+            </div>
+          </motion.div>
+        </aside>
+      </div>
     </div>
   );
 }

@@ -198,6 +198,16 @@ export function Coquille({ children }: { children: React.ReactNode }) {
 
         /* ── L'en-tête : fixe en haut, se replie en barre flottante au défilement ── */
         .coq-entete { height: var(--coq-entete); pointer-events: none; }
+        /* Repliée, la barre flotte : un voile de la couleur de la page passe
+           sous elle, pour que le contenu s'efface avant de la toucher au lieu
+           d'avoir l'air collé dessous. */
+        .coq-entete::before {
+          content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: -28px; z-index: -1; pointer-events: none;
+          background: linear-gradient(to bottom, #fff 0%, #fff 62%, rgba(255,255,255,0) 100%);
+          opacity: 0; transition: opacity .35s ease;
+        }
+        .coq-entete[data-accueil]::before { background: linear-gradient(to bottom, #A792F4 0%, rgba(167,146,244,0.92) 62%, rgba(167,146,244,0) 100%); }
+        .coq-entete[data-compacte]::before { opacity: 1; }
         .coq-barre {
           pointer-events: auto; padding: 0 20px; border-radius: 0; background: transparent;
           transition: margin .45s cubic-bezier(.22,1,.36,1), padding .45s cubic-bezier(.22,1,.36,1),

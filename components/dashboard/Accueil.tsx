@@ -216,6 +216,122 @@ function AppelWhatsapp({ agent, meta }: { agent?: Agent; meta: EtatMeta | null }
   );
 }
 
+// ── Le carrousel des agents ─────────────────────────────────────────────────
+
+function Carrousel({ visibles, loading, agentId, onChoisir, onActualiser, onCreer, ca }: {
+  visibles: Agent[]; loading: boolean; agentId?: string; ca: React.ReactNode;
+  onChoisir: (id: string) => void; onActualiser: () => void; onCreer: () => void;
+}) {
+  const piste = useRef<HTMLDivElement>(null);
+
+  // L'agent choisi vient se placer au début de la piste (glissement doux,
+  // sans faire bouger la page de haut en bas).
+  useEffect(() => {
+    const el = piste.current;
+    const carte = el?.querySelector<HTMLElement>(`[data-agent="${agentId}"]`);
+    if (!el || !carte) return;
+    const marge = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    const cible = Math.max(0, carte.offsetLeft - marge);
+    if (Math.abs(el.scrollLeft - cible) > 2) el.scrollTo({ left: cible, behavior: "smooth" });
+  }, [agentId]);
+
+  // Téléphone : le glissement est piloté ici, pas par le navigateur. La piste
+  // suit le doigt ; au lâcher, dès 40 px dans un sens, on termine le geste à
+  // la place de l'utilisateur jusqu'à l'agent suivant (ou précédent) et on le
+  // sélectionne. Un geste trop court revient en place.
+  const geste = useRef<{ x: number; y: number; depart: number; horizontal: boolean | null } | null>(null);
+  const mobile = () => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches;
+  const aller = (id: string) => {
+    const el = piste.current;
+    const carte = el?.querySelector<HTMLElement>(`[data-agent="${id}"]`);
+    if (!el || !carte) return;
+    const marge = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    el.scrollTo({ left: Math.max(0, carte.offsetLeft - marge), behavior: "smooth" });
+  };
+  const toucher = {
+    onTouchStart: (e: React.TouchEvent) => {
+      if (!mobile() || !piste.current) return;
+      const t = e.touches[0];
+      geste.current = { x: t.clientX, y: t.clientY, depart: piste.current.scrollLeft, horizontal: null };
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      const g = geste.current, el = piste.current;
+      if (!g || !el) return;
+      const t = e.touches[0];
+      const dx = t.clientX - g.x, dy = t.clientY - g.y;
+      if (g.horizontal === null && Math.abs(dx) + Math.abs(dy) > 6) g.horizontal = Math.abs(dx) > Math.abs(dy);
+      if (g.horizontal) el.scrollLeft = g.depart - dx;
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      const g = geste.current;
+      geste.current = null;
+      if (!g || !g.horizontal || !agentId) return;
+      const dx = e.changedTouches[0].clientX - g.x;
+      const i = visibles.findIndex((a) => a.id === agentId);
+      const cible = Math.abs(dx) < 40 ? i : Math.max(0, Math.min(visibles.length - 1, i + (dx < 0 ? 1 : -1)));
+      const id = visibles[cible]?.id;
+      if (!id) return;
+      if (id !== agentId) onChoisir(id);
+      aller(id);
+    },
+  };
+
+  if (loading && !visibles.length) {
+    return <div className="acc-carrousel flex px-5 lg:px-10"><div className="acc-carte-agent animate-pulse"><span className="acc-verre" /></div></div>;
+  }
+  if (!visibles.length) {
+    return (
+      <div className="acc-carrousel flex px-5 lg:px-10">
+        <button onClick={onCreer} className="acc-carte-agent text-left">
+          <span className="acc-onglet" />
+          <span className="relative flex items-center gap-3 px-6 pt-6 text-[16px] font-medium" style={{ color: "var(--cl-ink)" }}>
+            <Plus className="h-5 w-5" /> Créer votre premier agent
+          </span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={piste} {...toucher} className="acc-carrousel flex items-end gap-3 overflow-x-auto px-5 lg:px-10">
+      {visibles.map((a) => {
+        const sel = a.id === agentId;
+        return (
+          <div key={a.id} data-agent={a.id} role="button" tabIndex={0} aria-pressed={sel}
+            onClick={() => onChoisir(a.id)} onKeyDown={(e) => e.key === "Enter" && onChoisir(a.id)}
+            className="acc-carte-agent cursor-pointer" data-sel={sel ? "1" : undefined}>
+            <span className="acc-verre" />
+            {sel && <motion.span layoutId="acc-onglet" transition={RESSORT} className="acc-onglet" />}
+            <motion.div className="relative px-[22px] pt-5" initial={false} animate={{ y: sel ? 0 : 34 }} transition={RESSORT}>
+              <div className="flex items-start gap-3">
+                <span className="acc-avatar flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[16px]">
+                  {a.identity.avatar_emoji || a.identity.name?.[0] || "A"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="acc-nom truncate text-[15px] font-medium">{a.identity.name}</p>
+                  <p className="acc-secteur truncate text-[12px]">
+                    {SECTEURS[a.business_context?.sector] || "Agent"} · {a.id.slice(0, 4).toUpperCase()}
+                  </p>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); if (sel) onActualiser(); else onChoisir(a.id); }}
+                  aria-label="Actualiser" className="acc-actualiser flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full">
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+              </div>
+              <motion.p initial={false} animate={{ opacity: sel ? 1 : 0 }} transition={{ duration: 0.25, delay: sel ? 0.12 : 0 }}
+                className="mt-3 flex items-center gap-2 whitespace-nowrap text-[14px]" style={{ color: "var(--cl-ink-faint)" }} aria-hidden={!sel}>
+                CA (30 j) :
+                <strong className="text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>{sel ? ca : "—"}</strong>
+                <Point couleur="#1DAB55" />
+              </motion.p>
+            </motion.div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── La page ─────────────────────────────────────────────────────────────────
 
 export function Accueil() {
@@ -275,58 +391,13 @@ export function Accueil() {
           <div className="lg:pt-6"><AppelWhatsapp agent={agent} meta={meta} /></div>
         </div>
 
-        {/* Le carrousel des agents */}
-        <div className="acc-carrousel flex items-end gap-3 overflow-x-auto px-5 lg:px-10">
-          {loading && !visibles.length ? (
-            <div className="acc-agent h-[86px] w-64 animate-pulse rounded-3xl" />
-          ) : visibles.length === 0 ? (
-            <button onClick={() => router.push("/configure")} className="acc-agent-choisi flex items-center gap-3 rounded-t-[30px] px-6 py-5 text-left">
-              <Plus className="h-5 w-5" /> <span className="text-[16px] font-medium">Créer votre premier agent</span>
-            </button>
-          ) : (
-            visibles.map((a) => {
-              const sel = a.id === agent?.id;
-              return (
-                <motion.div key={a.id} layout transition={RESSORT}
-                  onClick={(e) => { setChoisi(a.id); e.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" }); }}
-                  role="button" tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && setChoisi(a.id)}
-                  style={{ borderRadius: sel ? "30px 30px 0 0" : 24 }}
-                  className={sel ? "acc-agent-choisi flex-shrink-0 cursor-pointer px-6 pb-4 pt-5" : "acc-agent flex-shrink-0 cursor-pointer px-5 py-4"}>
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[16px]"
-                      style={{ background: sel ? "var(--cl-accent-soft)" : "rgba(255,255,255,0.35)" }}>
-                      {a.identity.avatar_emoji || a.identity.name?.[0] || "A"}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-[15px] font-medium" style={{ color: sel ? "var(--cl-ink)" : "#fff" }}>{a.identity.name}</p>
-                      <p className="text-[12px]" style={{ color: sel ? "var(--cl-ink-faint)" : "rgba(255,255,255,0.7)" }}>
-                        {SECTEURS[a.business_context?.sector] || "Agent"} · {a.id.slice(0, 4).toUpperCase()}
-                      </p>
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); if (sel) setTour((t) => t + 1); else setChoisi(a.id); }}
-                      aria-label="Actualiser" className="ml-4 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full"
-                      style={{ border: `1px solid ${sel ? "var(--cl-line)" : "rgba(255,255,255,0.45)"}`, color: sel ? "var(--cl-ink)" : "#fff" }}>
-                      <RefreshCw className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <AnimatePresence initial={false}>
-                    {sel && (
-                      <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                        transition={RESSORT} className="flex items-center gap-2 overflow-hidden pt-3 text-[14px]" style={{ color: "var(--cl-ink-faint)" }}>
-                        CA (30 j) :
-                        <strong className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>
-                          {r ? <Glisse valeur={r.total} format={(n) => montant(n, cur)} /> : "—"}
-                        </strong>
-                        <Point couleur="#1DAB55" />
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })
-          )}
-        </div>
+        {/* Le carrousel des agents. Toutes les cartes ont la même taille : en
+            changeant d'agent, l'onglet blanc GLISSE d'une carte à l'autre, rien
+            ne change de forme. Sur téléphone, un glissement de côté s'aimante
+            à la carte suivante et la sélectionne — on n'a pas à finir le geste. */}
+        <Carrousel visibles={visibles} loading={loading} agentId={agent?.id} onChoisir={setChoisi}
+          onActualiser={() => setTour((t) => t + 1)} onCreer={() => router.push("/configure")}
+          ca={r ? <Glisse valeur={r.total} format={(n) => montant(n, cur)} /> : "—"} />
 
         {/* La feuille blanche : premiers indicateurs et conversations */}
         {!loading && visibles.length === 0 ? (
@@ -516,25 +587,42 @@ export function Accueil() {
            coquille). Sur un écran bas, il grandit plutôt que de tasser les
            cartes : mieux vaut défiler un peu que lire des chiffres qui débordent. */
         @media (min-width: 1024px) { .acc-haut { min-height: calc(100dvh - var(--coq-entete)); } }
-        .acc-tete, .acc-carrousel { animation: acc-apparait .5s cubic-bezier(.22,1,.36,1) both; }
-        .acc-carrousel { animation-delay: .08s; }
+        .acc-tete { animation: acc-apparait .5s cubic-bezier(.22,1,.36,1) both; }
         @keyframes acc-apparait { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
-        @media (prefers-reduced-motion: reduce) { .acc-tete, .acc-carrousel { animation: none; } }
+        @media (prefers-reduced-motion: reduce) { .acc-tete { animation: none; } }
         .acc-titre { font-size: clamp(30px, min(6.4vh, 10vw), 64px); line-height: 1.02; margin-top: 6px; }
         .acc-tete { margin-top: clamp(6px, 2.4vh, 32px); }
         :global(.acc-eventail) { width: clamp(240px, 30vh, 330px); margin-top: -6px; margin-bottom: clamp(-60px, -6vh, -20px); }
-        .acc-carrousel { margin-top: clamp(10px, 2vh, 24px); scrollbar-width: none; }
-        .acc-carrousel::-webkit-scrollbar, .acc-indicateurs::-webkit-scrollbar { display: none; }
+        :global(.acc-carrousel) { margin-top: clamp(10px, 2vh, 24px); scrollbar-width: none; scroll-padding-inline: 20px; }
+        @media (min-width: 1024px) { :global(.acc-carrousel) { scroll-padding-inline: 40px; } }
+        :global(.acc-carrousel::-webkit-scrollbar), .acc-indicateurs::-webkit-scrollbar { display: none; }
         .acc-indicateurs { scrollbar-width: none; scroll-padding-left: 16px; }
         /* Téléphone : cartes d'agent plus étroites, indicateurs moins hauts. */
         @media (max-width: 639px) {
-          :global(.acc-agent-choisi) { min-width: 248px !important; }
-          :global(.acc-agent) { min-width: 190px !important; }
+          :global(.acc-carte-agent) { width: calc(100vw - 72px); max-width: 300px; }
+          /* Le glissement de côté est piloté par la page ; le défilement
+             vertical reste au navigateur. */
+          :global(.acc-carrousel) { overflow-x: hidden; touch-action: pan-y; }
           :global(.acc-carte) { min-height: 186px !important; }
           .acc-fil { min-height: 230px; }
         }
-        :global(.acc-agent) { background: rgba(255,255,255,0.28); border: 1px solid rgba(255,255,255,0.45); backdrop-filter: blur(10px); margin-bottom: 10px; min-width: 230px; }
-        :global(.acc-agent-choisi) { background: #fff; min-width: 300px; box-shadow: 0 -10px 30px rgba(70,40,190,0.10); position: relative; z-index: 2; margin-bottom: -1px; }
+        /* Les cartes d'agent : même taille pour toutes. Le verre est le fond d'une
+           carte au repos ; l'onglet blanc, celui de la carte choisie, glisse de
+           l'une à l'autre et rejoint la feuille. */
+        :global(.acc-carte-agent) { position: relative; flex-shrink: 0; width: 300px; height: 126px; margin-bottom: -1px; z-index: 2; }
+        :global(.acc-verre) { position: absolute; left: 0; right: 0; top: 34px; bottom: 11px; border-radius: 24px;
+          background: rgba(255,255,255,0.28); border: 1px solid rgba(255,255,255,0.45); backdrop-filter: blur(10px); transition: opacity .3s ease; }
+        :global(.acc-carte-agent[data-sel] .acc-verre) { opacity: 0; }
+        :global(.acc-onglet) { position: absolute; inset: 0; border-radius: 30px 30px 0 0; background: #fff; box-shadow: 0 -10px 30px rgba(70,40,190,0.10); }
+        :global(.acc-avatar) { background: rgba(255,255,255,0.35); transition: background-color .3s ease; }
+        :global(.acc-carte-agent[data-sel] .acc-avatar) { background: var(--cl-accent-soft); }
+        :global(.acc-nom) { color: #fff; transition: color .3s ease; }
+        :global(.acc-secteur) { color: rgba(255,255,255,0.7); transition: color .3s ease; }
+        :global(.acc-carte-agent[data-sel] .acc-nom) { color: var(--cl-ink); }
+        :global(.acc-carte-agent[data-sel] .acc-secteur) { color: var(--cl-ink-faint); }
+        :global(.acc-actualiser) { border: 1px solid rgba(255,255,255,0.45); color: #fff; transition: color .3s ease, border-color .3s ease; }
+        :global(.acc-carte-agent[data-sel] .acc-actualiser) { border-color: var(--cl-line); color: var(--cl-ink); }
+        
         .acc-feuille { position: relative; z-index: 1; }
         :global(.acc-carte) { padding: clamp(14px, 2.2vh, 22px); border: 1px solid var(--cl-line-soft); min-height: 212px; transition: opacity .3s ease; }
         .acc-fil { min-height: 260px; max-height: 340px; transition: opacity .3s ease; }
