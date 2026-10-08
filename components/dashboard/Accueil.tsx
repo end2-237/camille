@@ -187,8 +187,8 @@ function AppelWhatsapp({ agent, meta }: { agent?: Agent; meta: EtatMeta | null }
 
       {/* L'appel lui-même : rien de plus important pour un commerçant. */}
       {meta && !meta.connecte && <Doodle nom="selfie" className="acc-doodle-appel pointer-events-none hidden xl:block" />}
-      {meta?.connecte ? (
-        <Link href={page} className="acc-puce flex items-center gap-2.5 rounded-full py-2 pl-2 pr-4 text-[14px]">
+      {!meta ? null : meta.connecte ? (
+        <Link href={page} className="acc-puce acc-fondu flex items-center gap-2.5 rounded-full py-2 pl-2 pr-4 text-[14px]">
           <span className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: "#25D366", color: "#fff" }}>
             <Check className="h-4 w-4" />
           </span>
@@ -197,7 +197,7 @@ function AppelWhatsapp({ agent, meta }: { agent?: Agent; meta: EtatMeta | null }
           </span>
         </Link>
       ) : (
-        <Link href={page} className="acc-appel group flex items-center gap-3 rounded-full py-2 pl-2 pr-2">
+        <Link href={page} className="acc-appel acc-fondu group flex items-center gap-3 rounded-full py-2 pl-2 pr-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: "#25D366", color: "#fff" }}>
             <IconeWhatsapp className="h-5 w-5" />
           </span>
@@ -352,6 +352,9 @@ export function Accueil() {
   const charger = useCallback(async (id: string) => {
     dernier.current = id;
     setChargement(true);
+    // L'état WhatsApp de l'agent précédent ne doit pas s'afficher pour le
+    // suivant, même un instant : on l'oublie le temps de lire le nouveau.
+    setMeta(null);
     const [s, m, f] = await Promise.all([
       lire<Stats>(`/api/stats?agentId=${id}&period=30d`),
       lire<EtatMeta>(`/api/agents/${id}/meta`),
@@ -634,6 +637,8 @@ export function Accueil() {
         :global(.acc-valeur) { font-size: clamp(28px, min(4.6vh, 2.6vw), 42px); margin-top: clamp(8px, 2vh, 22px); white-space: nowrap; }
                 :global(.acc-deroulant) { background: #fff; box-shadow: 0 18px 50px rgba(40,20,110,0.18); border: 1px solid var(--cl-line-soft); }
         :global(.acc-puce) { background: #fff; color: var(--cl-ink); box-shadow: 0 4px 18px rgba(70,40,190,0.10); }
+        :global(.acc-fondu) { animation: acc-fondu .35s ease both; }
+        @keyframes -global-acc-fondu { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
         :global(.acc-appel) { background: rgba(255,255,255,0.92); box-shadow: 0 10px 30px rgba(70,40,190,0.18); border: 1px solid rgba(255,255,255,0.8); }
         :global(.acc-rond) { border: 1px solid var(--cl-line); color: var(--cl-ink); }
         :global(.acc-bloc) { border: 1px solid var(--cl-line-soft); }

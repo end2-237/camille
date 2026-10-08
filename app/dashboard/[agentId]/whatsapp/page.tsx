@@ -22,6 +22,8 @@ import { Doodle, type NomDoodle } from "@/components/dashboard/Doodle";
 
 type Etat = {
   connecte: boolean;
+  /** « propre » : son WhatsApp (Embedded Signup) ; « application » : le numéro de l'application. */
+  mode?: "propre" | "application" | null;
   transport: string;
   numero: string | null;
   nom_verifie: string | null;
@@ -178,7 +180,7 @@ export default function WhatsappOfficielPage() {
   return (
     <div className="wa py-6 lg:py-8">
       <AnimatePresence>
-        {manque.length ? (
+        {manque.length && !etat?.connecte ? (
           <motion.div key="manque" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="mb-4 flex items-start gap-3 rounded-[22px] px-5 py-4 text-[13.5px] leading-relaxed" style={{ background: "#FDF1DC", color: "#7A4F00" }}>
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -311,8 +313,15 @@ function Connecte({ etat, occupe, onActualiser, onDeconnecter }: { etat: Etat; o
     <>
       <motion.section {...apparait(0)} className="wa-hero relative grid items-center gap-6 overflow-hidden rounded-[32px] p-6 sm:p-8 lg:grid-cols-[1.2fr_1fr] lg:p-10">
         <div>
-          <span className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-[12.5px]" style={{ color: "#1E6A37" }}>
-            <span className="wa-pouls h-2 w-2 rounded-full" style={{ background: "#25D366" }} /> Connecté et actif
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-[12.5px]" style={{ color: "#1E6A37" }}>
+              <span className="wa-pouls h-2 w-2 rounded-full" style={{ background: "#25D366" }} /> Connecté et actif
+            </span>
+            {etat.mode === "application" && (
+              <span className="rounded-full bg-white/70 px-3.5 py-1.5 text-[12.5px]" style={{ color: "var(--cl-ink-soft)" }}>
+                Numéro officiel de l&apos;application
+              </span>
+            )}
           </span>
           <h2 className="mt-4 text-[clamp(28px,3.4vw,42px)] font-medium leading-[1.08] tracking-[-0.035em]" style={{ color: "var(--cl-ink)" }}>
             {etat.nom_verifie || "Votre WhatsApp"} parle<br />avec la voix de Camille.
@@ -320,6 +329,12 @@ function Connecte({ etat, occupe, onActualiser, onDeconnecter }: { etat: Etat; o
           <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
             Chaque message reçu sur {etat.numero || "votre numéro"} est traité par votre agent, avec votre nom vérifié et votre catalogue.
           </p>
+          {etat.mode === "application" ? (
+            <p className="mt-5 max-w-[52ch] rounded-[18px] bg-white/70 px-4 py-3 text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+              Cet agent utilise le numéro WhatsApp officiel configuré pour l&apos;application. Rien à connecter ici :
+              il répond déjà par Meta, avec les boutons, les listes et le catalogue.
+            </p>
+          ) : (
           <div className="mt-6 flex flex-wrap gap-2.5">
             <motion.button onClick={onActualiser} disabled={occupe} whileTap={{ scale: 0.97 }}
               className="flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[14px] font-medium disabled:opacity-60" style={{ color: "var(--cl-ink)" }}>
@@ -330,6 +345,7 @@ function Connecte({ etat, occupe, onActualiser, onDeconnecter }: { etat: Etat; o
               <Unplug className="h-4 w-4" /> Déconnecter
             </motion.button>
           </div>
+          )}
         </div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, type: "spring", stiffness: 200, damping: 18 }}
           className="relative hidden justify-center lg:flex">

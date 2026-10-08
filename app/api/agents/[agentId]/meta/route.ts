@@ -11,7 +11,7 @@ import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { chiffrer, coffrePret, dechiffrer } from "@/lib/whatsapp/coffre";
 import { oublierIdentifiants } from "@/lib/whatsapp/identifiants";
-import { appId, catalogueRelie, connecter, desabonner } from "@/lib/whatsapp/inscription";
+import { appId, catalogueRelie, connecter, desabonner, profilNumeroApplication } from "@/lib/whatsapp/inscription";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
@@ -41,17 +41,39 @@ async function etat(agentId: string) {
   return r.rows[0] || null;
 }
 
+/**
+ * Comment l'agent parle à WhatsApp :
+ *  - « propre »      : son WhatsApp, connecté par l'Embedded Signup ;
+ *  - « application » : par Meta, avec le numéro de l'application (variables
+ *    d'environnement) — c'est le numéro qui lui est réservé (PHONE_NUMBER_ID
+ *    enregistré sur l'agent, ou agent de test META_TEST_AGENT_ID) ;
+ *  - null            : pas encore sur WhatsApp officiel.
+ * Dans les deux premiers cas, l'agent est CONNECTÉ : on ne lui propose pas de
+ * se connecter une seconde fois.
+ */
+type Etat = NonNullable<Awaited<ReturnType<typeof etat>>>;
+function modeDe(agentId: string, e: Etat | null): "propre" | "application" | null {
+  if (!e) return null;
+  if (e.a_son_jeton && e.phone_id) return "propre";
+  const appli = process.env.PHONE_NUMBER_ID;
+  if (e.transport === "meta" && ((appli && e.phone_id === appli) || agentId === process.env.META_TEST_AGENT_ID)) return "application";
+  return null;
+}
+
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
   if (!(await proprietaire(req, agentId))) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   const e = await etat(agentId).catch(() => null);
+  const mode = modeDe(agentId, e);
+  const app = mode === "application" ? await profilNumeroApplication() : null;
   return NextResponse.json({
-    connecte: Boolean(e?.a_son_jeton && e?.phone_id),
+    connecte: mode !== null,
+    mode,
     transport: e?.transport || "core",
-    numero: e?.display_phone || null,
-    nom_verifie: e?.verified_name || null,
-    catalogue: e?.catalog_id || null,
-    connecte_le: e?.connected_at || null,
+    numero: app ? app.numero : e?.display_phone || null,
+    nom_verifie: app ? app.nom : e?.verified_name || null,
+    catalogue: app ? process.env.CATALOG_ID || null : e?.catalog_id || null,
+    connecte_le: app ? null : e?.connected_at || null,
     // Ce qui manque côté configuration, pour l'afficher au lieu d'échouer.
     pret: {
       app_id: Boolean(appId()),
@@ -69,6 +91,18 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json(
       { error: "META_TOKEN_KEY absente : Camille refuse de garder un jeton qu'elle ne sait pas chiffrer." },
       { status: 503 }
+    );
+  }
+  // Déjà connecté : pas de seconde connexion par-dessus. Pour changer de
+  // numéro, on déconnecte d'abord (et le numéro de l'application ne se
+  // remplace pas d'ici).
+  const dejaConnecte = modeDe(agentId, await etat(agentId).catch(() => null));
+  if (dejaConnecte) {
+    return NextResponse.json(
+      { error: dejaConnecte === "propre"
+          ? "Cet agent a déjà son WhatsApp connecté. Déconnectez-le d'abord pour en relier un autre."
+          : "Cet agent répond déjà par le WhatsApp officiel, avec le numéro de l'application." },
+      { status: 409 }
     );
   }
   const b = (await req.json().catch(() => ({}))) as { code?: string; waba_id?: string; phone_number_id?: string };

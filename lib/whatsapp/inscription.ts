@@ -128,3 +128,25 @@ export async function catalogueRelie(wabaId: string, token: string): Promise<str
 export async function desabonner(wabaId: string, token: string): Promise<void> {
   await graph(`${wabaId}/subscribed_apps`, { token, method: "DELETE" });
 }
+
+// ── Le numéro de l'application ──────────────────────────────────────────────
+// Un agent peut parler par Meta avec le numéro de l'APPLICATION (identifiants
+// de l'environnement) plutôt qu'avec le sien : c'est le cas de Buyticle. Il est
+// alors bel et bien connecté ; on va chercher chez Meta le nom et le numéro à
+// afficher. Gardé dix minutes : ces valeurs ne bougent pas.
+let profilApp: { valeur: { numero: string | null; nom: string | null }; expire: number } | null = null;
+
+export async function profilNumeroApplication(): Promise<{ numero: string | null; nom: string | null }> {
+  if (profilApp && profilApp.expire > Date.now()) return profilApp.valeur;
+  const phoneId = process.env.PHONE_NUMBER_ID || "";
+  const token = process.env.WHATSAPP_TOKEN || "";
+  let valeur = { numero: null as string | null, nom: null as string | null };
+  if (phoneId && token) {
+    try {
+      const r = await graph(`${phoneId}?fields=display_phone_number,verified_name`, { token });
+      valeur = { numero: r.json.display_phone_number ? String(r.json.display_phone_number) : null, nom: r.json.verified_name ? String(r.json.verified_name) : null };
+    } catch { /* Meta injoignable : on affiche sans le détail */ }
+  }
+  profilApp = { valeur, expire: Date.now() + 10 * 60_000 };
+  return valeur;
+}
