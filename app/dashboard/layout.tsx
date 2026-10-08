@@ -664,6 +664,7 @@ function Topbar({ sidebarW, isDesktop, onBurger }: { sidebarW: number; isDesktop
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const accueil = usePathname() === "/dashboard";
   const [collapsed, setCollapsed]   = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDesktop, setIsDesktop]   = useState(true);
@@ -678,6 +679,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Largeur réservée au contenu : sidebar sur desktop, 0 sur mobile (drawer overlay)
   const contentW = isDesktop ? (collapsed ? SIDEBAR_COL : SIDEBAR_W) : 0;
+
+  // L'accueil a sa propre mise en page plein écran, avec son menu en haut
+  // (components/dashboard/Accueil.tsx) : ni barre latérale ni barre du haut.
+  if (accueil) return <>{children}</>;
 
   return (
     <div className="flex min-h-dvh" style={{ background: "var(--bg-base)" }}>
