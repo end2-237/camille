@@ -18,11 +18,14 @@ import {
   Activity, Pause, Play, Trash2, Check, MessageCircle, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AnimatePresence, motion } from "framer-motion";
 import { authHeaders } from "@/lib/auth-client";
 import type { Agent } from "@/types/agent";
 import { Eventail } from "./Eventail";
+import { Doodle } from "./Doodle";
 import { useAgentCourant } from "./coquille/AgentCourant";
 import { useMontee } from "./coquille/montee";
+import { RESSORT } from "./coquille/Entete";
 
 // ── Données ─────────────────────────────────────────────────────────────────
 
@@ -65,6 +68,37 @@ const heure = (d: string) => new Date(d).toLocaleTimeString("fr-FR", { hour: "2-
 
 // ── Les cartes d'indicateurs ────────────────────────────────────────────────
 
+/**
+ * Un nombre qui glisse vers sa nouvelle valeur au lieu de sauter : en
+ * changeant d'agent, on voit les chiffres passer de l'un à l'autre.
+ */
+function useGlisse(cible: number, duree = 700): number {
+  const [v, setV] = useState(cible);
+  const depart = useRef(cible);
+  const courant = useRef(cible);
+  useEffect(() => {
+    const calme = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (calme || !Number.isFinite(cible)) { courant.current = cible; setV(cible); return; }
+    depart.current = courant.current;
+    const t0 = performance.now();
+    let image = 0;
+    const pas = (t: number) => {
+      const k = Math.min(1, (t - t0) / duree);
+      const e = 1 - Math.pow(1 - k, 3);
+      courant.current = depart.current + (cible - depart.current) * e;
+      setV(courant.current);
+      if (k < 1) image = requestAnimationFrame(pas);
+    };
+    image = requestAnimationFrame(pas);
+    return () => cancelAnimationFrame(image);
+  }, [cible, duree]);
+  return v;
+}
+
+function Glisse({ valeur, format }: { valeur: number; format: (n: number) => string }) {
+  return <>{format(useGlisse(valeur))}</>;
+}
+
 /** Une rangée de barres fines : la part colorée dit la proportion, comme une jauge. */
 function Barres({ ratio, couleur, n = 52 }: { ratio: number; couleur: string; n?: number }) {
   const pleines = Math.round(Math.max(0, Math.min(1, ratio)) * n);
@@ -72,7 +106,9 @@ function Barres({ ratio, couleur, n = 52 }: { ratio: number; couleur: string; n?
     <div className="flex h-[30px] items-end justify-between gap-[2px] overflow-hidden">
       {Array.from({ length: n }, (_, i) => {
         const h = 62 + ((i * 37) % 38);
-        return <span key={i} className="block w-[2px] flex-shrink-0 rounded-full" style={{ height: `${h}%`, background: i < pleines ? couleur : "#E4E0EA" }} />;
+        // Les barres se remplissent l'une après l'autre quand la valeur change.
+        return <span key={i} className="block w-[2px] flex-shrink-0 rounded-full"
+          style={{ height: `${h}%`, background: i < pleines ? couleur : "#E4E0EA", transition: `background-color .35s ease ${i * 9}ms` }} />;
       })}
     </div>
   );
@@ -87,7 +123,7 @@ function Point({ couleur }: { couleur: string }) {
 }
 
 function Carte({ icone: Icone, titre, sous, valeur, point, ratio, couleur, gauche, droite, href }: {
-  icone: React.ElementType; titre: string; sous: string; valeur: string; point: string;
+  icone: React.ElementType; titre: string; sous: string; valeur: number; point: string;
   ratio: number; couleur: string; gauche: [string, string]; droite: [string, string]; href: string;
 }) {
   return (
@@ -104,7 +140,7 @@ function Carte({ icone: Icone, titre, sous, valeur, point, ratio, couleur, gauch
         </Link>
       </div>
       <p className="acc-valeur mt-auto flex items-center gap-2.5 font-light tracking-[-0.03em]" style={{ color: "var(--cl-ink)" }}>
-        {valeur} <Point couleur={point} />
+        <Glisse valeur={valeur} format={pct} /> <Point couleur={point} />
       </p>
       <div className="mt-3 flex justify-between text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
         <span>{gauche[0]}</span><span>{droite[0]}</span>
@@ -180,13 +216,6 @@ function AppelWhatsapp({ agent, meta }: { agent?: Agent; meta: EtatMeta | null }
   );
 }
 
-// ── Les illustrations ───────────────────────────────────────────────────────
-
-/** Une illustration « Open Doodles » (CC0), recolorée aux couleurs de Camille. */
-function Doodle({ nom, className }: { nom: "laying" | "selfie" | "unboxing" | "sitting-reading"; className?: string }) {
-  return <img src={`/doodles/${nom}.svg`} alt="" aria-hidden="true" draggable={false} className={`select-none ${className || ""}`} />;
-}
-
 // ── La page ─────────────────────────────────────────────────────────────────
 
 export function Accueil() {
@@ -198,15 +227,24 @@ export function Accueil() {
   const [meta, setMeta] = useState<EtatMeta | null>(null);
   const [fil, setFil] = useState<Message[]>([]);
   const [tour, setTour] = useState(0);
+  const [chargement, setChargement] = useState(false);
+  const [filDe, setFilDe] = useState<string | undefined>();
+  const dernier = useRef<string | null>(null);
 
-
+  // En changeant d'agent, les anciens chiffres restent affichés (adoucis)
+  // jusqu'à l'arrivée des nouveaux, puis glissent vers eux : pas de saut à
+  // zéro entre les deux. Une réponse arrivée trop tard est ignorée.
   const charger = useCallback(async (id: string) => {
+    dernier.current = id;
+    setChargement(true);
     const [s, m, f] = await Promise.all([
       lire<Stats>(`/api/stats?agentId=${id}&period=30d`),
       lire<EtatMeta>(`/api/agents/${id}/meta`),
       lire<{ messages: Message[] }>(`/api/agents/${id}/activite`),
     ]);
-    setStats(s); setMeta(m); setFil(f?.messages || []);
+    if (dernier.current !== id) return;
+    setStats(s); setMeta(m); setFil(f?.messages || []); setFilDe(id);
+    setChargement(false);
   }, []);
 
   useEffect(() => { if (agent?.id) charger(agent.id); }, [agent?.id, charger, tour]);
@@ -249,9 +287,12 @@ export function Accueil() {
             visibles.map((a) => {
               const sel = a.id === agent?.id;
               return (
-                <div key={a.id} onClick={() => setChoisi(a.id)} role="button" tabIndex={0}
+                <motion.div key={a.id} layout transition={RESSORT}
+                  onClick={(e) => { setChoisi(a.id); e.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" }); }}
+                  role="button" tabIndex={0}
                   onKeyDown={(e) => e.key === "Enter" && setChoisi(a.id)}
-                  className={sel ? "acc-agent-choisi flex-shrink-0 cursor-pointer rounded-t-[30px] px-6 pb-4 pt-5" : "acc-agent flex-shrink-0 cursor-pointer rounded-[24px] px-5 py-4"}>
+                  style={{ borderRadius: sel ? "30px 30px 0 0" : 24 }}
+                  className={sel ? "acc-agent-choisi flex-shrink-0 cursor-pointer px-6 pb-4 pt-5" : "acc-agent flex-shrink-0 cursor-pointer px-5 py-4"}>
                   <div className="flex items-start gap-3">
                     <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[16px]"
                       style={{ background: sel ? "var(--cl-accent-soft)" : "rgba(255,255,255,0.35)" }}>
@@ -269,16 +310,19 @@ export function Accueil() {
                       <RefreshCw className="h-4 w-4" />
                     </button>
                   </div>
-                  {sel && (
-                    <p className="mt-3 flex items-center gap-2 text-[14px]" style={{ color: "var(--cl-ink-faint)" }}>
-                      CA (30 j) :
-                      <strong className="text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>
-                        {r ? montant(r.total, cur) : "—"}
-                      </strong>
-                      <Point couleur="#1DAB55" />
-                    </p>
-                  )}
-                </div>
+                  <AnimatePresence initial={false}>
+                    {sel && (
+                      <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                        transition={RESSORT} className="flex items-center gap-2 overflow-hidden pt-3 text-[14px]" style={{ color: "var(--cl-ink-faint)" }}>
+                        CA (30 j) :
+                        <strong className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>
+                          {r ? <Glisse valeur={r.total} format={(n) => montant(n, cur)} /> : "—"}
+                        </strong>
+                        <Point couleur="#1DAB55" />
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
               );
             })
           )}
@@ -297,18 +341,18 @@ export function Accueil() {
             </button>
           </div>
         ) : (
-        <div ref={feuille} className="acc-feuille grid flex-1 gap-4 rounded-t-[36px] bg-white p-4 lg:grid-cols-[2fr_1fr] lg:p-6">
+        <div ref={feuille} data-chargement={chargement ? "1" : undefined} className="acc-feuille grid flex-1 content-start gap-4 rounded-t-[36px] bg-white p-4 lg:grid-cols-[2fr_1fr] lg:p-6">
           <div className="grid gap-4 sm:grid-cols-3">
             <Carte icone={ShoppingBag} titre="Commandes" sous={r ? `${r.orders_count} sur 30 jours` : "30 derniers jours"}
-              valeur={pct(livrees * 100)} point="#1DAB55" ratio={livrees} couleur="#1DAB55"
+              valeur={livrees * 100} point="#1DAB55" ratio={livrees} couleur="#1DAB55"
               gauche={["Livrées", String(r?.delivered_count ?? 0)]} droite={["En cours", String(r?.pending_count ?? 0)]}
               href="/dashboard/orders" />
             <Carte icone={MessagesSquare} titre="Réponses de l'agent" sous={o ? `${o.unique_contacts} clients sur 30 jours` : "30 derniers jours"}
-              valeur={pct(repondus * 100)} point="#7C5AF8" ratio={repondus} couleur="#7C5AF8"
+              valeur={repondus * 100} point="#7C5AF8" ratio={repondus} couleur="#7C5AF8"
               gauche={["Envoyés", court(o?.messages_sent ?? 0)]} droite={["Reçus", court(o?.messages_from_user ?? 0)]}
               href="/dashboard/stats" />
             <Carte icone={LifeBuoy} titre="Passages à l'humain" sous={o ? `${o.total_escalations} sur 30 jours` : "30 derniers jours"}
-              valeur={pct(escalade * 100)} point="#E5484D" ratio={escalade} couleur="#E5484D"
+              valeur={escalade * 100} point="#E5484D" ratio={escalade} couleur="#E5484D"
               gauche={["Escaladés", String(o?.total_escalations ?? 0)]} droite={["Contacts", String(o?.unique_contacts ?? 0)]}
               href="/dashboard/complaints" />
           </div>
@@ -323,7 +367,10 @@ export function Accueil() {
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className="acc-fil-messages mt-3 flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-hidden">
+            <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={filDe || "vide"} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="acc-fil-messages mt-3 flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-hidden">
               {fil.length === 0 ? (
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
                   <Doodle nom="laying" className="acc-doodle-fil min-h-0 w-auto" />
@@ -350,7 +397,8 @@ export function Accueil() {
                   </div>
                 ))
               )}
-            </div>
+            </motion.div>
+            </AnimatePresence>
             <div className="mt-4 flex flex-wrap gap-2">
               {[
                 { href: "/dashboard/orders", label: "Commandes" },
@@ -480,8 +528,14 @@ export function Accueil() {
         :global(.acc-agent) { background: rgba(255,255,255,0.28); border: 1px solid rgba(255,255,255,0.45); backdrop-filter: blur(10px); margin-bottom: 10px; min-width: 230px; }
         :global(.acc-agent-choisi) { background: #fff; min-width: 300px; box-shadow: 0 -10px 30px rgba(70,40,190,0.10); position: relative; z-index: 2; margin-bottom: -1px; }
         .acc-feuille { position: relative; z-index: 1; }
-        :global(.acc-carte) { padding: clamp(14px, 2.2vh, 22px); border: 1px solid var(--cl-line-soft); min-height: 212px; }
-        .acc-fil { min-height: 240px; }
+        :global(.acc-carte) { padding: clamp(14px, 2.2vh, 22px); border: 1px solid var(--cl-line-soft); min-height: 212px; transition: opacity .3s ease; }
+        .acc-fil { min-height: 260px; max-height: 340px; transition: opacity .3s ease; }
+        /* Sur ordinateur, cartes et conversations ont la même hauteur fixe :
+           de vraies conversations ne doivent plus étirer toute la rangée. */
+        @media (min-width: 1024px) {
+          :global(.acc-carte), .acc-fil { height: clamp(236px, 31vh, 300px); min-height: 0; max-height: none; }
+        }
+        .acc-feuille[data-chargement] :global(.acc-carte), .acc-feuille[data-chargement] .acc-fil { opacity: .55; }
         :global(.acc-valeur) { font-size: clamp(28px, min(4.6vh, 2.6vw), 42px); margin-top: clamp(8px, 2vh, 22px); white-space: nowrap; }
                 :global(.acc-deroulant) { background: #fff; box-shadow: 0 18px 50px rgba(40,20,110,0.18); border: 1px solid var(--cl-line-soft); }
         :global(.acc-puce) { background: #fff; color: var(--cl-ink); box-shadow: 0 4px 18px rgba(70,40,190,0.10); }

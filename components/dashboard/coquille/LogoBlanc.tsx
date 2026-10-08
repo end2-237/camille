@@ -26,11 +26,11 @@ export function SigneCamille({ className }: { className?: string }) {
 export function LogoBlanc({ compact = false }: { compact?: boolean }) {
   return (
     <span className="flex items-center gap-2.5 text-white">
-      <SigneCamille className="h-9 w-9 flex-shrink-0" />
+      <SigneCamille className="coq-logo-signe flex-shrink-0" />
       {!compact && (
-        <span className="leading-none">
+        <span className="coq-logo-texte leading-none">
           <span className="block text-[19px] font-bold tracking-[-0.01em]" style={{ fontFamily: "var(--font-good-timing)" }}>Camille</span>
-          <span className="mt-1 block text-[9.5px] font-medium tracking-[0.2em] text-white/70">BY BUYTICLE</span>
+          <span className="coq-logo-sous mt-1 block text-[9.5px] font-medium tracking-[0.2em] text-white/70">BY BUYTICLE</span>
         </span>
       )}
     </span>
