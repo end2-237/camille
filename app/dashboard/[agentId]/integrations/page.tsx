@@ -1,14 +1,29 @@
 "use client";
 
-// Page Intégrations : plateformes compatibles + import de catalogue.
-// - Montre TOUTES les plateformes (OFS actif, Shopify/WooCommerce bientôt, MCP dispo).
-// - Pour OFS : connexion compte → import boutique / catalogue plateforme (CJ) / tout.
+// ─────────────────────────────────────────────────────────────────────────────
+// Intégrations — ce qui relie l'agent au reste du monde.
+//
+// En tête, les plateformes compatibles (OFS active, Shopify/WooCommerce bientôt,
+// MCP disponible) ; pour OFS : connexion du compte → import boutique /
+// catalogue plateforme (CJ) / tout.
+//
+// Dessous, deux colonnes : à gauche ce qu'on manipule (les clés d'API du site
+// du marchand, les médias de prospection) ; à droite, collés en haut de
+// l'écran, les réglages qu'on vérifie d'un coup d'œil (secteur, mode de
+// conversion, source du catalogue, vectorisation).
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { authHeaders } from "@/lib/auth-client";
 import { sectorProfile, type SectorMode } from "@/lib/sectorProfiles";
-import { Store, ShoppingBag, Boxes, Plug, Check, Clock, Sparkles } from "lucide-react";
+import {
+  BookOpen, Boxes, Check, ChevronDown, Clock, Code2, Compass, Copy, Images, KeyRound, Library,
+  Lock, Paperclip, Plug, Plus, ShoppingBag, Sparkles, Store, Target, Trash2,
+} from "lucide-react";
+import { Bandeau, Bouton, BoutonRond, Filtres, LienBouton, Pastille, StylesUI, apparait } from "@/components/dashboard/ui";
+import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
 type MediaItem = { kind: string; url: string; caption?: string };
 
@@ -25,17 +40,62 @@ const PLATFORMS: Platform[] = [
 ];
 
 function Badge({ status }: { status: Platform["status"] }) {
-  const map = {
-    active: { t: "Disponible", c: "#0e9d63", bg: "rgba(14,157,99,.1)", i: <Check className="w-3 h-3" /> },
-    beta: { t: "Bêta", c: "#c77d0a", bg: "rgba(199,125,10,.1)", i: <Sparkles className="w-3 h-3" /> },
-    soon: { t: "Bientôt", c: "#8a8790", bg: "rgba(138,135,144,.12)", i: <Clock className="w-3 h-3" /> },
-  }[status];
+  if (status === "active") return <Pastille ton="vert"><Check className="h-3 w-3" />Disponible</Pastille>;
+  if (status === "beta") return <Pastille ton="ambre"><Sparkles className="h-3 w-3" />Bêta</Pastille>;
+  return <Pastille ton="gris"><Clock className="h-3 w-3" />Bientôt</Pastille>;
+}
+
+// ── Les petites pièces de la page ───────────────────────────────────────────
+
+/** Une carte de section : la pastille d'icône, le titre, une phrase d'aide. */
+function Section({ icone: Icone, titre, texte, rang = 0, children, action }: {
+  icone: React.ElementType; titre: string; texte?: React.ReactNode; rang?: number;
+  children?: React.ReactNode; action?: React.ReactNode;
+}) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ color: map.c, background: map.bg }}>
-      {map.i}{map.t}
-    </span>
+    <motion.section {...apparait(rang)} className="ui-carte min-w-0 rounded-[28px] p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+          <Icone className="h-[18px] w-[18px]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[17px] font-medium leading-tight tracking-[-0.01em]" style={{ color: "var(--cl-ink)" }}>{titre}</h2>
+          {texte && <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>{texte}</p>}
+        </div>
+        {action}
+      </div>
+      {children && <div className="mt-4">{children}</div>}
+    </motion.section>
   );
 }
+
+/** L'interrupteur rond : la bille glisse au ressort. */
+function Interrupteur({ actif, onClick, disabled, label }: { actif: boolean; onClick: () => void; disabled?: boolean; label: string }) {
+  return (
+    <button role="switch" aria-checked={actif} aria-label={label} onClick={onClick} disabled={disabled}
+      className="relative flex h-8 w-[52px] flex-shrink-0 items-center rounded-full p-1 transition-colors disabled:opacity-50"
+      style={{ background: actif ? "var(--cl-accent)" : "#DCD8E3", justifyContent: actif ? "flex-end" : "flex-start" }}>
+      <motion.span layout transition={RESSORT} className="h-6 w-6 rounded-full bg-white" style={{ boxShadow: "0 2px 6px rgba(25,23,27,0.18)" }} />
+    </button>
+  );
+}
+
+/** Copier dans le presse-papiers, avec la coche le temps d'y croire. */
+function useCopie() {
+  const [copie, setCopie] = useState(false);
+  const copier = (texte: string) => {
+    navigator.clipboard?.writeText(texte);
+    setCopie(true);
+    setTimeout(() => setCopie(false), 1800);
+  };
+  return { copie, copier };
+}
+
+const Etiquette = ({ children }: { children: React.ReactNode }) => (
+  <span className="mb-1.5 block px-1 text-[12.5px]" style={{ color: "var(--cl-ink-soft)" }}>{children}</span>
+);
+
+// ── La page ─────────────────────────────────────────────────────────────────
 
 export default function IntegrationsPage() {
   const { agentId } = useParams<{ agentId: string }>();
@@ -185,267 +245,264 @@ export default function IntegrationsPage() {
     } finally { setBusy(false); }
   }
 
+  // null = non configuré ; pour l'agent OFS désigné le grand catalogue était actif par défaut
+  const montreCatalogue = isOfsOwner || catSrc === "ofs_cj" || catSrc === "ofs_shop";
+  const bigOn = catSrc === "ofs_cj" || catSrc === "ofs_shop" || (catSrc === null && isOfsOwner);
+
   return (
-    <div className="mx-auto max-w-4xl p-4 sm:p-6">
-      <div className="mb-5">
-        <h1 className="text-lg font-semibold" style={{ color: "var(--cl-ink)" }}>Intégrations</h1>
-        <p className="text-[13px]" style={{ color: "var(--cl-ink-soft)" }}>
-          Connecte une plateforme pour importer ou lier ton catalogue. Voici ce qui est compatible :
-        </p>
-      </div>
+    <div className="py-6 lg:py-8">
+      <StylesUI />
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {PLATFORMS.map((p) => (
-          <div key={p.key} className="rounded-xl p-4" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="grid h-9 w-9 place-items-center rounded-lg text-white" style={{ background: p.accent }}>{p.icon}</span>
-                <div>
-                  <div className="text-[13.5px] font-semibold" style={{ color: "var(--cl-ink)" }}>{p.name}</div>
-                  <Badge status={p.status} />
-                </div>
+      <p className="max-w-2xl text-[14px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+        Connecte une plateforme pour importer ou lier ton catalogue. Voici ce qui est compatible :
+      </p>
+
+      {/* ── Les plateformes ─────────────────────────────────────────────────── */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:gap-4">
+        {PLATFORMS.map((p, i) => {
+          const ouvert = p.key === "ofs" && open === "ofs";
+          return (
+            <motion.div key={p.key} {...apparait(i)} className="ui-carte flex min-w-0 flex-col rounded-[26px] p-5"
+              style={ouvert ? { borderColor: "var(--cl-accent)", boxShadow: "0 16px 36px rgba(124,90,248,0.14)" } : undefined}>
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full" style={{ background: `${p.accent}1F`, color: p.accent }}>{p.icon}</span>
+                <Badge status={p.status} />
               </div>
-            </div>
-            <p className="mt-2.5 text-[12px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>{p.desc}</p>
+              <p className="mt-4 text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>{p.name}</p>
+              <p className="mt-1 flex-1 text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>{p.desc}</p>
 
-            {p.key === "ofs" && p.status === "active" && (
-              <button onClick={() => setOpen(open === "ofs" ? null : "ofs")} className="mt-3 w-full rounded-lg py-2 text-[12.5px] font-semibold text-white" style={{ background: p.accent }}>
-                {open === "ofs" ? "Fermer" : "Connecter OFS"}
-              </button>
-            )}
-            {p.key === "mcp" && (
-              <a href="https://github.com/end2-237/camille/tree/main/camille-mcp" target="_blank" rel="noreferrer" className="mt-3 inline-flex w-full items-center justify-center rounded-lg py-2 text-[12.5px] font-semibold" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)" }}>
-                Voir la configuration MCP
-              </a>
-            )}
-            {p.status === "soon" && (
-              <div className="mt-3 rounded-lg py-2 text-center text-[12px]" style={{ background: "var(--cl-bg-soft)", color: "var(--cl-ink-faint)" }}>Disponible bientôt</div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {open === "ofs" && (
-        <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
-          <div className="mb-3 flex items-center gap-2">
-            <Plug className="h-4 w-4" style={{ color: "#0e9d63" }} />
-            <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Importer depuis OFS</h2>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-[12px]" style={{ color: "var(--cl-ink-soft)" }}>
-              Email du compte OFS
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full rounded-lg px-3 py-2 text-[13px]" style={{ border: "1px solid var(--cl-line)" }} placeholder="toi@exemple.com" />
-            </label>
-            <label className="text-[12px]" style={{ color: "var(--cl-ink-soft)" }}>
-              Mot de passe OFS
-              <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="mt-1 w-full rounded-lg px-3 py-2 text-[13px]" style={{ border: "1px solid var(--cl-line)" }} placeholder="••••••••" />
-            </label>
-          </div>
-          <div className="mt-3">
-            <div className="mb-1.5 text-[12px]" style={{ color: "var(--cl-ink-soft)" }}>Quoi importer ?</div>
-            <div className="flex flex-wrap gap-2">
-              {([
-                { v: "shop", l: "Ma boutique" },
-                { v: "cj", l: "Catalogue plateforme (CJ)" },
-                { v: "all", l: "Tout (super-admin)" },
-              ] as const).map((o) => (
-                <button key={o.v} onClick={() => setMode(o.v)} className="rounded-full px-3 py-1.5 text-[12px] font-medium"
-                  style={mode === o.v ? { background: "#0e9d63", color: "#fff" } : { border: "1px solid var(--cl-line)", color: "var(--cl-ink-soft)" }}>
-                  {o.l}
-                </button>
-              ))}
-            </div>
-            <p className="mt-1.5 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
-              « Catalogue plateforme (CJ) » et « Tout » nécessitent un compte super-admin OFS.
-            </p>
-          </div>
-          <button onClick={importOfs} disabled={busy || !email || !password} className="mt-4 rounded-lg px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#0e9d63" }}>
-            {busy ? "Import en cours…" : "Importer le catalogue"}
-          </button>
-          {msg && (
-            <div className="mt-3 rounded-lg px-3 py-2 text-[12.5px]" style={{ background: msg.ok ? "rgba(14,157,99,.08)" : "rgba(214,69,69,.08)", color: msg.ok ? "#0b7a4b" : "#c0392b" }}>
-              {msg.text}
-            </div>
-          )}
-          <p className="mt-3 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
-            🔒 Tes identifiants OFS servent uniquement à lire ton catalogue (connexion directe à OFS) et ne sont pas stockés.
-          </p>
-        </div>
-      )}
-
-      {/* ── Secteur & comportement (cran 2 : auto selon le secteur) ── */}
-      <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
-        <div className="mb-2 flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#0e9d63" }}>🧭</span>
-          <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Secteur & comportement</h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-[12px]">
-          <span className="rounded-full px-2.5 py-1 font-medium" style={{ background: "var(--cl-bg-soft)", color: "var(--cl-ink)" }}>{profile.label}</span>
-          <span className="rounded-full px-2.5 py-1" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink-soft)" }}>Mode : {MODE_LABEL[profile.mode]}</span>
-          {profile.auto
-            ? <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold" style={{ background: "rgba(14,157,99,.1)", color: "#0b7a4b" }}><Check className="h-3 w-3" /> Comportement auto activé</span>
-            : <span className="rounded-full px-2.5 py-1" style={{ background: "rgba(199,125,10,.1)", color: "#a56b0a" }}>Réglages recommandés</span>}
-        </div>
-        <p className="mt-2 text-[12px]" style={{ color: "var(--cl-ink-soft)" }}>
-          Message d'accueil actuel : <span style={{ color: "var(--cl-ink)" }}>« {profile.welcome.replace(/\{b\}/g, bizName || "votre boutique")} »</span>
-        </p>
-        <p className="mt-1 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
-          Le secteur se règle dans les paramètres de l'agent. {profile.auto ? "Ce secteur est validé : le bot fonctionne sans réglage supplémentaire." : "Configure tes médias ci-dessous pour enrichir la prospection."}
-        </p>
-      </div>
-
-      {/* ── Médias de prospection (cran 3 : flyers, galeries, fiches services) ── */}
-      <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
-        <div className="mb-1 flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#2563eb" }}>📎</span>
-          <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Médias de prospection WhatsApp</h2>
-        </div>
-        <p className="text-[12px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>
-          {profile.mode === "catalogue"
-            ? "Ajoute des flyers/promos ; ton catalogue produits reste la source principale."
-            : "Ton activité repose sur des prestations : ajoute ici flyers, galerie de réalisations et fiches de services que le bot enverra."}
-          {" "}Colle l'URL d'une image (hébergée) + une légende.
-        </p>
-
-        <div className="mt-3 space-y-4">
-          {profile.media.map((mk) => {
-            const items = media.map((x, i) => ({ x, i })).filter(({ x }) => x.kind === mk.key);
-            return (
-              <div key={mk.key}>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <div>
-                    <span className="text-[12.5px] font-semibold" style={{ color: "var(--cl-ink)" }}>{mk.label}</span>
-                    <span className="ml-2 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>{mk.hint}</span>
+              <div className="mt-4">
+                {p.key === "ofs" && p.status === "active" && (
+                  <Bouton variante={ouvert ? "doux" : "encre"} icone={Plug} className="w-full" aria-expanded={ouvert}
+                    onClick={() => setOpen(open === "ofs" ? null : "ofs")}>
+                    {open === "ofs" ? "Fermer" : "Connecter OFS"}
+                  </Bouton>
+                )}
+                {p.key === "mcp" && (
+                  <LienBouton href="https://github.com/end2-237/camille/tree/main/camille-mcp" target="_blank" rel="noreferrer" icone={Code2} className="w-full">
+                    Voir la configuration MCP
+                  </LienBouton>
+                )}
+                {p.status === "soon" && (
+                  <div className="flex h-10 items-center justify-center rounded-full text-[13px]" style={{ background: "#F4F2F7", color: "var(--cl-ink-faint)" }}>
+                    Disponible bientôt
                   </div>
-                  <button onClick={() => addMedia(mk.key)} className="rounded-lg px-2.5 py-1 text-[11.5px] font-semibold" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)" }}>+ Ajouter</button>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* ── L'import OFS, déplié sous les plateformes ───────────────────────── */}
+      <AnimatePresence initial={false}>
+        {open === "ofs" && (
+          <motion.div key="ofs" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={RESSORT} className="overflow-hidden">
+            <div className="pt-4">
+              <Section icone={Plug} titre="Importer depuis OFS">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <Etiquette>Email du compte OFS</Etiquette>
+                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="ui-champ" placeholder="toi@exemple.com" />
+                  </label>
+                  <label className="block">
+                    <Etiquette>Mot de passe OFS</Etiquette>
+                    <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="ui-champ" placeholder="••••••••" />
+                  </label>
                 </div>
-                {items.length === 0 && <div className="text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>Aucun élément.</div>}
-                <div className="space-y-2">
-                  {items.map(({ x, i }) => (
-                    <div key={i} className="flex flex-wrap items-center gap-2">
-                      <input value={x.url} onChange={(e) => updMedia(i, { url: e.target.value })} placeholder="https://…/image.jpg" className="min-w-[180px] flex-1 rounded-lg px-2.5 py-1.5 text-[12px]" style={{ border: "1px solid var(--cl-line)" }} />
-                      <input value={x.caption || ""} onChange={(e) => updMedia(i, { caption: e.target.value })} placeholder="Légende (optionnel)" className="min-w-[120px] flex-1 rounded-lg px-2.5 py-1.5 text-[12px]" style={{ border: "1px solid var(--cl-line)" }} />
-                      {mk.multiple === false && items.length > 1 && <span className="text-[10px]" style={{ color: "#c0392b" }}>1 seul autorisé</span>}
-                      <button onClick={() => delMedia(i)} className="rounded-lg px-2 py-1 text-[11px]" style={{ border: "1px solid var(--cl-line)", color: "#c0392b" }}>Suppr.</button>
+
+                <div className="mt-4">
+                  <Etiquette>Quoi importer ?</Etiquette>
+                  <Filtres id="ofs-mode" label="Quoi importer ?" valeur={mode} onChange={setMode}
+                    options={[
+                      { cle: "shop", libelle: "Ma boutique" },
+                      { cle: "cj", libelle: "Catalogue plateforme (CJ)" },
+                      { cle: "all", libelle: "Tout (super-admin)" },
+                    ]} />
+                  <p className="mt-2 px-1 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+                    « Catalogue plateforme (CJ) » et « Tout » nécessitent un compte super-admin OFS.
+                  </p>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <Bouton variante="encre" onClick={importOfs} occupe={busy} disabled={busy || !email || !password}>
+                    {busy ? "Import en cours…" : "Importer le catalogue"}
+                  </Bouton>
+                  <span className="flex items-center gap-1.5 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+                    <Lock className="h-3.5 w-3.5 flex-shrink-0" />
+                    Tes identifiants OFS servent uniquement à lire ton catalogue (connexion directe à OFS) et ne sont pas stockés.
+                  </span>
+                </div>
+              </Section>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Les messages d'import et de mode de conversion partagent ce bandeau :
+          il reste visible même quand le panneau OFS est replié. */}
+      <AnimatePresence>
+        {msg && (
+          <motion.div key="msg" exit={{ opacity: 0 }} className="mt-4">
+            <Bandeau ton={msg.ok ? "vert" : "rouge"}>{msg.text}</Bandeau>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="mt-6 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
+        {/* ── Colonne principale ─────────────────────────────────────────────── */}
+        <div className="min-w-0 space-y-5">
+          <ApiKeysSection agentId={agentId} />
+
+          {/* ── Médias de prospection (cran 3 : flyers, galeries, fiches services) ── */}
+          <Section icone={Paperclip} titre="Médias de prospection WhatsApp" rang={3}
+            texte={<>
+              {profile.mode === "catalogue"
+                ? "Ajoute des flyers/promos ; ton catalogue produits reste la source principale."
+                : "Ton activité repose sur des prestations : ajoute ici flyers, galerie de réalisations et fiches de services que le bot enverra."}
+              {" "}Colle l&apos;URL d&apos;une image (hébergée) + une légende.
+            </>}>
+            <div className="space-y-3">
+              {profile.media.map((mk) => {
+                const items = media.map((x, i) => ({ x, i })).filter(({ x }) => x.kind === mk.key);
+                return (
+                  <div key={mk.key} className="rounded-[22px] p-4" style={{ background: "#FAF9FC" }}>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>{mk.label}</p>
+                        <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>{mk.hint}</p>
+                      </div>
+                      <Bouton variante="clair" icone={Plus} onClick={() => addMedia(mk.key)}>Ajouter</Bouton>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 flex items-center gap-3">
-          <button onClick={saveMedia} disabled={mediaBusy} className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#2563eb" }}>
-            {mediaBusy ? "Enregistrement…" : "Enregistrer les médias"}
-          </button>
-          {mediaMsg && <span className="text-[12px]" style={{ color: mediaMsg.startsWith("✅") ? "#0b7a4b" : "#c0392b" }}>{mediaMsg}</span>}
-        </div>
-      </div>
-
-      <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
-        <div className="mb-1 flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#101012" }}>🎯</span>
-          <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Mode de conversion</h2>
-        </div>
-        <p className="mb-3 text-[12px]" style={{ color: "var(--cl-sub)" }}>
-          Où la vente se conclut. En mode WhatsApp, l&apos;agent enregistre la commande dans la conversation
-          et vous notifie ; le lien produit devient informatif.
-        </p>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          {[
-            { id: "whatsapp", t: "Conclure dans WhatsApp", d: "Panier + commande enregistrée. Recommandé si vous livrez et encaissez à la livraison." },
-            { id: "boutique", t: "Renvoyer vers ma boutique", d: "Le lien produit reste l'action principale. Pour une boutique avec paiement en ligne." },
-          ].map((o) => {
-            const on = convMode === o.id;
-            return (
-              <button key={o.id} onClick={() => saveConvMode(o.id)} disabled={convBusy}
-                className="rounded-lg p-3 text-left transition disabled:opacity-50"
-                style={{ border: on ? "2px solid #0e9d63" : "1px solid var(--cl-line)", background: on ? "#F2FBF7" : "#fff" }}>
-                <div className="text-[13px] font-semibold" style={{ color: "var(--cl-ink)" }}>
-                  {on ? "✓ " : ""}{o.t}
-                </div>
-                <div className="mt-1 text-[11.5px]" style={{ color: "var(--cl-sub)" }}>{o.d}</div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {(isOfsOwner || catSrc === "ofs_cj" || catSrc === "ofs_shop") && (() => {
-        // null = non configuré ; pour l'agent OFS désigné le grand catalogue était actif par défaut
-        const bigOn = catSrc === "ofs_cj" || catSrc === "ofs_shop" || (catSrc === null && isOfsOwner);
-        return (
-          <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
-            <div className="mb-1 flex items-center gap-2">
-              <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#0e9d63" }}>🗂️</span>
-              <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Source du catalogue</h2>
+                    {items.length === 0 && <p className="mt-2 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>Aucun élément.</p>}
+                    {items.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <AnimatePresence initial={false}>
+                          {items.map(({ x, i }) => (
+                            <motion.div key={i} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={RESSORT}
+                              className="flex flex-wrap items-center gap-2">
+                              <input value={x.url} onChange={(e) => updMedia(i, { url: e.target.value })} placeholder="https://…/image.jpg"
+                                className="ui-champ min-w-0 flex-[2_1_180px]" style={{ background: "#fff", width: "auto" }} />
+                              <input value={x.caption || ""} onChange={(e) => updMedia(i, { caption: e.target.value })} placeholder="Légende (optionnel)"
+                                className="ui-champ min-w-0 flex-[1_1_120px]" style={{ background: "#fff", width: "auto" }} />
+                              {mk.multiple === false && items.length > 1 && <Pastille ton="rouge">1 seul autorisé</Pastille>}
+                              <BoutonRond icone={Trash2} label="Supprimer" onClick={() => delMedia(i)} style={{ color: "#A63D28" }} />
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <p className="mb-3 text-[12px]" style={{ color: "var(--cl-sub)" }}>
-              Choisis ce que l&apos;agent utilise pour répondre : le grand catalogue OFS (des milliers de produits)
-              ou uniquement ton catalogue Camille natif.
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Bouton variante="encre" onClick={saveMedia} occupe={mediaBusy} disabled={mediaBusy}>
+                {mediaBusy ? "Enregistrement…" : "Enregistrer les médias"}
+              </Bouton>
+              {mediaMsg && <span className="text-[13px]" style={{ color: mediaMsg.startsWith("✅") ? "#1E7A3A" : "#A63D28" }}>{mediaMsg}</span>}
+            </div>
+          </Section>
+        </div>
+
+        {/* ── Colonne des réglages, collée en haut ───────────────────────────── */}
+        <aside className="min-w-0 space-y-5 lg:sticky lg:top-24">
+          {/* ── Secteur & comportement (cran 2 : auto selon le secteur) ── */}
+          <Section icone={Compass} titre="Secteur & comportement" rang={2}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Pastille ton="violet">{profile.label}</Pastille>
+              <Pastille ton="gris">Mode : {MODE_LABEL[profile.mode]}</Pastille>
+              {profile.auto
+                ? <Pastille ton="vert"><Check className="h-3 w-3" /> Comportement auto activé</Pastille>
+                : <Pastille ton="ambre">Réglages recommandés</Pastille>}
+            </div>
+            <div className="mt-3 rounded-[20px] px-4 py-3" style={{ background: "#FAF9FC" }}>
+              <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Message d&apos;accueil actuel</p>
+              <p className="mt-0.5 text-[13.5px] leading-relaxed" style={{ color: "var(--cl-ink)" }}>
+                « {profile.welcome.replace(/\{b\}/g, bizName || "votre boutique")} »
+              </p>
+            </div>
+            <p className="mt-3 text-[12px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+              Le secteur se règle dans les paramètres de l&apos;agent. {profile.auto ? "Ce secteur est validé : le bot fonctionne sans réglage supplémentaire." : "Configure tes médias ci-dessous pour enrichir la prospection."}
             </p>
+          </Section>
 
-            <div className="flex items-center justify-between rounded-lg p-3" style={{ background: "#f7f7f8", border: "1px solid var(--cl-line)" }}>
-              <div>
-                <div className="text-[13px] font-semibold" style={{ color: "var(--cl-ink)" }}>
-                  {bigOn ? "Grand catalogue OFS" : "Catalogue natif Camille"}
-                </div>
-                <div className="text-[11px]" style={{ color: "var(--cl-sub)" }}>
-                  {bigOn ? "L'agent répond depuis le catalogue OFS en direct." : "L'agent répond uniquement depuis tes produits Camille."}
-                </div>
-              </div>
-              <button
-                onClick={() => toggleCatalog(!bigOn)}
-                disabled={catBusy}
-                aria-label="Activer ou désactiver le grand catalogue"
-                className="relative h-7 w-12 rounded-full transition-colors disabled:opacity-50"
-                style={{ background: bigOn ? "#0e9d63" : "#cbd5e1" }}
-              >
-                <span
-                  className="absolute top-1 h-5 w-5 rounded-full bg-white transition-all"
-                  style={{ left: bigOn ? 26 : 4 }}
-                />
-              </button>
+          {/* ── Mode de conversion ── */}
+          <Section icone={Target} titre="Mode de conversion" rang={3}
+            texte="Où la vente se conclut. En mode WhatsApp, l'agent enregistre la commande dans la conversation et vous notifie ; le lien produit devient informatif.">
+            <div className="grid gap-2" role="radiogroup" aria-label="Mode de conversion">
+              {[
+                { id: "whatsapp", t: "Conclure dans WhatsApp", d: "Panier + commande enregistrée. Recommandé si vous livrez et encaissez à la livraison." },
+                { id: "boutique", t: "Renvoyer vers ma boutique", d: "Le lien produit reste l'action principale. Pour une boutique avec paiement en ligne." },
+              ].map((o) => {
+                const on = convMode === o.id;
+                return (
+                  <motion.button key={o.id} role="radio" aria-checked={on} onClick={() => saveConvMode(o.id)} disabled={convBusy}
+                    whileTap={{ scale: 0.98 }} transition={RESSORT}
+                    className="flex items-start gap-3 rounded-[22px] p-4 text-left transition-colors disabled:opacity-50"
+                    style={{ background: on ? "#F7F4FF" : "#FAF9FC", boxShadow: on ? "inset 0 0 0 2px var(--cl-accent)" : "inset 0 0 0 1px var(--cl-line-soft)" }}>
+                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full"
+                      style={{ background: on ? "var(--cl-accent)" : "#fff", boxShadow: on ? "none" : "inset 0 0 0 1.5px var(--cl-line)", color: "#fff" }}>
+                      {on && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>{o.t}</span>
+                      <span className="mt-0.5 block text-[12.5px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>{o.d}</span>
+                    </span>
+                  </motion.button>
+                );
+              })}
             </div>
-            {catMsg && <div className="mt-2 text-[12px]" style={{ color: "var(--cl-sub)" }}>{catMsg}</div>}
-          </div>
-        );
-      })()}
+          </Section>
 
-      {isOfsOwner && (
-        <div className="mt-5 rounded-xl p-4 sm:p-5" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
-          <div className="mb-1 flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg text-white" style={{ background: "#6d28d9" }}>🖼️</span>
-            <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Recherche par image — vectorisation OFS</h2>
-          </div>
-          <p className="text-[12px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>
-            Indexe les images du catalogue OFS (CLIP) pour la recherche visuelle. « Nouveautés » ne traite que les produits
-            pas encore indexés — rapide, à relancer après un ajout. « Tout réindexer » repart de zéro.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={() => runVec(true)} disabled={vecBusy} className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#6d28d9" }}>
-              {vecBusy ? "En cours…" : "Vectoriser les nouveautés"}
-            </button>
-            <button onClick={() => runVec(false)} disabled={vecBusy} className="rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)" }}>
-              Tout réindexer
-            </button>
-            {vecTotal > 0 && <span className="self-center text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>{vecTotal} vecteurs créés</span>}
-          </div>
-          {vecLog && (
-            <pre className="mt-3 max-h-52 overflow-auto rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "var(--cl-bg-soft)", color: "var(--cl-ink-soft)", whiteSpace: "pre-wrap" }}>{vecLog}</pre>
+          {montreCatalogue && (
+            <Section icone={Library} titre="Source du catalogue" rang={4}
+              texte="Choisis ce que l'agent utilise pour répondre : le grand catalogue OFS (des milliers de produits) ou uniquement ton catalogue Camille natif.">
+              <div className="flex items-center justify-between gap-3 rounded-[22px] p-4" style={{ background: "#FAF9FC" }}>
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>
+                    {bigOn ? "Grand catalogue OFS" : "Catalogue natif Camille"}
+                  </p>
+                  <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>
+                    {bigOn ? "L'agent répond depuis le catalogue OFS en direct." : "L'agent répond uniquement depuis tes produits Camille."}
+                  </p>
+                </div>
+                <Interrupteur actif={bigOn} onClick={() => toggleCatalog(!bigOn)} disabled={catBusy}
+                  label="Activer ou désactiver le grand catalogue" />
+              </div>
+              {catMsg && <p className="mt-2 px-1 text-[12.5px]" style={{ color: "var(--cl-ink-soft)" }}>{catMsg}</p>}
+            </Section>
           )}
-          <p className="mt-2 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
-            Requiert <code>OFS_SUPABASE_SERVICE_KEY</code> et <code>CLIP_SERVICE_URL</code> côté serveur. Idéalement, planifie « nouveautés » toutes les 15 min.
-          </p>
-        </div>
-      )}
 
-      <ApiKeysSection agentId={agentId} />
+          {isOfsOwner && (
+            <Section icone={Images} titre="Recherche par image — vectorisation OFS" rang={5}
+              texte="Indexe les images du catalogue OFS (CLIP) pour la recherche visuelle. « Nouveautés » ne traite que les produits pas encore indexés — rapide, à relancer après un ajout. « Tout réindexer » repart de zéro.">
+              <div className="flex flex-wrap items-center gap-2">
+                <Bouton variante="encre" onClick={() => runVec(true)} occupe={vecBusy} disabled={vecBusy}>
+                  {vecBusy ? "En cours…" : "Vectoriser les nouveautés"}
+                </Bouton>
+                <Bouton variante="clair" onClick={() => runVec(false)} disabled={vecBusy}>Tout réindexer</Bouton>
+                {vecTotal > 0 && <Pastille ton="violet">{vecTotal} vecteurs créés</Pastille>}
+              </div>
+              {vecLog && (
+                <pre className="mt-3 max-h-52 overflow-auto rounded-[18px] p-4 text-[11.5px] leading-relaxed"
+                  style={{ background: "#FAF9FC", color: "var(--cl-ink-soft)", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{vecLog}</pre>
+              )}
+              <p className="mt-3 text-[12px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+                Requiert <Code>OFS_SUPABASE_SERVICE_KEY</Code> et <Code>CLIP_SERVICE_URL</Code> côté serveur. Idéalement, planifie « nouveautés » toutes les 15 min.
+              </p>
+            </Section>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
+
+const Code = ({ children }: { children: React.ReactNode }) => (
+  <code className="rounded-full px-1.5 py-0.5 text-[11.5px]" style={{ background: "#F1EFF4", color: "var(--cl-ink)", overflowWrap: "anywhere" }}>{children}</code>
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cles d'API : le site du marchand devient un consommateur de l'API Camille.
@@ -456,6 +513,8 @@ function ApiKeysSection({ agentId }: { agentId: string }) {
   const [fresh, setFresh] = useState<{ key: string; kind: string } | null>(null);
   const [origins, setOrigins] = useState("");
   const [creating, setCreating] = useState(false);
+  const [exemples, setExemples] = useState(false);
+  const { copie, copier } = useCopie();
 
   const load = useCallback(() => {
     fetch(`/api/agents/${agentId}/api-keys`, { headers: { ...authHeaders() } })
@@ -498,86 +557,97 @@ function ApiKeysSection({ agentId }: { agentId: string }) {
   const base = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
-    <div className="mt-6 rounded-xl p-4" style={{ border: "1px solid var(--cl-line)", background: "#fff" }}>
-      <h2 className="text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>API — brancher le site du client</h2>
-      <p className="mt-1 text-[12.5px] leading-snug" style={{ color: "var(--cl-ink-soft)" }}>
+    <Section icone={KeyRound} titre="API — brancher le site du client" rang={2}
+      texte={<>
         Le site appelle Camille comme n&apos;importe quelle API. Le catalogue reste saisi
         une seule fois, et les commandes du site arrivent au même endroit que celles
         de WhatsApp — avec le même accusé de réception au client.
-      </p>
+      </>}>
 
-      {err && (
-        <div className="mt-3 rounded-lg p-3 text-[12.5px]" style={{ background: "#FDECEC", color: "#c0392b" }}>{err}</div>
-      )}
+      {err && <div className="mb-4"><Bandeau ton="rouge">{err}</Bandeau></div>}
 
-      {fresh && (
-        <div className="mt-3 rounded-lg p-3" style={{ background: "#FDF7E7", border: "1px solid #F3D5A5" }}>
-          <div className="text-[12.5px] font-semibold" style={{ color: "#8A5A00" }}>
-            Copie cette clé maintenant — elle ne sera plus jamais affichée.
-          </div>
-          <code className="mt-2 block break-all rounded p-2 text-[12px]" style={{ background: "#fff" }}>{fresh.key}</code>
-          {fresh.kind === "secret" && (
-            <div className="mt-2 text-[11.5px]" style={{ color: "#8A5A00" }}>
-              Clé secrète : à n&apos;utiliser que côté serveur. Jamais dans du code envoyé au navigateur.
+      {/* La clé neuve : affichée une seule fois, jamais relue ensuite. */}
+      <AnimatePresence>
+        {fresh && (
+          <motion.div key="fresh" initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={RESSORT}
+            className="mb-4 rounded-[22px] p-4" style={{ background: "#FDF1DC", color: "#9A6510" }}>
+            <p className="text-[13.5px] font-semibold">
+              Copie cette clé maintenant — elle ne sera plus jamais affichée.
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <code className="min-w-0 flex-1 rounded-[18px] bg-white px-4 py-2.5 font-mono text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink)", overflowWrap: "anywhere" }}>
+                {fresh.key}
+              </code>
+              <BoutonRond icone={copie ? Check : Copy} label={copie ? "Copié" : "Copier la clé"} onClick={() => copier(fresh.key)} />
             </div>
-          )}
-          <button onClick={() => setFresh(null)} className="mt-2 text-[12px] underline" style={{ color: "var(--cl-ink-soft)" }}>
-            J&apos;ai copié
-          </button>
-        </div>
-      )}
+            {fresh.kind === "secret" && (
+              <p className="mt-2 text-[12.5px]">
+                Clé secrète : à n&apos;utiliser que côté serveur. Jamais dans du code envoyé au navigateur.
+              </p>
+            )}
+            <div className="mt-3">
+              <Bouton variante="clair" icone={Check} onClick={() => setFresh(null)}>J&apos;ai copié</Bouton>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <label className="mt-4 block text-[11.5px] font-medium" style={{ color: "var(--cl-ink-soft)" }}>
-        Domaines autorisés (un par ligne ou séparés par des virgules) — laisser vide pour tout autoriser
+      <label className="block">
+        <Etiquette>Domaines autorisés (un par ligne ou séparés par des virgules) — laisser vide pour tout autoriser</Etiquette>
+        <textarea className="ui-champ" rows={2} value={origins}
+          onChange={(e) => setOrigins(e.target.value)}
+          placeholder="https://boutique-client.com" />
       </label>
-      <textarea className="input-midnight mt-1" rows={2} value={origins}
-        onChange={(e) => setOrigins(e.target.value)}
-        placeholder="https://boutique-client.com" />
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <button onClick={() => create("public")} disabled={creating}
-          className="rounded-lg px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-50" style={{ background: "#0e9d63" }}>
+        <Bouton variante="vert" icone={KeyRound} onClick={() => create("public")} disabled={creating}>
           Clé de lecture (catalogue)
-        </button>
-        <button onClick={() => create("secret")} disabled={creating}
-          className="rounded-lg px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-50" style={{ background: "#101012" }}>
+        </Bouton>
+        <Bouton variante="encre" icone={Lock} onClick={() => create("secret")} disabled={creating}>
           Clé secrète (commandes)
-        </button>
+        </Bouton>
       </div>
 
       {keys.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {keys.map((k) => (
-            <div key={k.id} className="flex flex-wrap items-center gap-2 rounded-lg p-2.5"
-              style={{ background: "var(--cl-bg-soft)", opacity: k.revoked_at ? 0.5 : 1 }}>
-              <code className="text-[12px]" style={{ color: "var(--cl-ink)" }}>{k.key_prefix}…</code>
-              <span className="rounded px-2 py-0.5 text-[10.5px] font-semibold"
-                style={{ background: k.kind === "secret" ? "#101012" : "#E4F8EC", color: k.kind === "secret" ? "#fff" : "#0e6b45" }}>
-                {k.kind === "secret" ? "SECRÈTE" : "LECTURE"}
-              </span>
-              <span className="text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+        <motion.div layout className="mt-5 space-y-2">
+          {keys.map((k, i) => (
+            <motion.div key={k.id} layout {...apparait(i)}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[20px] px-4 py-3"
+              style={{ background: "#FAF9FC", opacity: k.revoked_at ? 0.5 : 1 }}>
+              <code className="rounded-full bg-white px-3 py-1 font-mono text-[12.5px]" style={{ color: "var(--cl-ink)", boxShadow: "inset 0 0 0 1px var(--cl-line-soft)" }}>
+                {k.key_prefix}…
+              </code>
+              <Pastille ton={k.kind === "secret" ? "violet" : "vert"}>
+                {k.kind === "secret" ? "Secrète" : "Lecture"}
+              </Pastille>
+              <span className="min-w-0 flex-1 truncate text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
                 {k.label} · {k.calls_count} appel(s)
               </span>
-              <div className="flex-1" />
               {k.revoked_at
-                ? <span className="text-[11.5px]" style={{ color: "#c0392b" }}>révoquée</span>
-                : <button onClick={() => revoke(k.id)} className="text-[11.5px] underline" style={{ color: "#c0392b" }}>Révoquer</button>}
-            </div>
+                ? <Pastille ton="rouge">révoquée</Pastille>
+                : <Bouton variante="danger" onClick={() => revoke(k.id)}>Révoquer</Bouton>}
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
-      <a href="/docs" target="_blank" rel="noreferrer"
-        className="mt-4 inline-block text-[12.5px] font-semibold underline" style={{ color: "var(--cl-ink)" }}>
-        Documentation complète et testeur en direct →
-      </a>
-
-      <details className="mt-4">
-        <summary className="cursor-pointer text-[12.5px] font-semibold" style={{ color: "var(--cl-ink)" }}>
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <LienBouton href="/docs" target="_blank" rel="noreferrer" variante="doux" icone={BookOpen} className="max-w-full">
+          <span className="truncate">Documentation complète et testeur en direct</span>
+        </LienBouton>
+        <Bouton variante="doux" icone={Code2} aria-expanded={exemples} onClick={() => setExemples((v) => !v)}>
           Exemples de code
-        </summary>
-        <pre className="mt-2 overflow-auto rounded-lg p-3 text-[11px] leading-relaxed"
-          style={{ background: "var(--cl-bg-soft)", color: "var(--cl-ink-soft)", whiteSpace: "pre-wrap" }}>
+          <motion.span animate={{ rotate: exemples ? 180 : 0 }} transition={RESSORT} className="flex">
+            <ChevronDown className="h-4 w-4" />
+          </motion.span>
+        </Bouton>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {exemples && (
+          <motion.div key="exemples" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={RESSORT} className="overflow-hidden">
+            <pre className="mt-3 overflow-auto rounded-[22px] p-4 text-[11.5px] leading-relaxed"
+              style={{ background: "#FAF9FC", color: "var(--cl-ink-soft)", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
 {`// 1. Afficher le catalogue sur le site (cle de lecture, navigateur OK)
 const r = await fetch("${base}/api/public/v1/catalog?limit=24", {
   headers: { "X-Camille-Key": "cam_pk_…" },
@@ -600,8 +670,10 @@ await fetch("${base}/api/public/v1/orders", {
 // 3. Mesurer le trafic du site (une balise a coller avant </body>)
 // <script src="${base}/api/public/v1/track" data-key="cam_pk_..." defer></script>
 // -> visiteurs, pages vues et taux de conversion dans l'onglet "Trafic du site".`}
-        </pre>
-      </details>
-    </div>
+            </pre>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Section>
   );
 }

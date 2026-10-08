@@ -10,12 +10,18 @@
 //
 // Deux actions, celles qu'on faisait à la main dans Postgres : changer un plan,
 // relancer une session.
+//
+// Sur grand écran les lignes s'alignent en colonnes ; sur téléphone chaque
+// agent devient une carte, sans défilement de côté.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, ShieldAlert, RotateCw, Check, X, Radio, TrendingUp } from "lucide-react";
+import { motion } from "framer-motion";
+import { RefreshCw, ShieldAlert, RotateCw, Check, X, Radio, TrendingUp, Bot, Siren, Eye, HeartPulse, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
+import { Bandeau, Bouton, Pastille, Squelettes, StylesUI, TONS, Tuile, Vide, apparait, type Ton } from "@/components/dashboard/ui";
+import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
 interface Ligne {
   id: string;
@@ -88,11 +94,8 @@ function diagnostic(l: Ligne): { texte: string; ton: "ko" | "attention" | "ok" }
   return { texte: "actif", ton: "ok" };
 }
 
-const COULEUR = {
-  ko:        { fg: "#8A2020", bg: "rgba(220,38,38,0.14)" },
-  attention: { fg: "#8A5A00", bg: "rgba(251,191,36,0.18)" },
-  ok:        { fg: "#4A6B00", bg: "rgba(198,242,78,0.20)" },
-} as const;
+/** Le ton du kit pour chaque gravité. */
+const TON: Record<"ko" | "attention" | "ok", Ton> = { ko: "rouge", attention: "ambre", ok: "vert" };
 
 /**
  * L'état de la plateforme WhatsApp, en haut de la console.
@@ -106,61 +109,82 @@ const COULEUR = {
 function CartePlateforme({ etat }: { etat: Plateforme | null }) {
   if (!etat) return null;
 
-  const c = COULEUR[etat.niveau === "critique" ? "ko" : etat.niveau === "attention" ? "attention" : "ok"];
+  const ton = TON[etat.niveau === "critique" ? "ko" : etat.niveau === "attention" ? "attention" : "ok"];
+  const t = TONS[ton];
   const bib = etat.bibliotheque;
   const wa = etat.whatsapp;
 
   return (
-    <div className="mt-4 rounded-xl p-4" style={{ border: "1px solid var(--border-default)", background: "var(--surface-raised)" }}>
-      <div className="flex flex-wrap items-center gap-2">
-        <Radio className="h-4 w-4 shrink-0" style={{ color: c.fg }} />
-        <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>
+    <motion.section {...apparait(4)} className="ui-carte min-w-0 rounded-[28px] p-5 sm:p-6">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: t.fond, color: t.encre }}>
+          <Radio className="h-[18px] w-[18px]" />
+        </span>
+        <span className="text-[17px] font-medium tracking-[-0.01em]" style={{ color: "var(--cl-ink)" }}>
           Plateforme WhatsApp
         </span>
-        <span className="rounded-md px-2 py-0.5 text-[11px] font-medium" style={{ background: c.bg, color: c.fg }}>
+        <Pastille ton={ton} point>
           {etat.niveau === "critique" ? "incident" : etat.niveau === "attention" ? "à surveiller" : "stable"}
-        </span>
-        {etat.sessions && (
-          <span className="text-[11.5px]" style={{ color: "var(--text-disabled)" }}>
-            {etat.sessions.en_ligne}/{etat.sessions.total} sessions en ligne
-          </span>
-        )}
+        </Pastille>
       </div>
 
-      <p className="mt-2 text-[13px]" style={{ color: "var(--text-primary)" }}>{etat.diagnostic}</p>
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] lg:gap-6">
+        <div className="min-w-0">
+          <p className="text-[14px] leading-relaxed" style={{ color: "var(--cl-ink)" }}>{etat.diagnostic}</p>
 
-      {/* La prévision est le vrai produit de cette carte : elle transforme un
-          constat en décision. On la marque comme telle. */}
-      <p className="mt-1.5 flex items-start gap-1.5 text-[12.5px]" style={{ color: "var(--text-secondary)" }}>
-        <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>{etat.prevision}</span>
-      </p>
+          {/* La prévision est le vrai produit de cette carte : elle transforme un
+              constat en décision. On la marque comme telle. */}
+          <div className="mt-3 flex items-start gap-2.5 rounded-[20px] p-4 text-[13px] leading-relaxed" style={{ background: "#F7F4FF", color: "var(--cl-ink-soft)" }}>
+            <TrendingUp className="mt-[3px] h-4 w-4 flex-shrink-0" style={{ color: "var(--cl-accent-deep)" }} />
+            <span className="min-w-0">{etat.prevision}</span>
+          </div>
 
-      {(bib || wa) && (
-        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11.5px]" style={{ color: "var(--text-disabled)" }}>
-          {bib && (
-            <span>
-              Bibliothèque <b style={{ color: "var(--text-secondary)" }}>{bib.installee}</b>
-              {bib.derniere && bib.derniere !== bib.installee && <> · dernière publiée {bib.derniere}</>}
-            </span>
-          )}
-          {wa && (
-            <span>
-              Protocole annoncé <b style={{ color: wa.decalage ? "#8A2020" : "var(--text-secondary)" }}>{wa.annoncee}</b>
-              {wa.embarquee && wa.embarquee !== wa.annoncee && <> · la bibliothèque parle {wa.embarquee}</>}
-              {wa.master && <> · master {wa.master}</>}
-            </span>
+          {etat.incident?.en_cours && etat.incident.sessions_touchees.length > 0 && (
+            <div className="mt-3 rounded-[18px] px-4 py-3 text-[12.5px] leading-relaxed" style={{ background: TONS.rouge.fond, color: TONS.rouge.encre, overflowWrap: "anywhere" }}>
+              Tombées dans les {etat.incident.fenetre_min} dernières minutes :{" "}
+              {etat.incident.sessions_touchees.join(" · ")}
+            </div>
           )}
         </div>
-      )}
 
-      {etat.incident?.en_cours && etat.incident.sessions_touchees.length > 0 && (
-        <div className="mt-3 rounded-lg p-2.5 text-[11.5px]" style={{ background: COULEUR.ko.bg, color: COULEUR.ko.fg }}>
-          Tombées dans les {etat.incident.fenetre_min} dernières minutes :{" "}
-          {etat.incident.sessions_touchees.join(" · ")}
-        </div>
-      )}
-    </div>
+        {(etat.sessions || bib || wa) && (
+          <div className="min-w-0 space-y-3">
+            {etat.sessions && (
+              <div className="rounded-[20px] px-4 py-3" style={{ background: "#FAF9FC" }}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>Sessions en ligne</span>
+                  <span className="text-[15px] font-medium tabular-nums" style={{ color: "var(--cl-ink)" }}>
+                    {etat.sessions.en_ligne}/{etat.sessions.total}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: "#ECE9F1" }}>
+                  <motion.div className="h-full rounded-full" style={{ background: "var(--cl-accent)" }}
+                    initial={{ width: 0 }} animate={{ width: `${etat.sessions.total ? (etat.sessions.en_ligne / etat.sessions.total) * 100 : 0}%` }} transition={RESSORT} />
+                </div>
+              </div>
+            )}
+
+            {(bib || wa) && (
+              <div className="space-y-1.5 rounded-[20px] px-4 py-3 text-[12.5px] leading-relaxed" style={{ background: "#FAF9FC", color: "var(--cl-ink-faint)", overflowWrap: "anywhere" }}>
+                {bib && (
+                  <p>
+                    Bibliothèque <b className="font-medium" style={{ color: "var(--cl-ink)" }}>{bib.installee}</b>
+                    {bib.derniere && bib.derniere !== bib.installee && <> · dernière publiée {bib.derniere}</>}
+                  </p>
+                )}
+                {wa && (
+                  <p>
+                    Protocole annoncé <b className="font-medium" style={{ color: wa.decalage ? TONS.rouge.encre : "var(--cl-ink)" }}>{wa.annoncee}</b>
+                    {wa.embarquee && wa.embarquee !== wa.annoncee && <> · la bibliothèque parle {wa.embarquee}</>}
+                    {wa.master && <> · master {wa.master}</>}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.section>
   );
 }
 
@@ -220,149 +244,204 @@ export default function AdminPage() {
   const rang = { ko: 0, attention: 1, ok: 2 } as const;
   const triees = [...items].sort((a, b) => rang[diagnostic(a).ton] - rang[diagnostic(b).ton]);
   const enPanne = items.filter((l) => diagnostic(l).ton === "ko").length;
+  const aSurveiller = items.filter((l) => diagnostic(l).ton === "attention").length;
+  const actifs = items.length - enPanne - aSurveiller;
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "var(--text-primary)" }}>
-            Console d&apos;exploitation
-          </h1>
-          <p className="mt-1 text-[13px]" style={{ color: "var(--text-secondary)" }}>
-            {items.length} agent{items.length > 1 ? "s" : ""}
-            {enPanne > 0 ? ` · ${enPanne} à regarder tout de suite` : " · rien à signaler"}
-          </p>
-        </div>
-        <button onClick={load} disabled={charge} className="btn-ghost disabled:opacity-60">
-          <RefreshCw className={"h-3.5 w-3.5 " + (charge ? "animate-spin" : "")} />
+    <div className="py-6 lg:py-8">
+      <StylesUI />
+
+      {/* ── Le résumé et l'actualisation ──────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[14px]" style={{ color: "var(--cl-ink-soft)" }}>
+          {items.length} agent{items.length > 1 ? "s" : ""}
+          {enPanne > 0 ? ` · ${enPanne} à regarder tout de suite` : " · rien à signaler"}
+        </p>
+        <Bouton variante="clair" icone={RefreshCw} onClick={load} disabled={charge}
+          className={charge ? "[&>svg]:animate-spin" : ""}>
           Actualiser
-        </button>
+        </Bouton>
       </div>
 
       {erreur && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg p-3 text-[13px]"
-          style={{ background: "rgba(220,38,38,0.10)", color: "#8A2020" }}>
-          <ShieldAlert className="h-4 w-4 shrink-0" /> {erreur}
+        <div className="mt-4">
+          <Bandeau ton="rouge" titre={<span className="inline-flex items-center gap-1.5"><ShieldAlert className="h-4 w-4" /> Console indisponible</span>}>
+            {erreur}
+          </Bandeau>
         </div>
       )}
 
-      <CartePlateforme etat={plateforme} />
-
-      {degrade.length > 0 && (
-        <div className="mt-4 rounded-lg p-3 text-[12px]"
-          style={{ background: "rgba(251,191,36,0.14)", color: "#8A5A00" }}>
-          Vue partielle — certaines données n&apos;ont pas pu être lues :{" "}
-          {degrade.join(" · ")}
-        </div>
-      )}
-
-      <div className="mt-5 overflow-x-auto rounded-xl"
-        style={{ border: "1px solid var(--border-default)" }}>
-        <table className="w-full min-w-[900px] border-collapse text-[13px]">
-          <thead>
-            <tr style={{ background: "var(--surface-raised)" }}>
-              {["Agent", "État", "Plan", "Quota du mois", "7 derniers jours", "Actions"].map((h) => (
-                <th key={h} className="px-3 py-2.5 text-left text-[11.5px] font-medium"
-                  style={{ color: "var(--text-secondary)" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {triees.map((l) => {
-              const d = diagnostic(l);
-              const c = COULEUR[d.ton];
-              return (
-                <tr key={l.id} style={{ borderTop: "1px solid var(--border-default)" }}>
-                  <td className="px-3 py-2.5">
-                    <div className="font-medium" style={{ color: "var(--text-primary)" }}>
-                      {l.business_name || l.name}
-                    </div>
-                    <div className="text-[11.5px]" style={{ color: "var(--text-disabled)" }}>
-                      {l.owner.email} · N{l.level}
-                    </div>
-                  </td>
-
-                  <td className="px-3 py-2.5">
-                    <span className="rounded-md px-2 py-1 text-[11.5px] font-medium"
-                      style={{ background: c.bg, color: c.fg }}>
-                      {d.texte}
-                    </span>
-                  </td>
-
-                  <td className="px-3 py-2.5">
-                    <select
-                      className="input-midnight w-[120px]"
-                      value={l.plan}
-                      disabled={busy === l.id}
-                      onChange={(e) => agir(l.id, { plan: e.target.value }, `Plan passé en ${e.target.value}`)}
-                    >
-                      {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                    {l.plan_expires_at && (
-                      <div className="mt-1 text-[11px]" style={{ color: l.plan_expired ? "#8A2020" : "var(--text-disabled)" }}>
-                        {l.plan_expired ? "expiré le " : "jusqu'au "}
-                        {new Date(l.plan_expires_at).toLocaleDateString("fr-FR")}
-                      </div>
-                    )}
-                  </td>
-
-                  <td className="px-3 py-2.5">
-                    {l.tokens.limit == null ? (
-                      <span style={{ color: "var(--text-disabled)" }}>illimité</span>
-                    ) : (
-                      <>
-                        <div className="tabular-nums" style={{ color: "var(--text-primary)" }}>
-                          {l.tokens.used.toLocaleString("fr-FR")} / {l.tokens.limit.toLocaleString("fr-FR")}
-                        </div>
-                        <div className="mt-1 h-1.5 w-[120px] overflow-hidden rounded-full"
-                          style={{ background: "var(--surface-raised)" }}>
-                          <div className="h-full rounded-full"
-                            style={{
-                              width: `${Math.min(100, l.tokens.percent)}%`,
-                              background: l.tokens.percent >= 90 ? "#8A2020"
-                                : l.tokens.percent >= 70 ? "#8A5A00" : "var(--color-gold, #4A6B00)",
-                            }} />
-                        </div>
-                      </>
-                    )}
-                  </td>
-
-                  <td className="px-3 py-2.5 tabular-nums" style={{ color: "var(--text-secondary)" }}>
-                    {l.messages_7j.toLocaleString("fr-FR")} msg · {l.commandes_7j} cmd
-                  </td>
-
-                  <td className="px-3 py-2.5">
-                    <button
-                      className="btn-ghost disabled:opacity-60"
-                      disabled={busy === l.id || !l.session}
-                      title={l.session ? "Relancer la session WhatsApp" : "Aucune session"}
-                      onClick={() => agir(l.id, { action: "restart_session" }, "Session relancée")}
-                    >
-                      <RotateCw className={"h-3.5 w-3.5 " + (busy === l.id ? "animate-spin" : "")} />
-                      Relancer
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-
-            {lignes !== null && !items.length && !erreur && (
-              <tr>
-                <td colSpan={6} className="px-3 py-8 text-center" style={{ color: "var(--text-disabled)" }}>
-                  Aucun agent.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <Tuile rang={0} icone={Bot} titre="Agents" valeur={lignes === null ? "—" : items.length} sous="sur la plateforme" />
+        <Tuile rang={1} icone={Siren} titre="À regarder" valeur={lignes === null ? "—" : enPanne} sous="tout de suite" fort={enPanne > 0} />
+        <Tuile rang={2} icone={Eye} titre="À surveiller" valeur={lignes === null ? "—" : aSurveiller} sous="quota ou silence" />
+        <Tuile rang={3} icone={HeartPulse} titre="Actifs" valeur={lignes === null ? "—" : actifs} sous="rien à signaler" />
       </div>
 
-      <p className="mt-3 text-[11.5px]" style={{ color: "var(--text-disabled)" }}>
-        <Check className="mr-1 inline h-3 w-3" />
-        Les changements de plan et les relances sont journalisés avec ton adresse.
-        <X className="ml-3 mr-1 inline h-3 w-3" />
-        Le quota se lit sur le mois en cours.
-      </p>
+      {/* La plateforme d'abord : quand elle tombe, toutes les lignes tombent
+          avec elle, et c'est elle qu'il faut lire en premier. */}
+      {plateforme && <div className="mt-5"><CartePlateforme etat={plateforme} /></div>}
+
+      <div className="mt-6">
+        {/* ── Les agents ────────────────────────────────────────────────────── */}
+        <section className="min-w-0">
+          {degrade.length > 0 && (
+            <div className="mb-4">
+              <Bandeau ton="ambre">
+                Vue partielle — certaines données n&apos;ont pas pu être lues :{" "}
+                {degrade.join(" · ")}
+              </Bandeau>
+            </div>
+          )}
+
+          {/* L'en-tête des colonnes, sur grand écran seulement. */}
+          <div className="admin-grille hidden px-5 pb-2 text-[12px] xl:grid" style={{ color: "var(--cl-ink-faint)" }}>
+            {["Agent", "État", "Plan", "Quota du mois", "7 derniers jours", "Actions"].map((h) => <span key={h}>{h}</span>)}
+          </div>
+
+          {lignes === null ? (
+            <Squelettes n={5} hauteur={84} />
+          ) : !items.length && !erreur ? (
+            <Vide doodle="meditating" titre="Aucun agent." />
+          ) : (
+            <motion.div layout className="space-y-2.5">
+              {triees.map((l, i) => {
+                const d = diagnostic(l);
+                const ton = TON[d.ton];
+                const occupe = busy === l.id;
+                return (
+                  <motion.article key={l.id} layout {...apparait(i)}
+                    className="ui-carte admin-grille grid items-center gap-x-4 gap-y-3 rounded-[24px] p-4 xl:px-5"
+                    style={d.ton === "ko" ? { borderColor: "#F0D2CB" } : undefined}>
+                    {/* Agent */}
+                    <div className="admin-agent flex min-w-0 items-center gap-3">
+                      <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[14px] font-semibold"
+                        style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+                        {(l.business_name || l.name || "?").trim().charAt(0).toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-[14.5px] font-medium" style={{ color: "var(--cl-ink)" }}>
+                          {l.business_name || l.name}
+                        </p>
+                        <p className="truncate text-[12px]" style={{ color: "var(--cl-ink-faint)" }} title={l.owner.email}>
+                          {l.owner.email} · N{l.level}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* État */}
+                    <div className="admin-etat min-w-0">
+                      <Pastille ton={ton} point>{d.texte}</Pastille>
+                    </div>
+
+                    {/* Plan */}
+                    <div className="admin-plan min-w-0">
+                      <Champ libelle="Plan">
+                        <div className="relative">
+                          <select
+                            className="ui-champ appearance-none"
+                            style={{ height: 38, fontSize: 13.5, paddingRight: 36 }}
+                            value={l.plan}
+                            disabled={occupe}
+                            onChange={(e) => agir(l.id, { plan: e.target.value }, `Plan passé en ${e.target.value}`)}
+                          >
+                            {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--cl-ink-faint)" }} />
+                        </div>
+                        {l.plan_expires_at && (
+                          <p className="mt-1 px-1 text-[11.5px]" style={{ color: l.plan_expired ? TONS.rouge.encre : "var(--cl-ink-faint)" }}>
+                            {l.plan_expired ? "expiré le " : "jusqu'au "}
+                            {new Date(l.plan_expires_at).toLocaleDateString("fr-FR")}
+                          </p>
+                        )}
+                      </Champ>
+                    </div>
+
+                    {/* Quota du mois */}
+                    <div className="admin-quota min-w-0">
+                      <Champ libelle="Quota du mois">
+                        {l.tokens.limit == null ? (
+                          <span className="text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>illimité</span>
+                        ) : (
+                          <>
+                            <p className="truncate text-[12.5px] tabular-nums" style={{ color: "var(--cl-ink)" }}>
+                              {l.tokens.used.toLocaleString("fr-FR")} / {l.tokens.limit.toLocaleString("fr-FR")}
+                            </p>
+                            <div className="mt-1.5 h-2 overflow-hidden rounded-full" style={{ background: "#ECE9F1" }}>
+                              <motion.div className="h-full rounded-full"
+                                initial={{ width: 0 }} animate={{ width: `${Math.min(100, l.tokens.percent)}%` }} transition={RESSORT}
+                                style={{
+                                  background: l.tokens.percent >= 90 ? TONS.rouge.encre
+                                    : l.tokens.percent >= 70 ? "#E0A43A" : "var(--cl-accent)",
+                                }} />
+                            </div>
+                          </>
+                        )}
+                      </Champ>
+                    </div>
+
+                    {/* 7 derniers jours */}
+                    <div className="admin-semaine min-w-0">
+                      <Champ libelle="7 derniers jours">
+                        <p className="text-[13px] tabular-nums" style={{ color: "var(--cl-ink-soft)" }}>
+                          {l.messages_7j.toLocaleString("fr-FR")} msg · {l.commandes_7j} cmd
+                        </p>
+                      </Champ>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="admin-actions min-w-0 xl:justify-self-end">
+                      <Bouton
+                        variante="doux"
+                        icone={RotateCw}
+                        occupe={occupe}
+                        disabled={occupe || !l.session}
+                        title={l.session ? "Relancer la session WhatsApp" : "Aucune session"}
+                        onClick={() => agir(l.id, { action: "restart_session" }, "Session relancée")}
+                      >
+                        Relancer
+                      </Bouton>
+                    </div>
+                  </motion.article>
+                );
+              })}
+            </motion.div>
+          )}
+
+          <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+            <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5" />
+              Les changements de plan et les relances sont journalisés avec ton adresse.</span>
+            <span className="inline-flex items-center gap-1.5"><X className="h-3.5 w-3.5" />
+              Le quota se lit sur le mois en cours.</span>
+          </p>
+        </section>
+      </div>
+
+      <style jsx global>{`
+        /* Téléphone : l'agent en tête, puis l'état et l'action, puis les
+           trois mesures côte à côte quand la place le permet. */
+        .admin-grille { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "agent agent" "etat actions" "plan plan" "quota semaine"; }
+        .admin-agent { grid-area: agent; } .admin-etat { grid-area: etat; } .admin-plan { grid-area: plan; }
+        .admin-quota { grid-area: quota; } .admin-semaine { grid-area: semaine; } .admin-actions { grid-area: actions; }
+        @media (min-width: 640px) {
+          .admin-grille { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "agent agent etat actions" "plan quota semaine semaine"; }
+        }
+        @media (min-width: 1280px) {
+          .admin-grille { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 140px minmax(0, 150px) minmax(0, 130px) auto; grid-template-areas: "agent etat plan quota semaine actions"; }
+          .admin-libelle { display: none; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/** Une mesure d'une ligne : sur téléphone son libellé, sur grand écran la colonne suffit. */
+function Champ({ libelle, children }: { libelle: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="admin-libelle mb-1 px-1 text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>{libelle}</p>
+      {children}
     </div>
   );
 }

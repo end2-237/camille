@@ -1,7 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // app/dashboard/[agentId]/page.tsx — Camille by Buyticle
-// Configuration complète d'un agent avec navigation par onglets.
-// Inspiré de l'interface ElevenLabs : sidebar gauche + contenu tabulé.
+// Configuration complète d'un agent, rangée par onglets.
+//
+// Dans la coquille du tableau de bord, le nom et le statut de l'agent sont
+// déjà dans le titre de la feuille : la page ne porte que les onglets (une
+// barre de pastilles sur mobile, un menu collant à gauche sur grand écran)
+// et leur contenu, qui s'écoule dans la page sans zone de défilement propre.
 // ─────────────────────────────────────────────────────────────────────────────
 
 "use client";
@@ -10,13 +14,15 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence }          from "framer-motion";
 import {
-  ArrowLeft, Sparkles, Bot, BookOpen,
+  Sparkles, Bot, BookOpen,
   Zap, Code2, Plug2, RefreshCw, Copy, Check,
   Save, Pencil, Plus, Trash2, Play, Pause,
   MessageCircle, Globe, Phone, Clock,
   Users, ChevronDown, LayoutDashboard, TrendingUp,
   History, FileText, Target, UserPlus, Send, Image, Calendar,
   Upload, Mic2, Video, X,
+  Ban, Building2, MapPin, KeyRound, Fingerprint, Smile, Eye, EyeOff,
+  CheckCircle2, HelpCircle,
 } from "lucide-react";
 import { toast }                from "sonner";
 import { useAuth }             from "@/hooks/useAuth";
@@ -25,6 +31,10 @@ import { generateSystemPrompt } from "@/lib/generateSystemPrompt";
 import { cn }                      from "@/lib/utils";
 import type { Agent, AgentModel, FAQEntry } from "@/types/agent";
 import type { DbCapability } from "@/lib/plans-db";
+import {
+  Bandeau, Bouton, BoutonRond, Filtres, Pastille, Squelettes, StylesUI, Tuile, Vide, apparait, type Ton,
+} from "@/components/dashboard/ui";
+import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -88,7 +98,12 @@ function CapIconDash({ name, className, style }: { name: string; className?: str
   return <Icon className={className} style={style} />;
 }
 
-// ── Shared primitives ─────────────────────────────────────────────────────────
+// ── Pièces locales ────────────────────────────────────────────────────────────
+// Le kit commun (components/dashboard/ui) couvre les boutons, pastilles et
+// bandeaux ; ce qui suit est propre aux formulaires de cette page.
+
+/** Le fond des blocs intérieurs d'une carte. */
+const FOND_DOUX = "#FAF9FC";
 
 function Field({
   label, hint, children, required,
@@ -96,54 +111,73 @@ function Field({
   label: string; hint?: string; children: React.ReactNode; required?: boolean;
 }) {
   return (
-    <div className="space-y-1.5">
-      <label className="block text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+    <div className="min-w-0 space-y-2">
+      <label className="block px-1 text-[13px] font-medium" style={{ color: "var(--cl-ink-soft)" }}>
         {label}
-        {required && <span className="ml-1 text-[var(--color-gold)]">*</span>}
+        {required && <span className="ml-1" style={{ color: "var(--cl-accent)" }}>*</span>}
       </label>
       {children}
-      {hint && <p className="text-2xs" style={{ color: "var(--text-disabled)" }}>{hint}</p>}
+      {hint && <p className="px-1 text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>{hint}</p>}
     </div>
   );
 }
 
 function FInput({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { className?: string }) {
-  return (
-    <input
-      className={cn("w-full px-3 py-1.5 rounded-md text-xs outline-none transition-all duration-150", className)}
-      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-      onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,90,248,0.4)"; }}
-      onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
-      {...props}
-    />
-  );
+  return <input className={cn("ui-champ", className)} {...props} />;
 }
 
 function FTextarea({ className, rows = 3, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { className?: string }) {
-  return (
-    <textarea
-      rows={rows}
-      className={cn("w-full px-3 py-2 rounded-md text-xs resize-none outline-none transition-all duration-150", className)}
-      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", color: "var(--text-primary)", lineHeight: 1.6 }}
-      onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,90,248,0.4)"; }}
-      onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
-      {...props}
-    />
-  );
+  return <textarea rows={rows} className={cn("ui-champ", className)} {...props} />;
 }
 
 function FSelect({ options, className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { options: { value: string; label: string }[]; className?: string }) {
   return (
     <div className="relative">
-      <select
-        className={cn("w-full px-3 py-1.5 rounded-md text-xs outline-none appearance-none transition-all duration-150 pr-8", className)}
-        style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-        {...props}
-      >
+      <select className={cn("ui-champ cursor-pointer appearance-none pr-11", className)} {...props}>
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none" style={{ color: "var(--text-disabled)" }} />
+      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--cl-ink-faint)" }} />
     </div>
+  );
+}
+
+/** L'interrupteur arrondi, au bouton qui glisse sur un ressort. Purement visuel : la ligne porte le clic. */
+function Interrupteur({ actif, attenue }: { actif: boolean; attenue?: boolean }) {
+  return (
+    <span aria-hidden className="relative inline-flex h-7 w-12 flex-shrink-0 rounded-full transition-colors duration-200"
+      style={{ background: actif ? "var(--cl-accent)" : "#DCD6E6", opacity: attenue ? 0.55 : 1 }}>
+      <motion.span animate={{ x: actif ? 20 : 0 }} transition={RESSORT}
+        className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white"
+        style={{ boxShadow: "0 2px 6px rgba(30,20,60,0.18)" }} />
+    </span>
+  );
+}
+
+/** Une carte de section : pastille d'icône, titre, sous-titre, action à droite. */
+function Section({
+  icone: Icone, titre, sous, action, children, rang = 0, className = "",
+}: {
+  icone: React.ElementType; titre: React.ReactNode; sous?: React.ReactNode; action?: React.ReactNode;
+  children?: React.ReactNode; rang?: number; className?: string;
+}) {
+  return (
+    <motion.section {...apparait(rang)} className={cn("rounded-[28px] bg-white p-5 sm:p-6", className)}
+      style={{ border: "1px solid var(--cl-line-soft)" }}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+            style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+            <Icone className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 pt-1">
+            <h3 className="text-[16px] font-medium leading-tight" style={{ color: "var(--cl-ink)" }}>{titre}</h3>
+            {sous && <p className="mt-1 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>{sous}</p>}
+          </div>
+        </div>
+        {action}
+      </div>
+      {children && <div className="mt-5 space-y-5">{children}</div>}
+    </motion.section>
   );
 }
 
@@ -152,39 +186,21 @@ function SaveBar({ dirty, onSave }: { dirty: boolean; onSave: () => void }) {
     <AnimatePresence>
       {dirty && (
         <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          className="flex items-center justify-between px-4 py-2.5 rounded-lg mb-5"
-          style={{ background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.2)" }}
+          initial={{ opacity: 0, y: -8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.98 }}
+          transition={RESSORT}
+          className="sticky top-[84px] z-20 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[24px] py-2 pl-5 pr-2 sm:rounded-full"
+          style={{ background: "rgba(240,235,255,0.92)", backdropFilter: "blur(8px)", boxShadow: "0 12px 28px rgba(70,40,190,0.10)", border: "1px solid var(--cl-lavender)" }}
         >
-          <p className="text-xs" style={{ color: "rgba(124,90,248,0.8)" }}>
+          <p className="flex items-center gap-2 text-[13.5px] font-medium" style={{ color: "var(--cl-accent-deep)" }}>
+            <span className="h-2 w-2 animate-pulse rounded-full" style={{ background: "var(--cl-accent)" }} />
             Modifications non sauvegardées
           </p>
-          <button
-            onClick={onSave}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium
-                       transition-all duration-150 hover:brightness-110"
-            style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.25)" }}
-          >
-            <Save className="w-3 h-3" />
-            Sauvegarder
-          </button>
+          <Bouton variante="encre" icone={Save} onClick={onSave}>Sauvegarder</Bouton>
         </motion.div>
       )}
     </AnimatePresence>
-  );
-}
-
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-4">
-      <h3 className="text-[10px] font-semibold uppercase tracking-widest pb-2"
-        style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--border-subtle)" }}>
-        {title}
-      </h3>
-      {children}
-    </div>
   );
 }
 
@@ -197,11 +213,11 @@ interface UsageData {
   plans:   { id: string; label: string; monthly_tokens: number; price_eur: number; current: boolean }[];
 }
 
-const PLAN_COLORS: Record<string, string> = {
-  free:       "var(--text-disabled)",
-  starter:    "#60a5fa",
-  pro:        "var(--color-gold)",
-  enterprise: "#a78bfa",
+const PLAN_TONS: Record<string, Ton> = {
+  free:       "gris",
+  starter:    "bleu",
+  pro:        "violet",
+  enterprise: "violet",
 };
 
 function UsageSection({ agentId, token }: { agentId: string; token: string | null }) {
@@ -221,62 +237,53 @@ function UsageSection({ agentId, token }: { agentId: string; token: string | nul
 
   const { plan, current } = usage;
   const pct = Math.min(100, current.percent);
-  const barColor = pct >= 90 ? "#f87171" : pct >= 70 ? "#fbbf24" : "var(--color-gold)";
+  const barColor = pct >= 90 ? "#D9534F" : pct >= 70 ? "#E6A23C" : "var(--cl-accent)";
 
   return (
-    <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-3.5 h-3.5" style={{ color: "var(--text-disabled)" }} />
-          <span className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>Utilisation · {current.period}</span>
-        </div>
-        <span className="text-2xs font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(124,90,248,0.1)", color: PLAN_COLORS[plan.id] ?? "var(--color-gold)", border: `1px solid ${PLAN_COLORS[plan.id] ?? "var(--color-gold)"}30` }}>
-          {plan.label}
-        </span>
-      </div>
-
-      {/* Progress bar */}
+    <Section icone={TrendingUp} titre="Utilisation" sous={current.period} rang={3}
+      action={<Pastille ton={PLAN_TONS[plan.id] ?? "violet"}>{plan.label}</Pastille>}>
+      {/* La jauge */}
       <div>
-        <div className="flex justify-between items-end mb-1.5">
-          <span className="text-xs font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+          <span className="text-[26px] font-light leading-none tracking-[-0.02em] tabular-nums" style={{ color: "var(--cl-ink)" }}>
             {current.total_tokens.toLocaleString("fr-FR")}
-            <span className="text-2xs font-normal ml-1" style={{ color: "var(--text-disabled)" }}>tokens</span>
+            <span className="ml-1.5 text-[13px] font-normal tracking-normal" style={{ color: "var(--cl-ink-faint)" }}>tokens</span>
           </span>
           {plan.unlimited ? (
-            <span className="text-2xs" style={{ color: "var(--text-disabled)" }}>Illimité</span>
+            <span className="text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>Illimité</span>
           ) : (
-            <span className="text-2xs tabular-nums" style={{ color: "var(--text-disabled)" }}>
+            <span className="text-[13px] tabular-nums" style={{ color: "var(--cl-ink-faint)" }}>
               / {plan.limit.toLocaleString("fr-FR")} · {pct}%
             </span>
           )}
         </div>
         {!plan.unlimited && (
-          <div className="w-full rounded-full overflow-hidden" style={{ height: "5px", background: "var(--border-subtle)" }}>
+          <div className="h-2.5 w-full overflow-hidden rounded-full" style={{ background: "#F1EFF4" }}>
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${pct}%` }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              style={{ height: "100%", borderRadius: "99px", background: barColor }}
+              transition={{ duration: 0.7, ease: "easeOut" }}
+              className="h-full rounded-full"
+              style={{ background: barColor }}
             />
           </div>
         )}
       </div>
 
       {/* Détail prompt / completion */}
-      <div className="flex gap-4">
-        <div>
-          <p className="text-2xs" style={{ color: "var(--text-disabled)" }}>Prompt</p>
-          <p className="text-xs font-semibold tabular-nums" style={{ color: "var(--text-tertiary)" }}>{current.prompt_tokens.toLocaleString("fr-FR")}</p>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        <div className="rounded-[18px] p-3.5" style={{ background: FOND_DOUX }}>
+          <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Prompt</p>
+          <p className="mt-0.5 text-[15px] font-medium tabular-nums" style={{ color: "var(--cl-ink)" }}>{current.prompt_tokens.toLocaleString("fr-FR")}</p>
         </div>
-        <div>
-          <p className="text-2xs" style={{ color: "var(--text-disabled)" }}>Réponse</p>
-          <p className="text-xs font-semibold tabular-nums" style={{ color: "var(--text-tertiary)" }}>{current.completion_tokens.toLocaleString("fr-FR")}</p>
+        <div className="rounded-[18px] p-3.5" style={{ background: FOND_DOUX }}>
+          <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Réponse</p>
+          <p className="mt-0.5 text-[15px] font-medium tabular-nums" style={{ color: "var(--cl-ink)" }}>{current.completion_tokens.toLocaleString("fr-FR")}</p>
         </div>
         {!plan.unlimited && (
-          <div className="ml-auto text-right">
-            <p className="text-2xs" style={{ color: "var(--text-disabled)" }}>Restant</p>
-            <p className="text-xs font-semibold tabular-nums" style={{ color: pct >= 90 ? "#f87171" : "var(--text-tertiary)" }}>
+          <div className="col-span-2 rounded-[18px] p-3.5 sm:col-span-1" style={{ background: FOND_DOUX }}>
+            <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Restant</p>
+            <p className="mt-0.5 text-[15px] font-medium tabular-nums" style={{ color: pct >= 90 ? "#A63D28" : "var(--cl-ink)" }}>
               {current.remaining.toLocaleString("fr-FR")}
             </p>
           </div>
@@ -285,13 +292,13 @@ function UsageSection({ agentId, token }: { agentId: string; token: string | nul
 
       {/* Alerte limite proche */}
       {!plan.unlimited && pct >= 80 && (
-        <div className="rounded-lg px-3 py-2 text-2xs" style={{ background: pct >= 90 ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.08)", color: pct >= 90 ? "#f87171" : "#fbbf24", border: `1px solid ${pct >= 90 ? "rgba(248,113,113,0.2)" : "rgba(251,191,36,0.2)"}` }}>
+        <Bandeau ton={pct >= 90 ? "rouge" : "ambre"}>
           {pct >= 90
-            ? "⚠️ Limite presque atteinte — le bot cessera de répondre à 100%."
+            ? "Limite presque atteinte — le bot cessera de répondre à 100%."
             : "Vous approchez de votre limite mensuelle."}
-        </div>
+        </Bandeau>
       )}
-    </div>
+    </Section>
   );
 }
 
@@ -306,89 +313,79 @@ function OverviewTab({ agent, onToggleStatus, token, capabilities }: { agent: Ag
 
   // Cap meta driven from DB (fall back to empty until loaded)
   const capsForOverview = capabilities.filter((c) => c.status !== "disabled");
+  const actif = agent.status === "active";
 
   return (
     <div className="space-y-5">
-      {/* Agent header strip */}
-      <div className="flex items-center gap-3 pb-5"
-        style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center text-xl flex-shrink-0"
-          style={{ background: "rgba(124,90,248,0.08)", border: "1px solid rgba(124,90,248,0.15)" }}>
+      {/* La carte de l'agent */}
+      <motion.div {...apparait(0)} className="flex flex-wrap items-center gap-4 rounded-[28px] bg-white p-5 sm:p-6"
+        style={{ border: "1px solid var(--cl-line-soft)" }}>
+        <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full text-[28px]"
+          style={{ background: "var(--cl-accent-soft)" }}>
           {agent.identity.avatar_emoji ?? "🤖"}
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-none" style={{ color: "var(--text-primary)" }}>{agent.identity.name}</p>
+        <div className="min-w-[150px] flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-[19px] font-medium leading-tight" style={{ color: "var(--cl-ink)" }}>{agent.identity.name}</p>
+            <Pastille ton={actif ? "vert" : "ambre"} point>{actif ? "Actif" : "En pause"}</Pastille>
+          </div>
           {agent.identity.tagline && (
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-disabled)" }}>{agent.identity.tagline}</p>
+            <p className="mt-1 text-[13.5px]" style={{ color: "var(--cl-ink-faint)" }}>{agent.identity.tagline}</p>
           )}
         </div>
-        <button onClick={onToggleStatus}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors duration-150"
-          style={{ color: "var(--text-tertiary)", border: "1px solid var(--border-subtle)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-glass)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-          {agent.status === "active" ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-          {agent.status === "active" ? "Mettre en pause" : "Activer"}
-        </button>
+        <Bouton variante={actif ? "clair" : "encre"} icone={actif ? Pause : Play} onClick={onToggleStatus}>
+          {actif ? "Mettre en pause" : "Activer"}
+        </Bouton>
+      </motion.div>
+
+      {/* Les chiffres */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <Tuile icone={Code2}   titre="Tokens"      valeur={agent.system_prompt.estimated_tokens.toLocaleString("fr-FR")} sous="taille du prompt" fort rang={1} />
+        <Tuile icone={History} titre="Version"     valeur={`v${agent.system_prompt.version ?? 1}`} sous="du prompt système" rang={2} />
+        <Tuile icone={Bot}     titre="Modèle"      valeur={agent.target_model.split("-")[0].toUpperCase()} sous={agent.target_model} rang={3} />
+        <Tuile icone={Clock}   titre="Mise à jour" valeur={new Date(agent.updated_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })} rang={4} />
       </div>
 
-      {/* Stats strip */}
-      <div className="grid grid-cols-4"
-        style={{ border: "1px solid var(--border-subtle)", borderRadius: "8px", overflow: "hidden" }}>
-        {[
-          { label: "Tokens",       value: agent.system_prompt.estimated_tokens.toLocaleString("fr-FR") },
-          { label: "Version",      value: `v${agent.system_prompt.version}` },
-          { label: "Modèle",       value: agent.target_model.split("-")[0].toUpperCase() },
-          { label: "Mise à jour",  value: new Date(agent.updated_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) },
-        ].map(({ label, value }, i) => (
-          <div key={label} className="px-4 py-3"
-            style={{ borderRight: i < 3 ? "1px solid var(--border-subtle)" : undefined }}>
-            <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: "var(--text-disabled)" }}>{label}</p>
-            <p className="text-sm font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>{value}</p>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+        {/* Capabilities */}
+        <Section icone={Zap} titre="Capacités activées" sous="Ce que votre agent sait faire en ce moment." rang={2}>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+            {capsForOverview.map((cap) => {
+              const agentCaps = agent.capabilities as unknown as Record<string, boolean>;
+              // capacités non-toggleables (Core/Auto) sont toujours considérées actives
+              const active = !cap.is_user_configurable || agentCaps[cap.id] === true;
+              return (
+                <div key={cap.id}
+                  className="flex min-w-0 items-center gap-2.5 rounded-[18px] px-3.5 py-3"
+                  style={{
+                    background: active ? "var(--cl-accent-soft)" : FOND_DOUX,
+                    opacity: active ? 1 : 0.55,
+                  }}>
+                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full"
+                    style={{ background: active ? "#fff" : "#F1EFF4" }}>
+                    <CapIconDash name={cap.icon} className="h-3.5 w-3.5"
+                      style={{ color: active ? "var(--cl-accent-deep)" : "var(--cl-ink-faint)" }} />
+                  </span>
+                  <span className="truncate text-[13.5px] font-medium"
+                    style={{ color: active ? "var(--cl-accent-deep)" : "var(--cl-ink-soft)" }}>
+                    {cap.label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+        </Section>
 
-      {/* Capabilities */}
-      <SectionCard title="Capacités activées">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {capsForOverview.map((cap) => {
-            const agentCaps = agent.capabilities as unknown as Record<string, boolean>;
-            // capacités non-toggleables (Core/Auto) sont toujours considérées actives
-            const active = !cap.is_user_configurable || agentCaps[cap.id] === true;
-            return (
-              <div key={cap.id}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                style={{
-                  background: active ? "rgba(124,90,248,0.08)" : "var(--bg-muted)",
-                  border: `1px solid ${active ? "rgba(124,90,248,0.2)" : "var(--border-subtle)"}`,
-                  opacity: active ? 1 : 0.4,
-                }}>
-                <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
-                  style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
-                <span className="text-2xs font-medium truncate"
-                  style={{ color: active ? "var(--color-gold)" : "var(--text-tertiary)" }}>
-                  {cap.label}
-                </span>
-              </div>
-            );
-          })}
+        <div className="min-w-0 space-y-5">
+          {/* Usage tokens */}
+          <UsageSection agentId={agent.id} token={token} />
+
+          {/* ID */}
+          <Section icone={Fingerprint} titre="Agent ID" rang={4}
+            action={<Bouton variante="clair" icone={copied ? Check : Copy} onClick={copyId}>{copied ? "Copié" : "Copier"}</Bouton>}>
+            <p className="truncate rounded-[18px] px-4 py-3 font-mono text-[13px]" style={{ background: FOND_DOUX, color: "var(--cl-ink-soft)" }}>{agent.id}</p>
+          </Section>
         </div>
-      </SectionCard>
-
-      {/* Usage tokens */}
-      <UsageSection agentId={agent.id} token={token} />
-
-      {/* ID */}
-      <div className="rounded-xl p-4 flex items-center gap-4" style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-        <div className="flex-1 min-w-0">
-          <p className="text-2xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-disabled)" }}>Agent ID</p>
-          <p className="text-xs font-mono truncate" style={{ color: "var(--text-tertiary)" }}>{agent.id}</p>
-        </div>
-        <button onClick={copyId} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-medium flex-shrink-0 transition-all duration-200" style={{ background: "var(--surface-glass)", color: "var(--text-tertiary)", border: "1px solid var(--border-subtle)" }}>
-          {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-          {copied ? "Copié" : "Copier"}
-        </button>
       </div>
     </div>
   );
@@ -402,55 +399,93 @@ function IdentityTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agen
   const save = () => { onSave({ identity: { ...form } }); toast.success("Identité mise à jour !"); };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <SaveBar dirty={dirty} onSave={save} />
-      <SectionCard title="Avatar">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0" style={{ background: "var(--surface-gold)", border: "1px solid var(--border-gold)" }}>
+      <Section icone={Smile} titre="Avatar" sous="L'emoji qui représente votre agent." rang={0}>
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <motion.div key={form.avatar_emoji ?? "🤖"} initial={{ scale: 0.8, rotate: -8 }} animate={{ scale: 1, rotate: 0 }} transition={RESSORT}
+            className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full text-[38px]"
+            style={{ background: "var(--cl-accent-soft)", boxShadow: "0 0 0 6px #F7F4FF" }}>
             {form.avatar_emoji ?? "🤖"}
-          </div>
+          </motion.div>
           <div className="flex flex-wrap gap-2">
-            {EMOJI_PRESETS.map((e) => (
-              <button key={e} onClick={() => setForm((f) => ({ ...f, avatar_emoji: e }))}
-                className={cn("w-9 h-9 rounded-xl text-lg transition-all duration-150", form.avatar_emoji === e ? "scale-110" : "opacity-60 hover:opacity-100 hover:scale-105")}
-                style={form.avatar_emoji === e ? { background: "var(--surface-gold)", border: "1px solid var(--border-gold)" } : { background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-                {e}
-              </button>
-            ))}
+            {EMOJI_PRESETS.map((e) => {
+              const choisi = form.avatar_emoji === e;
+              return (
+                <motion.button key={e} whileTap={{ scale: 0.9 }} transition={RESSORT}
+                  onClick={() => setForm((f) => ({ ...f, avatar_emoji: e }))}
+                  aria-pressed={choisi}
+                  className={cn("flex h-10 w-10 items-center justify-center rounded-full text-[19px] transition-all duration-150",
+                    choisi ? "scale-110" : "opacity-70 hover:scale-105 hover:opacity-100")}
+                  style={choisi
+                    ? { background: "var(--cl-accent-soft)", boxShadow: "0 0 0 2px var(--cl-accent)" }
+                    : { background: FOND_DOUX }}>
+                  {e}
+                </motion.button>
+              );
+            })}
           </div>
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard title="Personnalité">
-        <div className="grid md:grid-cols-2 gap-5">
+      <Section icone={Bot} titre="Personnalité" sous="Comment votre agent se présente et s'exprime." rang={1}>
+        <div className="grid gap-5 md:grid-cols-2">
           <Field label="Nom de l'agent" required>
             <FInput value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Camille, Aria, Max…" />
           </Field>
           <Field label="Tagline" hint="Courte description affichée sous le nom">
             <FInput value={form.tagline ?? ""} onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))} placeholder="Votre assistant commerce premium" />
           </Field>
-          <Field label="Voix de marque" required>
-            <FSelect value={form.brand_voice} onChange={(e) => setForm((f) => ({ ...f, brand_voice: e.target.value as typeof f.brand_voice }))} options={VOICE_OPTIONS} />
-          </Field>
-          <Field label="Langue principale" required>
-            <FSelect value={form.primary_language} onChange={(e) => setForm((f) => ({ ...f, primary_language: e.target.value as typeof f.primary_language }))} options={LANG_OPTIONS} />
-          </Field>
         </div>
-        <Field label="Langues secondaires" hint="L'agent bascule si le client écrit dans ces langues">
-          <div className="flex flex-wrap gap-2 mt-1">
-            {LANG_OPTIONS.filter((l) => l.value !== form.primary_language).map((l) => {
-              const active = (form.secondary_languages ?? []).includes(l.value as any);
+
+        <Field label="Voix de marque" required>
+          <div role="radiogroup" aria-label="Voix de marque" className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+            {VOICE_OPTIONS.map((o) => {
+              const choisi = form.brand_voice === o.value;
               return (
-                <button key={l.value} onClick={() => setForm((f) => ({ ...f, secondary_languages: active ? (f.secondary_languages ?? []).filter((x) => x !== l.value) : [...(f.secondary_languages ?? []), l.value as any] }))}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                  style={active ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" } : { background: "var(--bg-muted)", color: "var(--text-tertiary)", border: "1px solid var(--border-subtle)" }}>
-                  {l.label}
-                </button>
+                <motion.button key={o.value} role="radio" aria-checked={choisi} whileTap={{ scale: 0.97 }} transition={RESSORT}
+                  onClick={() => setForm((f) => ({ ...f, brand_voice: o.value as typeof f.brand_voice }))}
+                  className="flex items-center justify-between gap-2 rounded-[18px] px-4 py-3 text-left text-[13.5px] font-medium transition-colors duration-150"
+                  style={choisi
+                    ? { background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)", boxShadow: "inset 0 0 0 1.5px var(--cl-accent)" }
+                    : { background: FOND_DOUX, color: "var(--cl-ink-soft)" }}>
+                  <span className="truncate">{o.label}</span>
+                  <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full"
+                    style={{ boxShadow: `inset 0 0 0 1.5px ${choisi ? "var(--cl-accent)" : "#D6D0E0"}` }}>
+                    {choisi && <motion.span layoutId="ag-voix" transition={RESSORT} className="h-2 w-2 rounded-full" style={{ background: "var(--cl-accent)" }} />}
+                  </span>
+                </motion.button>
               );
             })}
           </div>
         </Field>
-      </SectionCard>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <Field label="Langue principale" required>
+            <FSelect value={form.primary_language} onChange={(e) => setForm((f) => ({ ...f, primary_language: e.target.value as typeof f.primary_language }))} options={LANG_OPTIONS} />
+          </Field>
+        </div>
+
+        <Field label="Langues secondaires" hint="L'agent bascule si le client écrit dans ces langues">
+          <div className="flex flex-wrap gap-2">
+            {LANG_OPTIONS.filter((l) => l.value !== form.primary_language).map((l) => {
+              const active = (form.secondary_languages ?? []).includes(l.value as any);
+              return (
+                <motion.button key={l.value} whileTap={{ scale: 0.95 }} transition={RESSORT}
+                  aria-pressed={active}
+                  onClick={() => setForm((f) => ({ ...f, secondary_languages: active ? (f.secondary_languages ?? []).filter((x) => x !== l.value) : [...(f.secondary_languages ?? []), l.value as any] }))}
+                  className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-medium transition-colors duration-150"
+                  style={active
+                    ? { background: "var(--cl-ink)", color: "#fff" }
+                    : { background: "#F4F2F7", color: "var(--cl-ink-soft)" }}>
+                  {active && <Check className="h-3.5 w-3.5" />}
+                  {l.label}
+                </motion.button>
+              );
+            })}
+          </div>
+        </Field>
+      </Section>
     </div>
   );
 }
@@ -464,10 +499,10 @@ function BusinessTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agen
   const sf = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <SaveBar dirty={dirty} onSave={save} />
-      <SectionCard title="Identité de l'entreprise">
-        <div className="grid md:grid-cols-2 gap-5">
+      <Section icone={Building2} titre="Identité de l'entreprise" sous="Ce que l'agent sait de votre activité." rang={0}>
+        <div className="grid gap-5 md:grid-cols-2">
           <Field label="Nom de l'entreprise" required><FInput value={form.business_name} onChange={sf("business_name")} placeholder="Ma Boutique SAS" /></Field>
           <Field label="Secteur d'activité" required><FSelect value={form.sector} onChange={(e) => setForm((f) => ({ ...f, sector: e.target.value as typeof f.sector }))} options={SECTOR_OPTIONS} /></Field>
           <Field label="Responsable" required><FInput value={form.owner_name} onChange={sf("owner_name")} placeholder="Marie Dupont" /></Field>
@@ -476,10 +511,10 @@ function BusinessTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agen
         <Field label="Description" required hint="Présentez votre activité en 1-2 phrases">
           <FTextarea value={form.description} onChange={sf("description")} placeholder="Boutique de mode éco-responsable…" rows={3} />
         </Field>
-      </SectionCard>
+      </Section>
 
-      <SectionCard title="Coordonnées & présence">
-        <div className="grid md:grid-cols-2 gap-5">
+      <Section icone={MapPin} titre="Coordonnées & présence" sous="Où vous trouver, et pour qui vous travaillez." rang={1}>
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Site web"><FInput value={form.website_url ?? ""} onChange={sf("website_url")} placeholder="https://maboutique.fr" /></Field>
           <Field label="Localisation"><FInput value={form.location ?? ""} onChange={sf("location")} placeholder="Paris, France" /></Field>
           <Field label="WhatsApp Business"><FInput value={form.whatsapp_number ?? ""} onChange={sf("whatsapp_number")} placeholder="+33 6 12 34 56 78" /></Field>
@@ -487,7 +522,7 @@ function BusinessTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agen
         <Field label="Audience cible" hint="Décrivez votre client idéal">
           <FTextarea value={form.target_audience ?? ""} onChange={sf("target_audience")} placeholder="Femmes 25-45 ans, CSP+, sensibles à l'éco-responsabilité…" rows={2} />
         </Field>
-      </SectionCard>
+      </Section>
     </div>
   );
 }
@@ -509,64 +544,77 @@ function KnowledgeTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Age
   const addTag    = () => { if (!newTag.trim()) return; setForbidden((f) => [...f, newTag.trim()]); setNewTag(""); };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <SaveBar dirty={dirty} onSave={save} />
 
-      <SectionCard title="Informations clés">
-        {[
-          { key: "products_services", label: "Produits & Services",  placeholder: "Robe en coton bio 49€, Jean recyclé 89€…" },
-          { key: "pricing_info",      label: "Tarifs & Offres",      placeholder: "Livraison gratuite dès 60€, -20% fidélité…" },
-          { key: "business_hours",    label: "Horaires d'ouverture", placeholder: "Lun-Ven 9h-18h, Sam 10h-17h" },
-          { key: "policies",          label: "Politiques",           placeholder: "Retours sous 30 jours, remboursement intégral…" },
-        ].map(({ key, label, placeholder }) => (
-          <Field key={key} label={label}>
-            <FTextarea value={(form as any)[key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} rows={3} />
-          </Field>
-        ))}
-      </SectionCard>
-
-      <div className="rounded-2xl p-5 space-y-4" style={{ background: "var(--surface-glass)", border: "1px solid var(--border-subtle)" }}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>FAQ ({faqDraft.length})</h3>
-          <button onClick={addFaq} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200" style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}>
-            <Plus className="w-3 h-3" />Ajouter
-          </button>
+      <Section icone={BookOpen} titre="Informations clés" sous="Les faits sur lesquels l'agent s'appuie pour répondre." rang={0}>
+        <div className="grid gap-5 lg:grid-cols-2">
+          {[
+            { key: "products_services", label: "Produits & Services",  placeholder: "Robe en coton bio 49€, Jean recyclé 89€…" },
+            { key: "pricing_info",      label: "Tarifs & Offres",      placeholder: "Livraison gratuite dès 60€, -20% fidélité…" },
+            { key: "business_hours",    label: "Horaires d'ouverture", placeholder: "Lun-Ven 9h-18h, Sam 10h-17h" },
+            { key: "policies",          label: "Politiques",           placeholder: "Retours sous 30 jours, remboursement intégral…" },
+          ].map(({ key, label, placeholder }) => (
+            <Field key={key} label={label}>
+              <FTextarea value={(form as any)[key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} rows={3} />
+            </Field>
+          ))}
         </div>
-        {faqDraft.length === 0 && <p className="text-sm py-4 text-center" style={{ color: "var(--text-disabled)" }}>Ajoutez des questions fréquentes pour affiner les réponses.</p>}
-        <div className="space-y-3">
-          <AnimatePresence>
-            {faqDraft.map((entry, i) => (
-              <motion.div key={i} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="rounded-xl p-4 space-y-3" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-2xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Q{i + 1}</span>
-                  <button onClick={() => removeFaq(i)} className="p-1 rounded-lg transition-colors hover:bg-red-500/10" style={{ color: "#F87171" }}><Trash2 className="w-3 h-3" /></button>
-                </div>
-                <FInput value={entry.question} onChange={(e) => updateFaq(i, "question", e.target.value)} placeholder="Question fréquente…" />
-                <FTextarea value={entry.answer} onChange={(e) => updateFaq(i, "answer", e.target.value)} placeholder="Réponse détaillée…" rows={2} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      </div>
+      </Section>
 
-      <div className="rounded-2xl p-5 space-y-4" style={{ background: "var(--surface-glass)", border: "1px solid var(--border-subtle)" }}>
-        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Sujets interdits</h3>
-        <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>L'agent refusera d'aborder ces sujets.</p>
+      <Section icone={HelpCircle} rang={1}
+        titre={<span className="inline-flex items-center gap-2">FAQ <Pastille ton="violet">{faqDraft.length}</Pastille></span>}
+        sous="Les questions qui reviennent, avec la réponse exacte à donner."
+        action={<Bouton variante="encre" icone={Plus} onClick={addFaq}>Ajouter</Bouton>}>
+        {faqDraft.length === 0 && (
+          <Vide doodle="sitting-reading" titre="Aucune question pour l'instant"
+            texte="Ajoutez des questions fréquentes pour affiner les réponses." />
+        )}
+        {faqDraft.length > 0 && (
+          <div className="space-y-3">
+            <AnimatePresence initial={false}>
+              {faqDraft.map((entry, i) => (
+                <motion.div key={i} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                  transition={RESSORT} className="overflow-hidden">
+                  <div className="space-y-3 rounded-[22px] p-4" style={{ background: FOND_DOUX }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <Pastille ton="violet">Q{i + 1}</Pastille>
+                      <BoutonRond icone={Trash2} label="Supprimer la question" onClick={() => removeFaq(i)}
+                        className="!h-9 !w-9" style={{ color: "#A63D28" }} />
+                    </div>
+                    <FInput value={entry.question} onChange={(e) => updateFaq(i, "question", e.target.value)} placeholder="Question fréquente…" className="!bg-white" />
+                    <FTextarea value={entry.answer} onChange={(e) => updateFaq(i, "answer", e.target.value)} placeholder="Réponse détaillée…" rows={2} className="!bg-white" />
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </Section>
+
+      <Section icone={Ban} titre="Sujets interdits" sous="L'agent refusera d'aborder ces sujets." rang={2}>
         <div className="flex gap-2">
-          <FInput value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTag()} placeholder="Concurrents, politique…" className="flex-1" />
-          <button onClick={addTag} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}><Plus className="w-4 h-4" /></button>
+          <FInput value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTag()} placeholder="Concurrents, politique…" className="min-w-0 flex-1" />
+          <BoutonRond icone={Plus} label="Ajouter le sujet" onClick={addTag} className="!h-11 !w-11" />
         </div>
         {forbidden.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {forbidden.map((t) => (
-              <span key={t} className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(239,68,68,0.10)", color: "#F87171", border: "1px solid rgba(239,68,68,0.2)" }}>
-                {t}
-                <button onClick={() => setForbidden((f) => f.filter((x) => x !== t))} className="hover:text-red-300 transition-colors">×</button>
-              </span>
-            ))}
+            <AnimatePresence initial={false}>
+              {forbidden.map((t) => (
+                <motion.span key={t} layout initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85 }} transition={RESSORT}
+                  className="inline-flex items-center gap-1.5 rounded-full py-1.5 pl-3.5 pr-1.5 text-[13px] font-medium"
+                  style={{ background: "#FBEAE6", color: "#A63D28" }}>
+                  {t}
+                  <button onClick={() => setForbidden((f) => f.filter((x) => x !== t))} aria-label={`Retirer ${t}`}
+                    className="flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-white/70">
+                    <X className="h-3 w-3" />
+                  </button>
+                </motion.span>
+              ))}
+            </AnimatePresence>
           </div>
         )}
-      </div>
+      </Section>
     </div>
   );
 }
@@ -679,53 +727,34 @@ function MediaUploadCard({
   const MediaIcon = type === "audio" ? Mic2 : Video;
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2.5">
       {/* Label row */}
-      <div className="flex items-center gap-1.5">
-        <MediaIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
-        <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{label}</p>
+      <div className="flex items-center gap-2 px-1">
+        <MediaIcon className="h-4 w-4 flex-shrink-0" style={{ color: "var(--cl-accent-deep)" }} />
+        <p className="text-[13.5px] font-medium" style={{ color: "var(--cl-ink)" }}>{label}</p>
       </div>
 
       {url ? (
         /* ── File is set ──────────────────────────────────────────────── */
-        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
-          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
+        <div className="flex items-center gap-3 rounded-[22px] p-3 pl-3.5" style={{ background: FOND_DOUX }}>
           {/* Icon bubble */}
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{ background: "rgba(124,90,248,0.12)" }}>
-            <MediaIcon className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} />
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full"
+            style={{ background: "var(--cl-accent-soft)" }}>
+            <MediaIcon className="h-4 w-4" style={{ color: "var(--cl-accent-deep)" }} />
           </div>
 
           {/* Filename */}
-          <p className="text-[11px] flex-1 min-w-0 truncate" style={{ color: "var(--text-secondary)" }}>
+          <p className="min-w-0 flex-1 truncate text-[13px]" style={{ color: "var(--cl-ink-soft)" }}>
             {fileName}
           </p>
 
           {/* Actions */}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading || deleting}
-              className="text-[10px] px-2 py-1 rounded-md font-medium transition-all duration-100"
-              style={{
-                background: "var(--surface-glass)",
-                color:      "var(--text-tertiary)",
-                border:     "1px solid var(--border-subtle)",
-              }}>
+          <div className="flex flex-shrink-0 items-center gap-1.5">
+            <Bouton variante="clair" onClick={() => inputRef.current?.click()} disabled={uploading || deleting} className="!h-9 !px-3.5">
               Remplacer
-            </button>
-            <button
-              onClick={doDelete}
-              disabled={uploading || deleting}
-              title="Supprimer"
-              className="w-6 h-6 flex items-center justify-center rounded-md transition-all duration-100"
-              style={{ color: "var(--text-disabled)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-disabled)")}>
-              {deleting
-                ? <RefreshCw className="w-3 h-3 animate-spin" />
-                : <X className="w-3 h-3" />}
-            </button>
+            </Bouton>
+            <BoutonRond icone={deleting ? RefreshCw : X} tourne={deleting} label="Supprimer"
+              onClick={doDelete} disabled={uploading || deleting} className="!h-9 !w-9" style={{ color: "#A63D28" }} />
           </div>
         </div>
       ) : (
@@ -735,28 +764,29 @@ function MediaUploadCard({
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className="flex flex-col items-center justify-center gap-1.5 py-5 px-4 rounded-xl transition-all duration-200"
+          className="flex flex-col items-center justify-center gap-2 rounded-[22px] px-4 py-7 text-center transition-all duration-200"
           style={{
-            border:     `1.5px dashed ${dragOver ? "var(--color-gold)" : "var(--border-default)"}`,
-            background: dragOver ? "rgba(124,90,248,0.04)" : "var(--bg-elevated)",
+            border:     `1.5px dashed ${dragOver ? "var(--cl-accent)" : "#D9D3E4"}`,
+            background: dragOver ? "var(--cl-accent-soft)" : FOND_DOUX,
             cursor:     uploading ? "wait" : "pointer",
           }}>
           {uploading ? (
             <>
-              <RefreshCw className="w-4 h-4 animate-spin" style={{ color: "var(--color-gold)" }} />
-              <p className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>Upload en cours…</p>
+              <RefreshCw className="h-5 w-5 animate-spin" style={{ color: "var(--cl-accent)" }} />
+              <p className="text-[13px]" style={{ color: "var(--cl-ink-soft)" }}>Upload en cours…</p>
             </>
           ) : (
             <>
-              <Upload
-                className="w-4 h-4"
-                style={{ color: dragOver ? "var(--color-gold)" : "var(--text-disabled)" }}
-              />
-              <p className="text-[11px] text-center" style={{ color: "var(--text-tertiary)" }}>
+              <motion.span animate={{ y: dragOver ? -3 : 0, scale: dragOver ? 1.08 : 1 }} transition={RESSORT}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white"
+                style={{ color: dragOver ? "var(--cl-accent)" : "var(--cl-ink-faint)", boxShadow: "inset 0 0 0 1px var(--cl-line)" }}>
+                <Upload className="h-4 w-4" />
+              </motion.span>
+              <p className="text-[13px]" style={{ color: "var(--cl-ink-soft)" }}>
                 Glissez un fichier ici ou{" "}
-                <span style={{ color: "var(--color-gold)" }}>parcourir</span>
+                <span className="font-medium" style={{ color: "var(--cl-accent-deep)" }}>parcourir</span>
               </p>
-              <p className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{formats}</p>
+              <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>{formats}</p>
             </>
           )}
         </div>
@@ -764,13 +794,13 @@ function MediaUploadCard({
 
       {/* Error message */}
       {err && (
-        <p className="text-[10px]" style={{ color: "#f87171" }}>{err}</p>
+        <p className="px-1 text-[12.5px]" style={{ color: "#A63D28" }}>{err}</p>
       )}
 
       {/* Auto-save confirmation */}
       {url && !uploading && !deleting && (
-        <p className="text-[10px] flex items-center gap-1" style={{ color: "#34D399" }}>
-          <Check className="w-2.5 h-2.5" /> Sauvegardé automatiquement
+        <p className="flex items-center gap-1.5 px-1 text-[12.5px]" style={{ color: "#1E7A3A" }}>
+          <Check className="h-3.5 w-3.5" /> Sauvegardé automatiquement
         </p>
       )}
 
@@ -787,6 +817,10 @@ function MediaUploadCard({
 }
 
 // ── CapabilitiesTab ───────────────────────────────────────────────────────────
+
+/** La couleur de l'étiquette d'une capacité (Core, Bientôt, Nouveau…). */
+const tonBadge = (badge: string): Ton =>
+  badge === "Core" ? "vert" : badge === "Bientôt" ? "gris" : badge === "Nouveau" ? "bleu" : "violet";
 
 function CapabilitiesTab({ agent, onSave, capabilities }: {
   agent: Agent;
@@ -806,117 +840,88 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
   const visibleCaps = capabilities.filter((c) => c.status !== "disabled");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <SaveBar dirty={dirty} onSave={save} />
 
       {/* ── Capacités standard ── */}
-      {visibleCaps.map((cap, i) => {
-        const isToggleable = cap.is_user_configurable && cap.status === "active";
-        const isComingSoon = cap.status === "coming_soon";
-        const isAuto       = !cap.is_user_configurable;
-        const active       = isAuto ? true : caps[cap.id] === true;
+      <Section icone={Zap} titre="Capacités" sous="Activez ce que votre agent peut faire. Les capacités « Auto » sont toujours actives." rang={0}>
+        <div className="space-y-1.5">
+          {visibleCaps.map((cap) => {
+            const isToggleable = cap.is_user_configurable && cap.status === "active";
+            const isComingSoon = cap.status === "coming_soon";
+            const isAuto       = !cap.is_user_configurable;
+            const active       = isAuto ? true : caps[cap.id] === true;
+            const basculer     = () => setCaps((c) => ({ ...c, [cap.id]: !c[cap.id] }));
 
-        return (
-          <div
-            key={cap.id}
-            onClick={isToggleable ? () => setCaps((c) => ({ ...c, [cap.id]: !c[cap.id] })) : undefined}
-            className={cn(
-              "flex items-center gap-4 py-3 transition-colors duration-100",
-              isToggleable ? "cursor-pointer" : isComingSoon ? "cursor-not-allowed opacity-50" : "cursor-default opacity-70"
-            )}
-            style={{ borderBottom: i < visibleCaps.length - 1 ? "1px solid var(--border-subtle)" : undefined }}
-          >
-            <div className="relative w-8 h-4 rounded-full flex-shrink-0"
-              style={{
-                background: active ? "var(--color-gold)" : "var(--bg-muted)",
-                border: `1px solid ${active ? "var(--color-gold)" : "var(--border-default)"}`,
-              }}>
-              <motion.div
-                animate={{ x: active ? 16 : 2 }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                className="absolute top-0.5 w-3 h-3 rounded-full"
-                style={{ background: active ? "#000" : "var(--text-disabled)" }}
-              />
-            </div>
-
-            <CapIconDash name={cap.icon} className="w-3.5 h-3.5 flex-shrink-0"
-              style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-xs font-medium"
-                  style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                  {cap.label}
-                </p>
-                {cap.badge && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                    style={{
-                      background: cap.badge === "Core"    ? "rgba(52,211,153,0.1)"   :
-                                  cap.badge === "Bientôt" ? "rgba(255,255,255,0.05)" :
-                                  cap.badge === "Nouveau" ? "rgba(56,189,248,0.1)"   :
-                                  "rgba(124,90,248,0.12)",
-                      color:      cap.badge === "Core"    ? "#34D399"                :
-                                  cap.badge === "Bientôt" ? "var(--text-disabled)"   :
-                                  cap.badge === "Nouveau" ? "#38bdf8"                :
-                                  "var(--color-gold)",
-                    }}>
-                    {cap.badge}
-                  </span>
+            return (
+              <div
+                key={cap.id}
+                role={isToggleable ? "switch" : undefined}
+                aria-checked={isToggleable ? active : undefined}
+                tabIndex={isToggleable ? 0 : undefined}
+                onClick={isToggleable ? basculer : undefined}
+                onKeyDown={isToggleable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); basculer(); } } : undefined}
+                className={cn(
+                  "flex items-center gap-3.5 rounded-[20px] px-3 py-3.5 transition-colors duration-150 sm:gap-4 sm:px-4",
+                  isToggleable ? "cursor-pointer hover:bg-[#FAF9FC]" : isComingSoon ? "cursor-not-allowed opacity-50" : "cursor-default opacity-75"
                 )}
-                {isAuto && !cap.badge && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                    style={{ background: "rgba(52,211,153,0.08)", color: "#34D399" }}>
-                    Auto
-                  </span>
-                )}
+                style={{ background: active && isToggleable ? "#FBFAFF" : undefined }}
+              >
+                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full"
+                  style={{ background: active ? "var(--cl-accent-soft)" : "#F4F2F7" }}>
+                  <CapIconDash name={cap.icon} className="h-4 w-4"
+                    style={{ color: active ? "var(--cl-accent-deep)" : "var(--cl-ink-faint)" }} />
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[14.5px] font-medium" style={{ color: "var(--cl-ink)" }}>
+                      {cap.label}
+                    </p>
+                    {cap.badge && <Pastille ton={tonBadge(cap.badge)}>{cap.badge}</Pastille>}
+                    {isAuto && !cap.badge && <Pastille ton="vert">Auto</Pastille>}
+                  </div>
+                  <p className="mt-0.5 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+                    {cap.description}
+                    {cap.tokens_per_msg > 0 && (
+                      <span className="ml-1 tabular-nums">
+                        · ~{cap.tokens_per_msg >= 1000
+                            ? `${(cap.tokens_per_msg / 1000).toFixed(1)}k`
+                            : cap.tokens_per_msg} tokens/msg
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                <Interrupteur actif={active} attenue={!isToggleable} />
               </div>
-              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                {cap.description}
-                {cap.tokens_per_msg > 0 && (
-                  <span className="ml-1 tabular-nums">
-                    · ~{cap.tokens_per_msg >= 1000
-                        ? `${(cap.tokens_per_msg / 1000).toFixed(1)}k`
-                        : cap.tokens_per_msg} tokens/msg
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      </Section>
 
       {/* ── Séquence d'accueil (audio / vidéo) ── */}
-      <div className="space-y-4 pt-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-        <div className="flex items-center gap-2">
-          <MessageCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
-          <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
-            Séquence d&apos;accueil
-          </p>
-          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-            style={{ background: "rgba(56,189,248,0.1)", color: "#38bdf8" }}>
-            Nouveau
-          </span>
+      <Section icone={MessageCircle} rang={1}
+        titre={<span className="inline-flex flex-wrap items-center gap-2">Séquence d&apos;accueil <Pastille ton="bleu">Nouveau</Pastille></span>}
+        sous="Envoyés automatiquement aux nouveaux contacts WhatsApp. Omettez pour n'envoyer que du texte.">
+        <div className="grid gap-5 md:grid-cols-2">
+          <MediaUploadCard
+            agentId={agent.id}
+            type="audio"
+            initialUrl={(agentCaps.welcome_audio_url as string) ?? null}
+            label="Message vocal d'accueil"
+            formats=".ogg · .mp3 · .m4a — max 10 Mo"
+          />
+
+          <MediaUploadCard
+            agentId={agent.id}
+            type="video"
+            initialUrl={(agentCaps.welcome_video_url as string) ?? null}
+            label="Vidéo d'accueil"
+            formats=".mp4 — max 50 Mo"
+          />
         </div>
-        <p className="text-[11px] -mt-2" style={{ color: "var(--text-disabled)" }}>
-          Envoyés automatiquement aux nouveaux contacts WhatsApp. Omettez pour n&apos;envoyer que du texte.
-        </p>
-
-        <MediaUploadCard
-          agentId={agent.id}
-          type="audio"
-          initialUrl={(agentCaps.welcome_audio_url as string) ?? null}
-          label="Message vocal d'accueil"
-          formats=".ogg · .mp3 · .m4a — max 10 Mo"
-        />
-
-        <MediaUploadCard
-          agentId={agent.id}
-          type="video"
-          initialUrl={(agentCaps.welcome_video_url as string) ?? null}
-          label="Vidéo d'accueil"
-          formats=".mp4 — max 50 Mo"
-        />
-      </div>
+      </Section>
 
     </div>
   );
@@ -930,37 +935,45 @@ function ModelTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>)
   const save = () => { onSave({ target_model: model }); toast.success("Modèle mis à jour !"); };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <SaveBar dirty={dirty} onSave={save} />
-      <SectionCard title="Modèle LLM cible">
-        <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>Le modèle utilisé pour générer les réponses de votre agent.</p>
-        <div className="space-y-3">
-          {MODEL_OPTIONS.map((opt) => (
-            <div
-              key={opt.value}
-              onClick={() => opt.available && setModel(opt.value as AgentModel)}
-              className="flex items-center gap-4 p-4 rounded-xl transition-all duration-200"
-              style={{
-                background: model === opt.value ? "rgba(124,90,248,0.08)" : "var(--bg-elevated)",
-                border: `1px solid ${model === opt.value ? "var(--border-gold)" : "var(--border-subtle)"}`,
-                cursor: opt.available ? "pointer" : "not-allowed",
-                opacity: opt.available ? 1 : 0.45,
-              }}>
-              <div className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ border: `2px solid ${model === opt.value ? "var(--color-gold)" : "var(--border-default)"}` }}>
-                {model === opt.value && <div className="w-2 h-2 rounded-full" style={{ background: "var(--color-gold)" }} />}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold" style={{ color: model === opt.value ? "var(--color-gold)" : "var(--text-primary)" }}>{opt.label}</p>
-                <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>{opt.sub}</p>
-              </div>
-              {opt.available
-                ? <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: model === opt.value ? "var(--color-gold)" : "var(--text-disabled)", opacity: model === opt.value ? 1 : 0.3 }} />
-                : <span className="text-2xs px-2 py-0.5 rounded-full" style={{ background: "var(--bg-card)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>Bientôt</span>
-              }
-            </div>
-          ))}
+      <Section icone={Sparkles} titre="Modèle LLM cible" sous="Le modèle utilisé pour générer les réponses de votre agent." rang={0}>
+        <div role="radiogroup" aria-label="Modèle LLM cible" className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+          {MODEL_OPTIONS.map((opt, i) => {
+            const choisi = model === opt.value;
+            return (
+              <motion.button
+                key={opt.value}
+                {...apparait(i)}
+                role="radio"
+                aria-checked={choisi}
+                aria-disabled={!opt.available}
+                whileTap={opt.available ? { scale: 0.98 } : undefined}
+                onClick={() => opt.available && setModel(opt.value as AgentModel)}
+                className="relative flex items-start gap-3.5 rounded-[24px] p-4 text-left transition-colors duration-200 sm:p-5"
+                style={{
+                  background: choisi ? "var(--cl-accent-soft)" : FOND_DOUX,
+                  boxShadow: choisi ? "inset 0 0 0 1.5px var(--cl-accent)" : "inset 0 0 0 1px var(--cl-line-soft)",
+                  cursor: opt.available ? "pointer" : "not-allowed",
+                  opacity: opt.available ? 1 : 0.5,
+                }}>
+                <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-white"
+                  style={{ boxShadow: `inset 0 0 0 2px ${choisi ? "var(--cl-accent)" : "#D6D0E0"}` }}>
+                  {choisi && <motion.span layoutId="ag-modele" transition={RESSORT} className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--cl-accent)" }} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-medium" style={{ color: choisi ? "var(--cl-accent-deep)" : "var(--cl-ink)" }}>{opt.label}</p>
+                  <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>{opt.sub}</p>
+                </div>
+                {opt.available
+                  ? <Sparkles className="h-4 w-4 flex-shrink-0" style={{ color: choisi ? "var(--cl-accent)" : "var(--cl-ink-faint)", opacity: choisi ? 1 : 0.4 }} />
+                  : <Pastille ton="gris">Bientôt</Pastille>
+                }
+              </motion.button>
+            );
+          })}
         </div>
-      </SectionCard>
+      </Section>
     </div>
   );
 }
@@ -1008,57 +1021,46 @@ function PromptTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Agent>
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1.5 rounded-lg text-2xs font-semibold tabular-nums" style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}>
-            v{agent.system_prompt.version}
-          </span>
-          <span className="text-xs" style={{ color: "var(--text-disabled)" }}>
-            {agent.system_prompt.estimated_tokens.toLocaleString("fr-FR")} tokens · {agent.system_prompt.target_model}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200" style={{ background: "var(--surface-glass)", color: "var(--text-tertiary)", border: "1px solid var(--border-subtle)" }}>
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+      <Section icone={Code2} rang={0}
+        titre={<span className="inline-flex flex-wrap items-center gap-2">System Prompt <Pastille ton="violet">v{agent.system_prompt.version}</Pastille></span>}
+        sous={<span className="tabular-nums">{agent.system_prompt.estimated_tokens.toLocaleString("fr-FR")} tokens · {agent.system_prompt.target_model}</span>}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Bouton variante="clair" icone={copied ? Check : Copy} onClick={handleCopy}>
             {copied ? "Copié !" : "Copier"}
-          </button>
-          <button onClick={handleRegenerate} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:brightness-110" style={{ background: "rgba(124,90,248,0.1)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.2)" }}>
-            <RefreshCw className="w-3.5 h-3.5" />Régénérer
-          </button>
+          </Bouton>
+          <Bouton variante="doux" icone={RefreshCw} onClick={handleRegenerate}>Régénérer</Bouton>
           {!editing ? (
-            <button onClick={() => { setDraft(agent.system_prompt.compiled_prompt); setEditing(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200" style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}>
-              <Pencil className="w-3.5 h-3.5" />Modifier
-            </button>
+            <Bouton variante="encre" icone={Pencil} onClick={() => { setDraft(agent.system_prompt.compiled_prompt); setEditing(true); }}>
+              Modifier
+            </Bouton>
           ) : (
             <>
-              <button onClick={() => setEditing(false)} className="text-xs px-3 py-1.5 transition-colors" style={{ color: "var(--text-disabled)" }}>Annuler</button>
-              <button onClick={handleSave} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}>
-                <Save className="w-3.5 h-3.5" />Sauvegarder
-              </button>
+              <Bouton variante="clair" onClick={() => setEditing(false)}>Annuler</Bouton>
+              <Bouton variante="encre" icone={Save} onClick={handleSave}>Sauvegarder</Bouton>
             </>
           )}
         </div>
-      </div>
 
-      <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border-default)" }}>
-        <div className="flex items-center gap-3 px-5 py-3" style={{ background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
-          <div className="flex gap-1.5">
-            {["bg-red-500/60","bg-amber-500/60","bg-emerald-500/60"].map((c,i) => <span key={i} className={`w-3 h-3 rounded-full ${c}`} />)}
+        <div className="overflow-hidden rounded-[24px]" style={{ background: FOND_DOUX, boxShadow: editing ? "inset 0 0 0 1.5px var(--cl-accent)" : "inset 0 0 0 1px var(--cl-line-soft)" }}>
+          <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: "1px solid var(--cl-line-soft)" }}>
+            <div className="flex gap-1.5">
+              {["#F2B8AC", "#F5D79A", "#A9DDB9"].map((c, i) => <span key={i} className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />)}
+            </div>
+            <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>system_prompt.txt</span>
+            {editing && <Pastille ton="violet" point>Édition</Pastille>}
           </div>
-          <span className="text-2xs font-mono flex-1" style={{ color: "var(--text-disabled)" }}>system_prompt.txt</span>
-          <Code2 className="w-3.5 h-3.5" style={{ color: "var(--text-disabled)" }} />
+          {editing ? (
+            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={24}
+              className="block w-full resize-y bg-white px-5 py-5 font-mono text-[13px] focus:outline-none sm:px-6"
+              style={{ color: "var(--cl-ink)", lineHeight: 1.75 }} />
+          ) : (
+            <pre className="overflow-x-auto whitespace-pre-wrap px-5 py-5 font-mono text-[13px] sm:px-6"
+              style={{ color: "var(--cl-ink-soft)", lineHeight: 1.75, maxHeight: "560px", overflowY: "auto" }}>
+              {agent.system_prompt.compiled_prompt}
+            </pre>
+          )}
         </div>
-        {editing ? (
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={24}
-            className="w-full px-6 py-5 text-xs font-mono resize-none focus:outline-none"
-            style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)", lineHeight: 1.8 }} />
-        ) : (
-          <pre className="px-6 py-5 text-xs font-mono whitespace-pre-wrap overflow-x-auto"
-            style={{ color: "var(--text-tertiary)", lineHeight: 1.8, maxHeight: "520px", overflowY: "auto", background: "var(--bg-elevated)" }}>
-            {agent.system_prompt.compiled_prompt}
-          </pre>
-        )}
-      </div>
+      </Section>
     </div>
   );
 }
@@ -1345,8 +1347,7 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
 
   function SectionHeader({ label }: { label: string }) {
     return (
-      <p className="text-[10px] font-semibold uppercase tracking-widest pb-2"
-        style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--border-subtle)" }}>
+      <p className="px-1 text-[13px] font-medium" style={{ color: "var(--cl-ink-faint)" }}>
         {label}
       </p>
     );
@@ -1358,128 +1359,138 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
     icon: React.ReactNode; label: string; description: string; accentColor: string;
   }) {
     return (
-      <div className="flex items-center gap-3 p-4 rounded-xl opacity-50"
-        style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: `${accentColor}15`, border: `1px solid ${accentColor}30` }}>
+      <div className="flex items-center gap-3.5 rounded-[22px] p-4" style={{ background: FOND_DOUX }}>
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full"
+          style={{ background: `${accentColor}14` }}>
           <span style={{ color: accentColor }}>{icon}</span>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</p>
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-              style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
-              BIENTÔT
-            </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[14.5px] font-medium" style={{ color: "var(--cl-ink)" }}>{label}</p>
+            <Pastille ton="gris">Bientôt</Pastille>
           </div>
-          <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>{description}</p>
+          <p className="mt-0.5 text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>{description}</p>
         </div>
       </div>
     );
   }
+
+  /** L'en-tête d'une carte d'intégration : pastille d'icône, nom, état. */
+  function EnteteCarte({ icone, fond, titre, sous, etat }: {
+    icone: React.ReactNode; fond: string; titre: React.ReactNode; sous: React.ReactNode; etat?: React.ReactNode;
+  }) {
+    return (
+      <div className="flex items-center gap-3.5 px-5 py-4 sm:px-6">
+        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full" style={{ background: fond }}>
+          {icone}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>{titre}</div>
+          <p className="truncate text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>{sous}</p>
+        </div>
+        {etat}
+      </div>
+    );
+  }
+
+  const carte = "overflow-hidden rounded-[28px] bg-white";
+  const bordure = { border: "1px solid var(--cl-line-soft)" };
+  const separation = { borderTop: "1px solid var(--cl-line-soft)" };
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
 
       {/* ── MESSAGERIE ───────────────────────────────────────────────────────── */}
-      <div className="space-y-3">
+      <motion.div {...apparait(0)} className="space-y-3">
         <SectionHeader label="Messagerie" />
 
         {/* WhatsApp card */}
-        <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
-          <div className="flex items-center gap-3 px-5 py-4" style={{ background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.25)" }}>
-              <MessageCircle className="w-4 h-4" style={{ color: "#25D366" }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>WhatsApp Business</p>
-              <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
-                {isWorking ? `Connecté · ${phoneNumber ?? ""}` : isScanning ? "Scannez le QR code" : isStarting ? "Démarrage…" : "Non connecté"}
-              </p>
-            </div>
-            <span className="flex items-center gap-1.5 text-xs font-medium flex-shrink-0"
-              style={{ color: isWorking ? "#34D399" : isScanning || isStarting ? "#FBBF24" : "var(--text-disabled)" }}>
-              <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
-                isWorking ? "bg-emerald-400 animate-pulse" : isScanning || isStarting ? "bg-amber-400 animate-pulse" : "bg-white/20")} />
-              <span className="hidden sm:inline">{isWorking ? "Actif" : isScanning ? "En attente" : isStarting ? "Démarrage" : "Inactif"}</span>
-            </span>
-          </div>
+        <div className={carte} style={bordure}>
+          <EnteteCarte
+            fond="#E4F6EA"
+            icone={<MessageCircle className="h-[18px] w-[18px]" style={{ color: "#1E7A3A" }} />}
+            titre="WhatsApp Business"
+            sous={isWorking ? `Connecté · ${phoneNumber ?? ""}` : isScanning ? "Scannez le QR code" : isStarting ? "Démarrage…" : "Non connecté"}
+            etat={
+              <Pastille ton={isWorking ? "vert" : isScanning || isStarting ? "ambre" : "gris"} point className="flex-shrink-0">
+                <span className="hidden sm:inline">{isWorking ? "Actif" : isScanning ? "En attente" : isStarting ? "Démarrage" : "Inactif"}</span>
+              </Pastille>
+            }
+          />
 
           {/* Mode toggle QR / Phone — visible uniquement en scan */}
           <AnimatePresence>
             {isScanning && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                <div className="flex px-5 pt-5 gap-2">
-                  <button onClick={() => setConnectMode("qr")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                    style={connectMode === "qr"
-                      ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
-                      : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
-                    <Globe className="w-3 h-3" /> QR Code
-                  </button>
-                  <button onClick={() => setConnectMode("phone")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                    style={connectMode === "phone"
-                      ? { background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }
-                      : { background: "transparent", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>
-                    <Phone className="w-3 h-3" /> Numéro
-                    <span className="text-[9px] px-1 py-0.5 rounded font-bold ml-0.5"
-                      style={{ background: "rgba(251,191,36,0.15)", color: "#FBBF24" }}>NEXT</span>
-                  </button>
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                transition={RESSORT} className="overflow-hidden" style={separation}>
+                <div className="flex px-5 pt-5 sm:px-6">
+                  <div role="radiogroup" aria-label="Mode de connexion" className="ui-filtres flex max-w-full gap-1 overflow-x-auto rounded-full p-1">
+                    {([
+                      { cle: "qr" as const,    libelle: "QR Code", Icone: Globe },
+                      { cle: "phone" as const, libelle: "Numéro",  Icone: Phone },
+                    ]).map(({ cle, libelle, Icone }) => {
+                      const actif = connectMode === cle;
+                      return (
+                        <button key={cle} role="radio" aria-checked={actif} onClick={() => setConnectMode(cle)}
+                          className="relative flex flex-shrink-0 items-center gap-2 rounded-full px-4 py-2 text-[13.5px] transition-colors"
+                          style={{ color: actif ? "#fff" : "var(--cl-ink-soft)" }}>
+                          {actif && <motion.span layoutId="ag-mode-waha" transition={RESSORT} className="absolute inset-0 rounded-full" style={{ background: "var(--cl-ink)" }} />}
+                          <Icone className="relative h-3.5 w-3.5" />
+                          <span className="relative">{libelle}</span>
+                          {cle === "phone" && (
+                            <span className="relative rounded-full px-1.5 text-[10.5px] font-semibold"
+                              style={{ background: actif ? "rgba(255,255,255,0.18)" : "#FDF1DC", color: actif ? "#fff" : "#9A6510" }}>NEXT</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {connectMode === "qr" && (
-                  <div className="flex flex-col items-center gap-4 py-6 px-6">
-                    <p className="text-xs text-center" style={{ color: "var(--text-tertiary)" }}>
+                  <div className="flex flex-col items-center gap-4 px-5 py-6 sm:px-6">
+                    <p className="text-center text-[13.5px]" style={{ color: "var(--cl-ink-soft)" }}>
                       WhatsApp → Paramètres → Appareils liés → Lier un appareil
                     </p>
                     {qrBlobUrl ? (
-                      <div className="rounded-2xl overflow-hidden p-3" style={{ background: "#fff" }}>
+                      <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={RESSORT}
+                        className="overflow-hidden rounded-[24px] bg-white p-3" style={{ boxShadow: "0 0 0 1px var(--cl-line-soft), 0 14px 32px rgba(70,40,190,0.08)" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={qrBlobUrl} alt="QR WhatsApp" width={200} height={200} />
-                      </div>
+                      </motion.div>
                     ) : (
-                      <div className="w-[200px] h-[200px] rounded-2xl flex items-center justify-center"
-                        style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-                        <div className="w-6 h-6 rounded-full border-2 border-t-[var(--color-gold)] border-white/10 animate-spin" />
+                      <div className="ui-squelette flex h-[200px] w-[200px] items-center justify-center rounded-[24px]">
+                        <RefreshCw className="h-5 w-5 animate-spin" style={{ color: "var(--cl-accent)" }} />
                       </div>
                     )}
-                    <button onClick={() => sessionName && fetchQr(sessionName)}
-                      className="text-xs flex items-center gap-1.5 transition-opacity hover:opacity-70"
-                      style={{ color: "var(--text-disabled)" }}>
-                      <RefreshCw className="w-3 h-3" /> Actualiser le QR
-                    </button>
+                    <Bouton variante="doux" icone={RefreshCw} onClick={() => sessionName && fetchQr(sessionName)}>
+                      Actualiser le QR
+                    </Bouton>
                   </div>
                 )}
 
                 {connectMode === "phone" && (
-                  <div className="flex flex-col gap-4 py-6 px-6">
-                    <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  <div className="flex flex-col gap-4 px-5 py-6 sm:px-6">
+                    <p className="text-[13.5px]" style={{ color: "var(--cl-ink-soft)" }}>
                       WhatsApp → Paramètres → Appareils liés → Lier avec numéro de téléphone
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <FInput
                         placeholder="+33 6 12 34 56 78"
                         value={phoneInput}
                         onChange={(e) => setPhoneInput(e.target.value)}
-                        className="flex-1"
+                        className="min-w-0 flex-1"
                       />
-                      <button onClick={handlePhoneCode} disabled={phoneLoading}
-                        className="px-4 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-all duration-200 disabled:opacity-50"
-                        style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
-                        {phoneLoading
-                          ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                          : "Obtenir le code"}
-                      </button>
+                      <Bouton variante="encre" onClick={handlePhoneCode} disabled={phoneLoading} occupe={phoneLoading} className="!h-11">
+                        {phoneLoading ? null : "Obtenir le code"}
+                      </Bouton>
                     </div>
                     {pairingCode && (
-                      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                        className="rounded-xl p-4 text-center"
-                        style={{ background: "rgba(37,211,102,0.08)", border: "1px solid rgba(37,211,102,0.2)" }}>
-                        <p className="text-xs mb-2" style={{ color: "var(--text-tertiary)" }}>Entrez ce code dans WhatsApp</p>
-                        <p className="text-2xl font-mono font-bold tracking-widest" style={{ color: "#25D366" }}>{pairingCode}</p>
+                      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={RESSORT}
+                        className="rounded-[22px] p-5 text-center" style={{ background: "#E4F6EA" }}>
+                        <p className="mb-2 text-[13px]" style={{ color: "#1E6A37" }}>Entrez ce code dans WhatsApp</p>
+                        <p className="break-all font-mono text-[26px] font-medium tracking-[0.2em]" style={{ color: "#1E7A3A" }}>{pairingCode}</p>
                       </motion.div>
                     )}
                   </div>
@@ -1492,44 +1503,39 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
           <AnimatePresence>
             {isWorking && phoneNumber && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex items-center gap-3 px-5 py-4">
-                <Phone className="w-4 h-4 flex-shrink-0" style={{ color: "#25D366" }} />
-                <span className="text-sm font-mono flex-1" style={{ color: "#25D366" }}>+{phoneNumber}</span>
+                className="px-5 pb-4 sm:px-6">
+                <div className="flex items-center gap-3 rounded-[18px] px-4 py-3" style={{ background: "#F1FAF4" }}>
+                  <Phone className="h-4 w-4 flex-shrink-0" style={{ color: "#1E7A3A" }} />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[14px]" style={{ color: "#1E7A3A" }}>+{phoneNumber}</span>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* Actions WhatsApp */}
-          <div className="flex items-center justify-between px-5 py-4 gap-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-6" style={{ ...separation, background: FOND_DOUX }}>
             {isStopped ? (
-              <button onClick={handleWahaConnect} disabled={connecting}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #25D366, #128C7E)", color: "#fff" }}>
-                {connecting
-                  ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Connexion…</>
-                  : <><MessageCircle className="w-3.5 h-3.5" />Connecter WhatsApp</>}
-              </button>
+              <Bouton variante="encre" icone={connecting ? undefined : MessageCircle} occupe={connecting}
+                onClick={handleWahaConnect} disabled={connecting}>
+                {connecting ? "Connexion…" : "Connecter WhatsApp"}
+              </Bouton>
             ) : (
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
                 {!isWorking && (
-                  <span className="text-xs animate-pulse truncate" style={{ color: "var(--text-disabled)" }}>
+                  <span className="truncate text-[13px] animate-pulse" style={{ color: "var(--cl-ink-faint)" }}>
                     {isStarting ? "Initialisation…" : "En attente du scan…"}
                   </span>
                 )}
               </div>
             )}
             {!isStopped && (
-              <button onClick={handleWahaDisconnect}
-                className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150 flex-shrink-0"
-                style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              <Bouton variante="danger" onClick={handleWahaDisconnect}>
                 Déconnecter
-              </button>
+              </Bouton>
             )}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* ── PRODUCTIVITÉ — Google Agenda (si calendar_booking activé) ─────────── */}
       <AnimatePresence>
@@ -1543,49 +1549,37 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
           >
             <SectionHeader label="Productivité" />
 
-            <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${calendarConnected ? "rgba(52,211,153,0.25)" : "var(--border-subtle)"}` }}>
+            <div className={carte} style={{ border: `1px solid ${calendarConnected ? "#CDEBD7" : "var(--cl-line-soft)"}` }}>
               {/* Header Google Agenda */}
-              <div className="flex items-center gap-3 px-5 py-4"
-                style={{ background: calendarConnected ? "rgba(52,211,153,0.05)" : "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{
-                    background: calendarConnected ? "rgba(52,211,153,0.12)" : "rgba(124,90,248,0.08)",
-                    border: `1px solid ${calendarConnected ? "rgba(52,211,153,0.3)" : "rgba(124,90,248,0.2)"}`,
-                  }}>
-                  <Calendar className="w-4 h-4" style={{ color: calendarConnected ? "#34D399" : "var(--color-gold)" }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Google Agenda</p>
-                  <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
-                    {calendarConnected
-                      ? `Connecté · ${agent.google_calendar_email}`
-                      : "Requis pour vérifier les dispos et créer des événements"}
-                  </p>
-                </div>
-                <span className="flex items-center gap-1.5 text-xs font-medium flex-shrink-0"
-                  style={{ color: calendarConnected ? "#34D399" : "var(--text-disabled)" }}>
-                  <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
-                    calendarConnected ? "bg-emerald-400 animate-pulse" : "bg-white/20")} />
-                  <span className="hidden sm:inline">{calendarConnected ? "Connecté" : "Non connecté"}</span>
-                </span>
-              </div>
+              <EnteteCarte
+                fond={calendarConnected ? "#E4F6EA" : "var(--cl-accent-soft)"}
+                icone={<Calendar className="h-[18px] w-[18px]" style={{ color: calendarConnected ? "#1E7A3A" : "var(--cl-accent-deep)" }} />}
+                titre="Google Agenda"
+                sous={calendarConnected
+                  ? `Connecté · ${agent.google_calendar_email}`
+                  : "Requis pour vérifier les dispos et créer des événements"}
+                etat={
+                  <Pastille ton={calendarConnected ? "vert" : "gris"} point className="flex-shrink-0">
+                    <span className="hidden sm:inline">{calendarConnected ? "Connecté" : "Non connecté"}</span>
+                  </Pastille>
+                }
+              />
 
               {/* Info quand connecté */}
               <AnimatePresence>
                 {calendarConnected && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                    <div className="px-5 py-4 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                        style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)" }}>
-                        ✅
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                          {agent.google_calendar_email}
-                        </p>
-                        <p className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                          Les rendez-vous seront créés automatiquement dans ce calendrier.
-                        </p>
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                    <div className="px-5 pb-4 sm:px-6">
+                      <div className="flex items-center gap-3 rounded-[18px] px-4 py-3" style={{ background: "#F1FAF4" }}>
+                        <CheckCircle2 className="h-5 w-5 flex-shrink-0" style={{ color: "#1E7A3A" }} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13.5px] font-medium" style={{ color: "var(--cl-ink)" }}>
+                            {agent.google_calendar_email}
+                          </p>
+                          <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+                            Les rendez-vous seront créés automatiquement dans ce calendrier.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -1593,32 +1587,21 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
               </AnimatePresence>
 
               {/* Actions Google Agenda */}
-              <div className="flex items-center justify-between px-5 py-4 gap-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-6" style={{ ...separation, background: FOND_DOUX }}>
                 {!calendarConnected ? (
-                  <button
-                    onClick={handleGCalConnect}
-                    disabled={gcalLoading}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 hover:brightness-110 disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #4285F4, #34A853)", color: "#fff" }}>
-                    {gcalLoading
-                      ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Connexion…</>
-                      : <><Calendar className="w-3.5 h-3.5" />Connecter Google Agenda</>}
-                  </button>
+                  <Bouton variante="encre" icone={gcalLoading ? undefined : Calendar} occupe={gcalLoading}
+                    onClick={handleGCalConnect} disabled={gcalLoading}>
+                    {gcalLoading ? "Connexion…" : "Connecter Google Agenda"}
+                  </Bouton>
                 ) : (
-                  <p className="text-xs" style={{ color: "var(--text-disabled)" }}>
+                  <p className="text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>
                     Agenda actif · les créneaux libres sont détectés en temps réel
                   </p>
                 )}
                 {calendarConnected && (
-                  <button
-                    onClick={handleGCalDisconnect}
-                    disabled={gcalLoading}
-                    className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150 flex-shrink-0 disabled:opacity-50"
-                    style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.08)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                  <Bouton variante="danger" onClick={handleGCalDisconnect} disabled={gcalLoading}>
                     {gcalLoading ? "…" : "Déconnecter"}
-                  </button>
+                  </Bouton>
                 )}
               </div>
             </div>
@@ -1638,93 +1621,88 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
           >
             <SectionHeader label="Réseaux sociaux" />
 
-            <ComingSoonCard
-              icon={<IconFacebook className="w-4 h-4" />}
-              label="Facebook"
-              description="Publication, gestion des messages et commentaires"
-              accentColor="#1877F2"
-            />
-            <ComingSoonCard
-              icon={<IconInstagram className="w-4 h-4" />}
-              label="Instagram"
-              description="Publication de contenu et réponses automatiques"
-              accentColor="#E1306C"
-            />
-            <ComingSoonCard
-              icon={<IconTikTok className="w-4 h-4" />}
-              label="TikTok"
-              description="Publication de vidéos et gestion des interactions"
-              accentColor="#010101"
-            />
+            <div className={cn(carte, "p-3 sm:p-4")} style={bordure}>
+              <div className="grid gap-2.5 lg:grid-cols-3">
+                <ComingSoonCard
+                  icon={<IconFacebook className="h-4 w-4" />}
+                  label="Facebook"
+                  description="Publication, gestion des messages et commentaires"
+                  accentColor="#1877F2"
+                />
+                <ComingSoonCard
+                  icon={<IconInstagram className="h-4 w-4" />}
+                  label="Instagram"
+                  description="Publication de contenu et réponses automatiques"
+                  accentColor="#E1306C"
+                />
+                <ComingSoonCard
+                  icon={<IconTikTok className="h-4 w-4" />}
+                  label="TikTok"
+                  description="Publication de vidéos et gestion des interactions"
+                  accentColor="#010101"
+                />
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* ── MODE PROPRIÉTAIRE ────────────────────────────────────────────────── */}
-      <div className="space-y-3">
+      <motion.div {...apparait(1)} className="space-y-3">
         <SectionHeader label="Mode Propriétaire" />
 
-        <div className="rounded-2xl overflow-hidden"
-          style={{ border: "1px solid rgba(124,90,248,0.25)", background: "rgba(124,90,248,0.02)" }}>
+        <div className={carte} style={{ border: "1px solid var(--cl-lavender)" }}>
 
           {/* Header */}
-          <div className="flex items-center gap-3 px-5 py-4"
-            style={{ background: "rgba(124,90,248,0.05)", borderBottom: "1px solid rgba(124,90,248,0.12)" }}>
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-              style={{ background: "rgba(124,90,248,0.1)", border: "1px solid rgba(124,90,248,0.2)" }}>
-              🔐
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-semibold" style={{ color: "var(--color-gold)" }}>Mode Propriétaire</p>
-                {pwSet
-                  ? <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-                      style={{ background: "rgba(52,211,153,0.1)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)" }}>Configuré</span>
-                  : <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-                      style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-disabled)", border: "1px solid var(--border-subtle)" }}>Non configuré</span>
-                }
-              </div>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                Accès exclusif depuis votre WhatsApp — conseiller stratégique & CM IA
-              </p>
-            </div>
+          <div style={{ background: "linear-gradient(90deg, #F7F4FF 0%, #fff 75%)" }}>
+            <EnteteCarte
+              fond="var(--cl-accent-soft)"
+              icone={<KeyRound className="h-[18px] w-[18px]" style={{ color: "var(--cl-accent-deep)" }} />}
+              titre={
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  Mode Propriétaire
+                  {pwSet
+                    ? <Pastille ton="vert">Configuré</Pastille>
+                    : <Pastille ton="gris">Non configuré</Pastille>}
+                </span>
+              }
+              sous="Accès exclusif depuis votre WhatsApp — conseiller stratégique & CM IA"
+            />
           </div>
 
-          <div className="px-5 py-5 space-y-5">
+          <div className="space-y-6 px-5 py-5 sm:px-6" style={separation}>
 
             {/* Comment ça marche */}
-            <div className="rounded-xl px-4 py-3 space-y-1.5"
-              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                Envoyez <span className="font-mono font-semibold px-1 py-0.5 rounded"
-                  style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)" }}>/votre-mot-de-passe</span> à votre agent depuis WhatsApp.
+            <div className="space-y-1.5 rounded-[22px] px-4 py-3.5" style={{ background: FOND_DOUX }}>
+              <p className="text-[13.5px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+                Envoyez <span className="rounded-full px-2 py-0.5 font-mono text-[12.5px] font-medium"
+                  style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>/votre-mot-de-passe</span> à votre agent depuis WhatsApp.
               </p>
-              <p className="text-[11px]" style={{ color: "var(--text-disabled)" }}>
-                L'agent bascule en consultant IA : stratégie, calendriers éditoriaux, campagnes, planning. Session 8h. Tapez <span className="font-mono font-semibold">/exit</span> pour quitter.
+              <p className="text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+                L&apos;agent bascule en consultant IA : stratégie, calendriers éditoriaux, campagnes, planning. Session 8h. Tapez <span className="font-mono font-medium">/exit</span> pour quitter.
               </p>
             </div>
 
             {/* ─── Mot de passe ─────────────────────────────────────── */}
             <div className="space-y-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-disabled)" }}>
+              <p className="px-1 text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>
                 {pwSet ? "Changer le mot de passe" : "Définir le mot de passe d'accès"}
               </p>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid max-w-2xl gap-3 sm:grid-cols-2">
                 <div className="relative">
                   <input
                     type={pwRevealNew ? "text" : "password"}
                     value={pwInput}
                     onChange={(e) => setPwInput(e.target.value)}
                     placeholder="Nouveau mot de passe"
-                    className="w-full px-3 py-2.5 rounded-lg text-xs outline-none pr-9"
-                    style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,90,248,0.4)"; }}
-                    onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
+                    className="ui-champ pr-12"
                   />
                   <button type="button" onClick={() => setPwRevealNew((v) => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--text-disabled)" }}>
-                    {pwRevealNew ? "🙈" : "👁"}
+                    aria-label={pwRevealNew ? "Masquer" : "Afficher"}
+                    className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:bg-white"
+                    style={{ color: "var(--cl-ink-faint)" }}>
+                    {pwRevealNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
                 <div className="relative">
@@ -1734,154 +1712,125 @@ function IntegrationTab({ agent, refetch }: { agent: Agent; refetch: () => void 
                     onChange={(e) => setPwConfirm(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSavePassword()}
                     placeholder="Confirmer"
-                    className="w-full px-3 py-2.5 rounded-lg text-xs outline-none pr-9"
-                    style={{
-                      background: "var(--bg-elevated)",
-                      border: `1px solid ${pwConfirm && pwConfirm !== pwInput ? "rgba(248,113,113,0.4)" : "var(--border-default)"}`,
-                      color: "var(--text-primary)",
-                    }}
-                    onFocus={(e) => { if (!pwConfirm || pwConfirm === pwInput) e.currentTarget.style.borderColor = "rgba(124,90,248,0.4)"; }}
-                    onBlur={(e)  => { e.currentTarget.style.borderColor = pwConfirm && pwConfirm !== pwInput ? "rgba(248,113,113,0.4)" : "var(--border-default)"; }}
+                    className="ui-champ pr-12"
+                    style={pwConfirm && pwConfirm !== pwInput ? { borderColor: "#E3A496", background: "#FFF8F6" } : undefined}
                   />
                   <button type="button" onClick={() => setPwRevealConf((v) => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--text-disabled)" }}>
-                    {pwRevealConf ? "🙈" : "👁"}
+                    aria-label={pwRevealConf ? "Masquer" : "Afficher"}
+                    className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:bg-white"
+                    style={{ color: "var(--cl-ink-faint)" }}>
+                    {pwRevealConf ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
               {pwConfirm && pwConfirm !== pwInput && (
-                <p className="text-[11px]" style={{ color: "#f87171" }}>Les mots de passe ne correspondent pas</p>
+                <p className="px-1 text-[12.5px]" style={{ color: "#A63D28" }}>Les mots de passe ne correspondent pas</p>
               )}
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
+              <div className="flex flex-wrap items-center gap-2">
+                <Bouton
+                  variante="encre"
+                  icone={pwSaving ? undefined : Save}
+                  occupe={pwSaving}
                   onClick={handleSavePassword}
-                  disabled={pwSaving || !pwInput || !pwConfirm || pwInput !== pwConfirm}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-40"
-                  style={{ background: "rgba(124,90,248,0.12)", color: "var(--color-gold)", border: "1px solid rgba(124,90,248,0.25)" }}>
-                  {pwSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  disabled={pwSaving || !pwInput || !pwConfirm || pwInput !== pwConfirm}>
                   {pwSet ? "Mettre à jour" : "Définir le mot de passe"}
-                </button>
+                </Bouton>
                 {pwSet && (
-                  <button
-                    onClick={handleRemovePassword}
-                    disabled={pwSaving}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-40"
-                    style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.06)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <Trash2 className="w-3 h-3" />Désactiver le mode proprio
-                  </button>
+                  <Bouton variante="danger" icone={Trash2} onClick={handleRemovePassword} disabled={pwSaving}>
+                    Désactiver le mode proprio
+                  </Bouton>
                 )}
               </div>
             </div>
 
             {/* ─── Sessions actives ──────────────────────────────────── */}
-            <div style={{ borderTop: "1px solid rgba(124,90,248,0.12)", paddingTop: "1.25rem" }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-disabled)" }}>
+            <div className="pt-5" style={separation}>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 px-1">
+                  <p className="text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>
                     Sessions WhatsApp actives
                   </p>
                   {ownerSessions.length > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold tabular-nums"
-                      style={{ background: "rgba(52,211,153,0.12)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)" }}>
-                      {ownerSessions.length}
-                    </span>
+                    <Pastille ton="vert">{ownerSessions.length}</Pastille>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={fetchOwnerSessions} disabled={sessionsLoading}
-                    className="p-1.5 rounded-lg transition-colors disabled:opacity-40"
-                    style={{ color: "var(--text-disabled)" }} title="Rafraîchir"
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <RefreshCw className={`w-3 h-3 ${sessionsLoading ? "animate-spin" : ""}`} />
-                  </button>
+                  <BoutonRond icone={RefreshCw} tourne={sessionsLoading} label="Rafraîchir"
+                    onClick={fetchOwnerSessions} disabled={sessionsLoading} />
                   {ownerSessions.length > 0 && (
-                    <button onClick={handleRevokeAll} disabled={revokingAll}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40"
-                      style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.06)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                      {revokingAll ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    <Bouton variante="danger" icone={revokingAll ? undefined : Trash2} occupe={revokingAll}
+                      onClick={handleRevokeAll} disabled={revokingAll}>
                       Tout révoquer
-                    </button>
+                    </Bouton>
                   )}
                 </div>
               </div>
 
               {sessionsLoading && ownerSessions.length === 0 && (
-                <p className="text-xs py-3 text-center" style={{ color: "var(--text-disabled)" }}>Chargement…</p>
+                <Squelettes n={2} hauteur={60} />
               )}
 
               {!sessionsLoading && ownerSessions.length === 0 && (
-                <div className="rounded-xl px-4 py-3 text-center"
-                  style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
-                  <p className="text-xs" style={{ color: "var(--text-disabled)" }}>Aucune session propriétaire active</p>
+                <div className="rounded-[22px] px-4 py-5 text-center" style={{ background: FOND_DOUX }}>
+                  <p className="text-[13.5px]" style={{ color: "var(--cl-ink-faint)" }}>Aucune session propriétaire active</p>
                 </div>
               )}
 
               {ownerSessions.length > 0 && (
                 <div className="space-y-2">
-                  {ownerSessions.map((s) => {
-                    const authDate    = new Date(s.authenticated_at);
-                    const expiresAt   = new Date(s.expires_at);
-                    const minutesLeft = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 60000));
-                    const timeLeft    = minutesLeft > 60
-                      ? `${Math.floor(minutesLeft / 60)}h${minutesLeft % 60 > 0 ? String(minutesLeft % 60).padStart(2,"0") : ""} restant`
-                      : `${minutesLeft}min restant`;
+                  <AnimatePresence initial={false}>
+                    {ownerSessions.map((s) => {
+                      const authDate    = new Date(s.authenticated_at);
+                      const expiresAt   = new Date(s.expires_at);
+                      const minutesLeft = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 60000));
+                      const timeLeft    = minutesLeft > 60
+                        ? `${Math.floor(minutesLeft / 60)}h${minutesLeft % 60 > 0 ? String(minutesLeft % 60).padStart(2,"0") : ""} restant`
+                        : `${minutesLeft}min restant`;
 
-                    return (
-                      <div key={s.id}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                        style={{ background: "rgba(124,90,248,0.04)", border: "1px solid rgba(124,90,248,0.1)" }}>
-                        <div className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse"
-                          style={{ background: "#34D399", boxShadow: "0 0 6px rgba(52,211,153,0.6)" }} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium font-mono" style={{ color: "var(--text-primary)" }}>{s.phone}</p>
-                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                            Connecté {authDate.toLocaleString("fr-FR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
-                            {" · "}
-                            <span style={{ color: minutesLeft < 30 ? "#f87171" : "var(--text-disabled)" }}>{timeLeft}</span>
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleRevokeSession(s.phone, s.id)}
-                          disabled={revokingId === s.id}
-                          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40"
-                          style={{ color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(248,113,113,0.08)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                          {revokingId === s.id
-                            ? <RefreshCw className="w-3 h-3 animate-spin" />
-                            : <><Trash2 className="w-3 h-3" /><span>Révoquer</span></>}
-                        </button>
-                      </div>
-                    );
-                  })}
+                      return (
+                        <motion.div key={s.id} layout
+                          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 24 }} transition={RESSORT}
+                          className="flex items-center gap-3 rounded-[20px] px-4 py-3"
+                          style={{ background: FOND_DOUX }}>
+                          <span className="h-2.5 w-2.5 flex-shrink-0 animate-pulse rounded-full"
+                            style={{ background: "#1DAB55", boxShadow: "0 0 0 4px #E4F6EA" }} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-mono text-[13.5px] font-medium" style={{ color: "var(--cl-ink)" }}>{s.phone}</p>
+                            <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+                              Connecté {authDate.toLocaleString("fr-FR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
+                              {" · "}
+                              <span style={{ color: minutesLeft < 30 ? "#A63D28" : "var(--cl-ink-faint)" }}>{timeLeft}</span>
+                            </p>
+                          </div>
+                          <Bouton
+                            variante="danger"
+                            icone={revokingId === s.id ? undefined : Trash2}
+                            occupe={revokingId === s.id}
+                            onClick={() => handleRevokeSession(s.phone, s.id)}
+                            disabled={revokingId === s.id}
+                            className="!h-9 !px-3"
+                            aria-label="Révoquer">
+                            {revokingId === s.id ? null : <span className="hidden sm:inline">Révoquer</span>}
+                          </Bouton>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
                 </div>
               )}
             </div>
 
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* ── Agent ID ──────────────────────────────────────────────────────────── */}
-      <div className="rounded-2xl p-4 flex items-center gap-3"
-        style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-disabled)" }}>Agent ID</p>
-          <p className="text-xs font-mono truncate" style={{ color: "var(--text-tertiary)" }}>{agent.id}</p>
-        </div>
-        <button onClick={copyId} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0 transition-all duration-200"
-          style={{ background: "var(--surface-gold)", color: "var(--color-gold)", border: "1px solid var(--border-gold)" }}>
-          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-          {copied ? "Copié" : "Copier"}
-        </button>
-      </div>
+      <Section icone={Fingerprint} titre="Agent ID" sous="L'identifiant à communiquer au support ou à vos intégrations." rang={2}
+        action={<Bouton variante="clair" icone={copied ? Check : Copy} onClick={copyId}>{copied ? "Copié" : "Copier"}</Bouton>}>
+        <p className="truncate rounded-[18px] px-4 py-3 font-mono text-[13px]" style={{ background: FOND_DOUX, color: "var(--cl-ink-soft)" }}>{agent.id}</p>
+      </Section>
     </div>
   );
 }
@@ -1959,91 +1908,68 @@ export default function AgentConfigPage() {
 
   if (loading || !agent) {
     return (
-      <div className="min-h-dvh flex items-center justify-center">
-        <div className="w-6 h-6 rounded-full border-2 border-t-[var(--color-gold)] border-white/10 animate-spin" />
+      <div className="py-6 lg:py-8">
+        <StylesUI />
+        <div className="mb-6 ui-squelette h-12 max-w-xl rounded-full" />
+        <Squelettes n={3} hauteur={150} />
       </div>
     );
   }
 
   return (
     // Dans la coquille du tableau de bord : le nom et le statut sont déjà dans
-    // le titre de la feuille, la barre du haut de la page n'est plus utile.
-    <div className="flex flex-col" style={{ height: "max(560px, calc(100dvh - 210px))" }}>
+    // le titre de la feuille. Ici, seulement les onglets et leur contenu.
+    <div className="py-6 lg:py-8">
+      <StylesUI />
 
-      {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className="hidden items-center gap-3 px-6 h-[52px] flex-shrink-0"
-        style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-        <button onClick={() => router.push("/dashboard")}
-          className="flex items-center gap-1.5 text-xs transition-colors duration-150 flex-shrink-0"
-          style={{ color: "var(--text-tertiary)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-tertiary)")}>
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Agents</span>
-        </button>
-        <span className="text-xs" style={{ color: "var(--border-strong)" }}>/</span>
-        <span className="text-sm leading-none flex-shrink-0">{agent.identity.avatar_emoji ?? "🤖"}</span>
-        <h1 className="text-xs font-semibold truncate flex-1" style={{ color: "var(--text-primary)" }}>
-          {agent.identity.name}
-        </h1>
-        <span className="inline-flex items-center gap-1.5 text-[11px] flex-shrink-0"
-          style={{ color: agent.status === "active" ? "#34D399" : "#FBBF24" }}>
-          <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", agent.status === "active" ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
-          {agent.status === "active" ? "Actif" : "Pausé"}
-        </span>
+      {/* ── Onglets, mobile et tablette : la barre de pastilles ───────────── */}
+      <div className="mb-6 lg:hidden">
+        <Filtres<TabId>
+          id="agent-onglets"
+          label="Sections de l'agent"
+          valeur={tab}
+          onChange={setTab}
+          options={TABS.map(({ id, label }) => ({ cle: id, libelle: label }))}
+        />
       </div>
 
-      {/* ── Mobile tab bar ──────────────────────────────────────────────── */}
-      <div className="md:hidden flex-shrink-0 overflow-x-auto flex gap-1 px-3 py-2"
-        style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap flex-shrink-0 transition-colors duration-100",
-              tab === id
-                ? "text-[var(--text-primary)] bg-[var(--surface-glass)]"
-                : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]")}
-            style={tab === id ? { border: "1px solid var(--border-subtle)" } : { border: "1px solid transparent" }}>
-            <Icon className="w-3 h-3 opacity-60" />
-            {label}
-          </button>
-        ))}
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
 
-      {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
-
-        {/* Left tab nav — desktop only */}
-        <div className="hidden md:flex w-[168px] flex-shrink-0 flex-col py-3 px-2.5 space-y-px overflow-y-auto"
-          style={{ borderRight: "1px solid var(--border-subtle)" }}>
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={cn("flex items-center gap-2 px-2.5 py-[7px] rounded-md text-xs font-medium text-left transition-colors duration-100 w-full",
-                tab === id
-                  ? "text-[var(--text-primary)] bg-[var(--surface-glass)]"
-                  : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[rgba(255,255,255,0.025)]")}
-              style={tab === id ? { border: "1px solid var(--border-subtle)" } : { border: "1px solid transparent" }}>
-              <Icon className="w-3 h-3 flex-shrink-0 opacity-60" />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
-          <div className="max-w-2xl mx-auto px-4 sm:px-7 py-5 sm:py-6">
-            <AnimatePresence mode="wait">
-              <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
-                {tab === "overview"     && <OverviewTab     agent={agent} onToggleStatus={handleToggleStatus} token={token} capabilities={capabilities} />}
-                {tab === "identity"     && <IdentityTab     agent={agent} onSave={handleSave} />}
-                {tab === "business"     && <BusinessTab     agent={agent} onSave={handleSave} />}
-                {tab === "knowledge"    && <KnowledgeTab    agent={agent} onSave={handleSave} />}
-                {tab === "capabilities" && <CapabilitiesTab agent={agent} onSave={handleSave} capabilities={capabilities} />}
-                {tab === "model"        && <ModelTab        agent={agent} onSave={handleSave} />}
-                {tab === "prompt"       && <PromptTab       agent={agent} onSave={handleSave} />}
-                {tab === "integration"  && <IntegrationTab  agent={agent} refetch={refetch} />}
-              </motion.div>
-            </AnimatePresence>
+        {/* ── Onglets, grand écran : le menu collant ─────────────────────── */}
+        <nav aria-label="Sections de l'agent" className="hidden lg:sticky lg:top-[96px] lg:block lg:self-start">
+          <div role="radiogroup" aria-label="Sections de l'agent" className="space-y-1 rounded-[28px] p-2" style={{ background: "#F4F2F7" }}>
+            {TABS.map(({ id, label, icon: Icon }) => {
+              const actif = tab === id;
+              return (
+                <button key={id} role="radio" aria-checked={actif} onClick={() => setTab(id)}
+                  className="relative flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-left text-[13.5px] transition-colors duration-150 hover:bg-white/60"
+                  style={{ color: actif ? "#fff" : "var(--cl-ink-soft)" }}>
+                  {actif && <motion.span layoutId="ag-onglet" transition={RESSORT} className="absolute inset-0 rounded-full" style={{ background: "var(--cl-ink)" }} />}
+                  <span className="relative flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full"
+                    style={{ background: actif ? "rgba(255,255,255,0.16)" : "#fff" }}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="relative truncate">{label}</span>
+                </button>
+              );
+            })}
           </div>
+        </nav>
+
+        {/* ── Le contenu ─────────────────────────────────────────────────── */}
+        <div className="min-w-0">
+          <AnimatePresence mode="wait">
+            <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
+              {tab === "overview"     && <OverviewTab     agent={agent} onToggleStatus={handleToggleStatus} token={token} capabilities={capabilities} />}
+              {tab === "identity"     && <IdentityTab     agent={agent} onSave={handleSave} />}
+              {tab === "business"     && <BusinessTab     agent={agent} onSave={handleSave} />}
+              {tab === "knowledge"    && <KnowledgeTab    agent={agent} onSave={handleSave} />}
+              {tab === "capabilities" && <CapabilitiesTab agent={agent} onSave={handleSave} capabilities={capabilities} />}
+              {tab === "model"        && <ModelTab        agent={agent} onSave={handleSave} />}
+              {tab === "prompt"       && <PromptTab       agent={agent} onSave={handleSave} />}
+              {tab === "integration"  && <IntegrationTab  agent={agent} refetch={refetch} />}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </div>

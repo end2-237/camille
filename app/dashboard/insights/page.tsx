@@ -7,7 +7,13 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { motion } from "framer-motion";
+import {
+  Activity, AlertTriangle, Filter, MessageCircleQuestion, MessagesSquare, Repeat, RefreshCw, ShieldCheck, Split, Target,
+} from "lucide-react";
 import { authHeaders } from "@/lib/auth-client";
+import { Bandeau, BoutonRond, Filtres, Pastille, Squelettes, StylesUI, Tuile, Vide, apparait } from "@/components/dashboard/ui";
+import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
 type Funnel = { etape: string; conversations: number; pourcentage: number };
 type Cause = { cause: string; conversations: number; exemples: string[] };
@@ -35,6 +41,13 @@ const CAUSE_LABEL: Record<string, string> = {
   passage_humain: "Demande un humain (cas non couvert)",
 };
 
+/** Les périodes proposées : la clé part telle quelle à l'API. */
+const PERIODES = [
+  { cle: "7d", libelle: "7 jours" },
+  { cle: "30d", libelle: "30 jours" },
+  { cle: "90d", libelle: "90 jours" },
+];
+
 export default function InsightsPage() {
   const [data, setData] = useState<Data | null>(null);
   const [period, setPeriod] = useState("30d");
@@ -56,158 +69,213 @@ export default function InsightsPage() {
   const funnel = data?.entonnoir ?? [];
   const maxConv = Math.max(1, ...funnel.map((f) => f.conversations));
   const precision = data?.precision_modele ?? null;
+  const libellePeriode = PERIODES.find((p) => p.cle === period)?.libelle ?? period;
+
+  const confusions = data?.confusions ?? [];
+  const causes = data?.causes ?? [];
+  const signatures = data?.signatures ?? [];
+  const questions = data?.questions_sans_reponse ?? [];
+  const precisionFaible = precision != null && precision < 85;
+  const frictionForte = (data?.taux_friction ?? 0) >= 40;
 
   return (
-    <div style={{ padding: "24px 20px", maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--cl-ink)" }}>Qualité du modèle</h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          {["7d", "30d", "90d"].map((p) => (
-            <button key={p} onClick={() => setPeriod(p)}
-              style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                border: "1px solid var(--cl-line)", background: period === p ? "#101012" : "#fff",
-                color: period === p ? "#fff" : "var(--cl-sub)" }}>
-              {p}
-            </button>
-          ))}
-          <button onClick={load} disabled={busy}
-            style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-ink)" }}>
-            {busy ? "…" : "Actualiser"}
-          </button>
+    <div className="py-6 lg:py-8">
+      <StylesUI />
+
+      {/* ── En-tête : de quoi il s'agit, et sur quelle période ──────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Pastille ton="violet"><ShieldCheck className="h-3.5 w-3.5" /> Outil interne</Pastille>
+          <p className="min-w-0 text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+            Non visible par les clients.
+          </p>
+        </div>
+        <div className="flex min-w-0 max-w-full items-center gap-2">
+          <Filtres id="insights-periode" label="Période" valeur={period} onChange={setPeriod} options={PERIODES} />
+          <BoutonRond icone={RefreshCw} label="Actualiser" onClick={load} disabled={busy} tourne={busy} />
         </div>
       </div>
-      <p style={{ fontSize: 13, color: "var(--cl-sub)", marginBottom: 20 }}>
-        Outil interne — analyse chaque discussion dans son ensemble pour mesurer la précision
-        et la cohérence de l&apos;agent. Non visible par les clients.
+      <p className="mt-3 max-w-3xl text-[13.5px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+        Analyse chaque discussion dans son ensemble pour mesurer la précision
+        et la cohérence de l&apos;agent.
       </p>
 
-      {data?.error && (
-        <div style={{ padding: 16, borderRadius: 12, background: "#FDECEC", color: "#c0392b", fontSize: 13.5 }}>
-          {data.error}
-        </div>
-      )}
-
-      {!data?.error && (
-        <>
-          {/* KPIs qualité */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
-            <Kpi label="Précision du modèle" value={precision != null ? `${precision}%` : "—"}
-                 hint={`${data?.tours_corriges ?? 0} tours corrigés / ${data?.tours_analyses ?? 0}`}
-                 danger={precision != null && precision < 85} />
-            <Kpi label="Discussions analysées" value={String(data?.conversations ?? 0)} hint={period} />
-            <Kpi label="Avec friction" value={`${data?.taux_friction ?? 0}%`}
-                 hint={`${data?.avec_friction ?? 0} discussions`} danger={(data?.taux_friction ?? 0) >= 40} />
+      <div className="mt-6">
+        {data?.error ? (
+          <Bandeau ton="rouge">{data.error}</Bandeau>
+        ) : data === null ? (
+          <div className="grid gap-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[0, 1, 2].map((i) => <div key={i} className="ui-squelette h-[130px] rounded-[26px]" style={{ animationDelay: `${i * 120}ms` }} />)}
+            </div>
+            <Squelettes n={2} hauteur={220} />
           </div>
+        ) : (
+          <>
+            {/* ── KPIs qualité ─────────────────────────────────────────────── */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Tuile rang={0} fort icone={Target} titre="Précision du modèle"
+                valeur={precision != null ? `${precision}%` : "—"}
+                sous={
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {data?.tours_corriges ?? 0} tours corrigés / {data?.tours_analyses ?? 0}
+                    {precisionFaible && <Pastille ton="rouge" point>Sous 85 %</Pastille>}
+                  </span>
+                } />
+              <Tuile rang={1} icone={MessagesSquare} titre="Discussions analysées"
+                valeur={String(data?.conversations ?? 0)} sous={`Sur ${libellePeriode}`} />
+              <Tuile rang={2} icone={Activity} titre="Avec friction"
+                valeur={<span style={{ color: frictionForte ? "#A63D28" : undefined }}>{data?.taux_friction ?? 0}%</span>}
+                sous={
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {data?.avec_friction ?? 0} discussions
+                    {frictionForte && <Pastille ton="rouge" point>Élevé</Pastille>}
+                  </span>
+                } />
+            </div>
 
-          {/* Entonnoir */}
-          <Section title="Parcours — où les discussions décrochent">
-            {funnel.map((f, i) => {
-              const prev = i > 0 ? funnel[i - 1].conversations : f.conversations;
-              const drop = prev > 0 ? Math.round(((prev - f.conversations) / prev) * 100) : 0;
-              const bigDrop = i > 0 && drop >= 40;
-              return (
-                <div key={f.etape} style={{ marginBottom: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
-                    <span style={{ color: "var(--cl-ink)", fontWeight: 600 }}>{STEP_LABEL[f.etape] || f.etape}</span>
-                    <span style={{ color: "var(--cl-sub)" }}>{f.conversations} · {f.pourcentage}%</span>
-                  </div>
-                  <div style={{ height: 10, borderRadius: 5, background: "#EEE", overflow: "hidden" }}>
-                    <div style={{ width: `${Math.round((f.conversations / maxConv) * 100)}%`, height: 10,
-                      background: bigDrop ? "#e74c3c" : "#0e9d63" }} />
-                  </div>
-                  {bigDrop && (
-                    <div style={{ fontSize: 11.5, color: "#c0392b", marginTop: 4 }}>
-                      ↓ {drop}% des discussions s&apos;arrêtent à cette étape
+            {data?.note && <div className="mt-4"><Bandeau ton="violet">{data.note}</Bandeau></div>}
+
+            {data?.empty ? (
+              <div className="mt-6">
+                <Vide doodle="meditating" titre="Rien à analyser sur la période."
+                  texte="Dès que l'agent aura mené quelques discussions, leur qualité s'affichera ici." />
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                <div className="min-w-0 space-y-6">
+                  {/* ── Entonnoir ───────────────────────────────────────────── */}
+                  <Section rang={3} icone={Filter} title="Parcours — où les discussions décrochent">
+                    <div className="space-y-4">
+                      {funnel.map((f, i) => {
+                        const prev = i > 0 ? funnel[i - 1].conversations : f.conversations;
+                        const drop = prev > 0 ? Math.round(((prev - f.conversations) / prev) * 100) : 0;
+                        const bigDrop = i > 0 && drop >= 40;
+                        return (
+                          <div key={f.etape}>
+                            <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[13px]">
+                              <span className="min-w-0 truncate font-medium" style={{ color: "var(--cl-ink)" }}>{STEP_LABEL[f.etape] || f.etape}</span>
+                              <span className="flex-shrink-0 tabular-nums" style={{ color: "var(--cl-ink-faint)" }}>{f.conversations} · {f.pourcentage}%</span>
+                            </div>
+                            <div className="h-3 overflow-hidden rounded-full" style={{ background: "#F1EFF4" }}>
+                              <motion.div className="h-full rounded-full"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${Math.round((f.conversations / maxConv) * 100)}%` }}
+                                transition={{ ...RESSORT, delay: Math.min(i, 8) * 0.05 }}
+                                style={{ background: bigDrop ? "linear-gradient(90deg, #E8907D, #C2504B)" : "linear-gradient(90deg, #8F75F6, #B6A4FA)" }} />
+                            </div>
+                            {bigDrop && (
+                              <p className="mt-1.5 flex items-center gap-1.5 text-[12px]" style={{ color: "#A63D28" }}>
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                {drop}% des discussions s&apos;arrêtent à cette étape
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
+                    {!funnel.length && <Empty />}
+                  </Section>
+
+                  {/* ── Causes de friction ─────────────────────────────────── */}
+                  <Section rang={5} icone={AlertTriangle} title="Causes de friction (par discussion)">
+                    <div className="space-y-2.5">
+                      {causes.map((c) => (
+                        <div key={c.cause} className="rounded-[20px] p-4" style={{ background: "#FAF9FC" }}>
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="min-w-0 text-[13.5px] font-medium" style={{ color: "var(--cl-ink)" }}>{CAUSE_LABEL[c.cause] || c.cause}</p>
+                            <Pastille ton="ambre">{c.conversations} disc.</Pastille>
+                          </div>
+                          {(c.exemples ?? []).slice(0, 2).map((ex, i) => (
+                            <p key={i} className="mt-2 rounded-[14px] bg-white px-3 py-2 text-[12.5px] italic leading-relaxed break-words" style={{ color: "var(--cl-ink-soft)" }}>
+                              « {ex} »
+                            </p>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    {!causes.length && <Empty />}
+                  </Section>
                 </div>
-              );
-            })}
-            {!funnel.length && <Empty />}
-          </Section>
 
-          {/* Confusions du modèle : LLM -> intention retenue */}
-          <Section title="Erreurs d'intention du modèle (proposée → retenue)">
-            <p style={{ fontSize: 12.5, color: "var(--cl-sub)", marginBottom: 12 }}>
-              Chaque ligne est une correction appliquée par l&apos;Ancrage. Plus le compte est élevé,
-              plus le modèle se trompe systématiquement sur ce cas — c&apos;est une règle à ajouter ou un prompt à ajuster.
-            </p>
-            {(data?.confusions ?? []).map((c) => (
-              <div key={c.paire} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "9px 12px", borderRadius: 8, background: "#F7F7F8", marginBottom: 6 }}>
-                <code style={{ fontSize: 12.5, color: "var(--cl-ink)" }}>{c.paire}</code>
-                <span style={{ fontSize: 12, fontWeight: 800, color: "#c0392b" }}>×{c.count}</span>
-              </div>
-            ))}
-            {!(data?.confusions ?? []).length && <Empty />}
-          </Section>
+                <div className="min-w-0 space-y-6">
+                  {/* ── Confusions du modèle : LLM -> intention retenue ────── */}
+                  <Section rang={4} icone={Split} title="Erreurs d'intention du modèle (proposée → retenue)">
+                    <p className="-mt-1 mb-4 text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+                      Chaque ligne est une correction appliquée par l&apos;Ancrage. Plus le compte est élevé,
+                      plus le modèle se trompe systématiquement sur ce cas — c&apos;est une règle à ajouter ou un prompt à ajuster.
+                    </p>
+                    <div className="space-y-2">
+                      {confusions.map((c) => (
+                        <LigneCompte key={c.paire} texte={c.paire} compte={c.count} ton="rouge" />
+                      ))}
+                    </div>
+                    {!confusions.length && <Empty />}
+                  </Section>
 
-          {/* Causes de friction */}
-          <Section title="Causes de friction (par discussion)">
-            {(data?.causes ?? []).map((c) => (
-              <div key={c.cause} style={{ padding: 12, borderRadius: 10, border: "1px solid var(--cl-line)", marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <strong style={{ fontSize: 13.5, color: "var(--cl-ink)" }}>{CAUSE_LABEL[c.cause] || c.cause}</strong>
-                  <span style={{ fontSize: 12, fontWeight: 800 }}>{c.conversations} disc.</span>
+                  {/* ── Scénarios répétés ─────────────────────────────────── */}
+                  <Section rang={6} icone={Repeat} title="Scénarios qui se répètent (signatures)">
+                    <div className="space-y-2">
+                      {signatures.map((s, i) => (
+                        <LigneCompte key={i} texte={s.signature} compte={s.count} ton={s.issue === "abandon" ? "rouge" : "gris"} />
+                      ))}
+                    </div>
+                    {!signatures.length && <Empty />}
+                  </Section>
+
+                  {/* ── Demandes sans réponse ─────────────────────────────── */}
+                  <Section rang={7} icone={MessageCircleQuestion} title="Demandes restées sans réponse">
+                    <ul className="divide-y" style={{ borderColor: "var(--cl-line-soft)" }}>
+                      {questions.map((q, i) => (
+                        <li key={i} className="flex items-center gap-3 py-2.5 text-[13px]" style={{ borderColor: "var(--cl-line-soft)" }}>
+                          <span className="w-12 flex-shrink-0"><Pastille ton="rouge">×{q.count}</Pastille></span>
+                          <span className="min-w-0 break-words" style={{ color: "var(--cl-ink)" }}>{q.question}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {!questions.length && <Empty />}
+                  </Section>
                 </div>
-                {(c.exemples ?? []).slice(0, 2).map((ex, i) => (
-                  <div key={i} style={{ fontSize: 12, color: "var(--cl-sub)", marginTop: 5, fontStyle: "italic" }}>« {ex} »</div>
-                ))}
               </div>
-            ))}
-            {!(data?.causes ?? []).length && <Empty />}
-          </Section>
-
-          {/* Scénarios répétés */}
-          <Section title="Scénarios qui se répètent (signatures)">
-            {(data?.signatures ?? []).map((s, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "10px 12px", borderRadius: 8, border: "1px solid var(--cl-line)", marginBottom: 6 }}>
-                <code style={{ fontSize: 12.5 }}>{s.signature}</code>
-                <span style={{ fontSize: 12, fontWeight: 700, color: s.issue === "abandon" ? "#c0392b" : "var(--cl-sub)" }}>
-                  ×{s.count}
-                </span>
-              </div>
-            ))}
-            {!(data?.signatures ?? []).length && <Empty />}
-          </Section>
-
-          {/* Demandes sans réponse */}
-          <Section title="Demandes restées sans réponse">
-            {(data?.questions_sans_reponse ?? []).map((q, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", fontSize: 13 }}>
-                <span style={{ fontWeight: 800, color: "#c0392b", minWidth: 34 }}>×{q.count}</span>
-                <span style={{ color: "var(--cl-ink)" }}>{q.question}</span>
-              </div>
-            ))}
-            {!(data?.questions_sans_reponse ?? []).length && <Empty />}
-          </Section>
-        </>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function Kpi({ label, value, hint, danger }: { label: string; value: string; hint?: string; danger?: boolean }) {
+/** Une paire ou une signature technique, avec le nombre de fois où elle revient. */
+function LigneCompte({ texte, compte, ton }: { texte: string; compte: number; ton: "rouge" | "gris" }) {
   return (
-    <div style={{ padding: 16, borderRadius: 12, border: "1px solid var(--cl-line)", background: "#fff" }}>
-      <div style={{ fontSize: 12, color: "var(--cl-sub)" }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4, color: danger ? "#c0392b" : "var(--cl-ink)" }}>{value}</div>
-      {hint && <div style={{ fontSize: 11, color: "var(--cl-sub)", marginTop: 2 }}>{hint}</div>}
+    <div className="flex items-center justify-between gap-3 rounded-[18px] px-4 py-2.5" style={{ background: "#FAF9FC" }}>
+      <code className="min-w-0 break-all font-mono text-[12.5px]" style={{ color: "var(--cl-ink)" }}>{texte}</code>
+      <Pastille ton={ton}>×{compte}</Pastille>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, icone: Icone, rang = 0, children }: {
+  title: string; icone: React.ElementType; rang?: number; children: React.ReactNode;
+}) {
   return (
-    <div style={{ marginBottom: 26, padding: 18, borderRadius: 14, border: "1px solid var(--cl-line)", background: "#fff" }}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--cl-ink)", marginBottom: 14 }}>{title}</h2>
+    <motion.section {...apparait(rang)} className="rounded-[28px] bg-white p-5 sm:p-6" style={{ border: "1px solid var(--cl-line-soft)" }}>
+      <div className="mb-5 flex items-center gap-3">
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+          style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+          <Icone className="h-4 w-4" />
+        </span>
+        <h2 className="min-w-0 text-[16px] font-medium leading-snug tracking-[-0.015em]" style={{ color: "var(--cl-ink)" }}>{title}</h2>
+      </div>
       {children}
-    </div>
+    </motion.section>
   );
 }
 
 function Empty() {
-  return <div style={{ fontSize: 13, color: "var(--cl-sub)" }}>Aucune donnée sur la période.</div>;
+  return (
+    <p className="rounded-[18px] px-4 py-5 text-center text-[13px]" style={{ background: "#FAF9FC", color: "var(--cl-ink-faint)" }}>
+      Aucune donnée sur la période.
+    </p>
+  );
 }

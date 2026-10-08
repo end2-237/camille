@@ -14,8 +14,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { motion } from "framer-motion";
 import { authHeaders } from "@/lib/auth-client";
-import { Check, Copy, Info, Loader2, RefreshCw } from "lucide-react";
+import { Check, Code2, Copy, Eye, Globe2, Info, MonitorSmartphone, MousePointerClick, Package, Percent, RefreshCw, ShoppingBag, Users, FileText } from "lucide-react";
+import { Bandeau, BoutonRond, Filtres, Pastille, StylesUI, Tuile, apparait } from "@/components/dashboard/ui";
+import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
 type Traffic = {
   ready: boolean;
@@ -72,189 +75,198 @@ export default function TraficPage() {
     return () => clearInterval(t);
   }, [load]);
 
-  const base = typeof window !== "undefined" ? window.location.origin : "";
+  // Lue après le montage : le serveur ne connaît pas l'adresse du site, et un
+  // texte différent entre serveur et navigateur casse l'hydratation.
+  const [base, setBase] = useState("");
+  useEffect(() => { setBase(window.location.origin); }, []);
   const snippet = `<script src="${base}/api/public/v1/track" data-key="cam_pk_…" defer></script>`;
 
   const t = data?.totals;
   const maxView = Math.max(1, ...(data?.series ?? []).map((s) => s.views));
+  const serie = data?.series ?? [];
+  // Sur 90 jours, une étiquette par barre ne tient pas : on n'en garde qu'une
+  // sur quelques-unes, la barre seule suffit entre deux.
+  const pas = Math.max(1, Math.ceil(serie.length / 7));
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-[-0.02em]">Trafic du site</h1>
-          <p className="mt-1.5 max-w-[560px] text-[13.5px] leading-relaxed text-[var(--cl-sub)]">
-            Ce que fait le site branché à Camille : qui vient, par où, ce qu&apos;on y regarde,
-            et combien de visites finissent en commande.
-          </p>
+    <div className="py-6 lg:py-8">
+      <StylesUI />
+
+      {/* ── La période, le direct, l'actualisation ────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 max-w-full">
+          <Filtres id="trafic-periode" label="Période" valeur={String(days)} onChange={(v) => setDays(Number(v))}
+            options={RANGES.map((r) => ({ cle: String(r.days), libelle: r.label }))} />
         </div>
         <div className="flex items-center gap-2">
           {!!t?.online && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E4F8EC] px-3 py-1.5 text-[12.5px] font-semibold text-[#0e6b45]">
-              <span className="h-2 w-2 rounded-full bg-[#0e9d63]" />
+            <Pastille ton="vert">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: "#1E7A3A" }} />
+                <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: "#1E7A3A" }} />
+              </span>
               {t.online} en ligne
-            </span>
+            </Pastille>
           )}
-          <button
-            onClick={load}
-            className="inline-flex h-9 items-center gap-2 rounded-full border border-[var(--cl-line)] bg-white px-4 text-[12.5px] font-semibold"
-          >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Actualiser
-          </button>
+          <BoutonRond icone={RefreshCw} label="Actualiser" tourne={loading} onClick={load} />
         </div>
-      </header>
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        {RANGES.map((r) => (
-          <button
-            key={r.days}
-            onClick={() => setDays(r.days)}
-            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
-              days === r.days ? "bg-[#101012] text-white" : "bg-[#F4F4F5] text-[var(--cl-sub)] hover:bg-[#EAEAEB]"
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
       </div>
+
+      <p className="mt-4 max-w-2xl text-[14px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+        Ce que fait le site branché à Camille : qui vient, par où, ce qu&apos;on y regarde,
+        et combien de visites finissent en commande.
+      </p>
 
       {data && !data.ready && (
-        <div className="mt-5 rounded-2xl border border-[#F3D5A5] bg-[#FDF7E7] p-4 text-[13px] text-[#8A5A00]">
-          {data.error || "Mesure indisponible."}
-        </div>
+        <div className="mt-4"><Bandeau ton="ambre">{data.error || "Mesure indisponible."}</Bandeau></div>
       )}
 
-      {t && (
-        <>
-          <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Kpi label="Visiteurs" value={nf(t.visitors)} hint={`${nf(t.sessions)} visite(s)`} />
-            <Kpi label="Pages vues" value={nf(t.views)} hint={t.visitors ? `${(t.views / t.visitors).toFixed(1)} par visiteur` : "—"} />
-            <Kpi label="Commandes du site" value={nf(t.orders)} hint={money(t.revenue)} accent />
-            <Kpi label="Conversion" value={`${t.conversion} %`} hint={`${nf(t.carts)} panier(s) · ${nf(t.checkouts)} paiement(s) entamé(s)`} />
-          </section>
+      {/* ── Les chiffres ──────────────────────────────────────────────────── */}
+      {t ? (
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+          <Tuile rang={0} icone={Users} titre="Visiteurs" valeur={nf(t.visitors)} sous={`${nf(t.sessions)} visite(s)`} />
+          <Tuile rang={1} icone={Eye} titre="Pages vues" valeur={nf(t.views)} sous={t.visitors ? `${(t.views / t.visitors).toFixed(1)} par visiteur` : "—"} />
+          <Tuile rang={2} icone={ShoppingBag} titre="Commandes du site" valeur={nf(t.orders)} sous={money(t.revenue)} fort />
+          <Tuile rang={3} icone={Percent} titre="Conversion" valeur={`${t.conversion} %`} sous={`${nf(t.carts)} panier(s) · ${nf(t.checkouts)} paiement(s) entamé(s)`} />
+        </div>
+      ) : loading && !data ? (
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="ui-squelette h-[124px] rounded-[26px]" style={{ animationDelay: `${i * 120}ms` }} />)}
+        </div>
+      ) : null}
 
-          {/* Courbe simple : une barre par jour, la hauteur dit tout. */}
-          <section className="mt-5 rounded-2xl border border-[var(--cl-line)] bg-white p-5">
-            <h2 className="text-[14px] font-semibold">Fréquentation, jour par jour</h2>
-            {data.series.length === 0 ? (
-              <p className="mt-3 text-[13px] text-[var(--cl-sub)]">
-                Aucune visite mesurée sur la période.
-              </p>
-            ) : (
-              <div className="mt-4 flex h-[160px] items-end gap-1.5">
-                {data.series.map((s) => (
-                  <div key={s.day} className="group flex flex-1 flex-col items-center justify-end gap-1.5">
-                    <span className="text-[10.5px] font-semibold text-[var(--cl-sub)] opacity-0 transition group-hover:opacity-100">
-                      {nf(s.views)}
-                    </span>
-                    <div
-                      className="w-full rounded-t-[4px] bg-[#101012] transition group-hover:bg-[#C6F24E]"
-                      style={{ height: `${Math.max(3, (s.views / maxView) * 118)}px` }}
-                      title={`${dayLabel(s.day)} — ${nf(s.views)} pages vues, ${nf(s.visitors)} visiteurs`}
-                    />
-                    <span className="truncate text-[10px] text-[var(--cl-sub)]">{dayLabel(s.day)}</span>
-                  </div>
-                ))}
+      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+        {/* ── Colonne principale : la courbe et les classements ─────────────── */}
+        {t && data ? (
+          <div className="min-w-0 space-y-5">
+            {/* Courbe simple : une barre par jour, la hauteur dit tout. */}
+            <motion.section {...apparait(4)} className="ui-carte rounded-[28px] p-5 sm:p-6">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-[17px] font-medium tracking-[-0.01em]" style={{ color: "var(--cl-ink)" }}>Fréquentation, jour par jour</h2>
+                <span className="text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>pages vues</span>
               </div>
-            )}
-          </section>
+              {serie.length === 0 ? (
+                <p className="mt-4 rounded-[20px] px-4 py-6 text-center text-[13.5px]" style={{ background: "#FAF9FC", color: "var(--cl-ink-faint)" }}>
+                  Aucune visite mesurée sur la période.
+                </p>
+              ) : (
+                <div className={`mt-5 flex h-[190px] items-end ${serie.length > 31 ? "gap-[2px]" : serie.length > 14 ? "gap-1" : "gap-2"}`}>
+                  {serie.map((s, i) => (
+                    <div key={s.day} className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
+                      <span className="whitespace-nowrap text-[11px] font-medium tabular-nums opacity-0 transition-opacity group-hover:opacity-100" style={{ color: "var(--cl-accent-deep)" }}>
+                        {nf(s.views)}
+                      </span>
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: Math.max(4, (s.views / maxView) * 130) }}
+                        transition={{ ...RESSORT, delay: Math.min(i, 30) * 0.012 }}
+                        className="trafic-barre w-full max-w-[44px] rounded-full"
+                        title={`${dayLabel(s.day)} — ${nf(s.views)} pages vues, ${nf(s.visitors)} visiteurs`}
+                      />
+                      <span className="h-4 max-w-full truncate text-[10.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+                        {i % pas === 0 ? dayLabel(s.day) : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.section>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <Table
-              title="Pages les plus vues"
-              empty="Rien encore."
-              rows={data.pages.map((p) => ({ label: p.path, value: nf(p.views) }))}
-            />
-            <Table
-              title="D'où viennent les visiteurs"
-              empty="Rien encore."
-              rows={data.sources.map((s) => ({ label: s.source, value: nf(s.visitors) }))}
-            />
-            <Table
-              title="Produits les plus consultés"
-              empty="Le site n'envoie pas encore d'événement « produit consulté »."
-              rows={data.products.map((p) => ({ label: p.name, value: nf(p.views) }))}
-            />
-            <Table
-              title="Appareils"
-              empty="Rien encore."
-              rows={data.devices.map((d) => ({ label: d.device, value: nf(d.visitors) }))}
+            <div className="grid gap-5 md:grid-cols-2">
+              <Table rang={5} icone={FileText} title="Pages les plus vues" empty="Rien encore."
+                rows={data.pages.map((p) => ({ label: p.path, value: nf(p.views), n: p.views }))} />
+              <Table rang={6} icone={Globe2} title="D'où viennent les visiteurs" empty="Rien encore."
+                rows={data.sources.map((s) => ({ label: s.source, value: nf(s.visitors), n: s.visitors }))} />
+              <Table rang={7} icone={Package} title="Produits les plus consultés" empty="Le site n'envoie pas encore d'événement « produit consulté »."
+                rows={data.products.map((p) => ({ label: p.name, value: nf(p.views), n: p.views }))} />
+              <Table rang={8} icone={MonitorSmartphone} title="Appareils" empty="Rien encore."
+                rows={data.devices.map((d) => ({ label: d.device, value: nf(d.visitors), n: d.visitors }))} />
+            </div>
+          </div>
+        ) : <div className="hidden lg:block" />}
+
+        {/* Installation : une ligne à coller, valable pour n'importe quel site. */}
+        <motion.aside {...apparait(5)} className="ui-carte min-w-0 rounded-[28px] p-5 sm:p-6 lg:sticky lg:top-24">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+              <Code2 className="h-[18px] w-[18px]" />
+            </span>
+            <h2 className="pt-2 text-[17px] font-medium leading-tight tracking-[-0.01em]" style={{ color: "var(--cl-ink)" }}>Brancher la mesure sur un site</h2>
+          </div>
+          <p className="mt-3 text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+            Colle cette ligne avant <Code>&lt;/body&gt;</Code>, avec la clé de lecture de l&apos;agent
+            (Intégrations → clé <Code>cam_pk_…</Code>). Elle suit aussi les sites qui changent
+            de page sans recharger.
+          </p>
+          <div className="mt-4 flex items-start gap-2 rounded-[22px] p-2 pl-4" style={{ background: "#FAF9FC" }}>
+            <code className="min-w-0 flex-1 py-2 font-mono text-[12px] leading-relaxed" style={{ color: "var(--cl-ink)", overflowWrap: "anywhere" }}>{snippet}</code>
+            <BoutonRond
+              icone={copied ? Check : Copy}
+              label={copied ? "Copié" : "Copier"}
+              style={copied ? { background: "#E4F6EA", color: "#1E7A3A", boxShadow: "none" } : undefined}
+              onClick={() => {
+                navigator.clipboard?.writeText(snippet);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
             />
           </div>
-        </>
-      )}
+          <div className="mt-4 flex items-start gap-2.5 rounded-[20px] p-4 text-[12.5px] leading-relaxed" style={{ background: "#F7F4FF", color: "var(--cl-ink-soft)" }}>
+            <MousePointerClick className="mt-[3px] h-4 w-4 flex-shrink-0" style={{ color: "var(--cl-accent-deep)" }} />
+            <p className="min-w-0">
+              Le site peut aussi signaler ses propres moments : <Code>camille(&quot;product_view&quot;, {"{ name: \"Poulet DG\" }"})</Code>,
+              <Code> camille(&quot;add_to_cart&quot;)</Code>, <Code>camille(&quot;checkout_start&quot;)</Code>.
+            </p>
+          </div>
+          <p className="mt-3 flex items-start gap-2 px-1 text-[12px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+            <Info className="mt-[3px] h-3.5 w-3.5 flex-shrink-0" />
+            Aucun cookie, aucune adresse IP : le visiteur n&apos;est qu&apos;un identifiant aléatoire.
+          </p>
+        </motion.aside>
+      </div>
 
-      {/* Installation : une ligne à coller, valable pour n'importe quel site. */}
-      <section className="mt-6 rounded-2xl border border-[var(--cl-line)] bg-white p-5">
-        <h2 className="text-[14px] font-semibold">Brancher la mesure sur un site</h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--cl-sub)]">
-          Colle cette ligne avant <code>&lt;/body&gt;</code>, avec la clé de lecture de l&apos;agent
-          (Intégrations → clé <code>cam_pk_…</code>). Elle suit aussi les sites qui changent
-          de page sans recharger.
-        </p>
-        <div className="mt-3 flex items-start gap-2">
-          <code className="flex-1 overflow-auto rounded-lg bg-[var(--cl-bg-soft)] p-3 text-[11.5px]">{snippet}</code>
-          <button
-            onClick={() => {
-              navigator.clipboard?.writeText(snippet);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }}
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-[var(--cl-line)] px-3 text-[12px] font-semibold"
-          >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? "Copié" : "Copier"}
-          </button>
-        </div>
-        <p className="mt-3 flex items-start gap-2 text-[12.5px] leading-snug text-[var(--cl-sub)]">
-          <Info className="mt-[2px] h-3.5 w-3.5 shrink-0" />
-          Le site peut aussi signaler ses propres moments : <code>camille(&quot;product_view&quot;, {"{ name: \"Poulet DG\" }"})</code>,
-          <code> camille(&quot;add_to_cart&quot;)</code>, <code>camille(&quot;checkout_start&quot;)</code>.
-          Aucun cookie, aucune adresse IP : le visiteur n&apos;est qu&apos;un identifiant aléatoire.
-        </p>
-      </section>
+      <style jsx global>{`
+        .trafic-barre { background: #DCD2FD; transition: background-color .2s ease; }
+        .group:hover .trafic-barre { background: var(--cl-accent); }
+      `}</style>
     </div>
   );
 }
 
-function Kpi({ label, value, hint, accent }: { label: string; value: string; hint?: string; accent?: boolean }) {
-  return (
-    <div
-      className="rounded-2xl border p-4"
-      style={{ borderColor: "var(--cl-line)", background: accent ? "#101012" : "#fff" }}
-    >
-      <div className="text-[11.5px] font-semibold" style={{ color: accent ? "rgba(255,255,255,.6)" : "var(--cl-sub)" }}>
-        {label}
-      </div>
-      <div className="mt-1 text-[26px] font-bold" style={{ color: accent ? "#C6F24E" : "var(--cl-ink)" }}>
-        {value}
-      </div>
-      {hint && (
-        <div className="mt-0.5 text-[11.5px]" style={{ color: accent ? "rgba(255,255,255,.5)" : "var(--cl-sub)" }}>
-          {hint}
-        </div>
-      )}
-    </div>
-  );
-}
+const Code = ({ children }: { children: React.ReactNode }) => (
+  <code className="rounded-full px-1.5 py-0.5 font-mono text-[11.5px]" style={{ background: "#F1EFF4", color: "var(--cl-ink)", overflowWrap: "anywhere" }}>{children}</code>
+);
 
-function Table({ title, rows, empty }: { title: string; rows: { label: string; value: string }[]; empty: string }) {
+function Table({ title, rows, empty, icone: Icone, rang = 0 }: {
+  title: string; rows: { label: string; value: string; n: number }[]; empty: string;
+  icone: React.ElementType; rang?: number;
+}) {
+  const max = Math.max(1, ...rows.map((r) => r.n || 0));
   return (
-    <section className="rounded-2xl border border-[var(--cl-line)] bg-white p-5">
-      <h2 className="text-[14px] font-semibold">{title}</h2>
+    <motion.section {...apparait(rang)} className="ui-carte min-w-0 rounded-[28px] p-5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+          <Icone className="h-4 w-4" />
+        </span>
+        <h2 className="min-w-0 truncate text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>{title}</h2>
+      </div>
       {rows.length === 0 ? (
-        <p className="mt-3 text-[13px] text-[var(--cl-sub)]">{empty}</p>
+        <p className="mt-4 rounded-[18px] px-4 py-4 text-[13px] leading-relaxed" style={{ background: "#FAF9FC", color: "var(--cl-ink-faint)" }}>{empty}</p>
       ) : (
-        <ul className="mt-3 space-y-1.5">
+        <ul className="mt-4 space-y-1.5">
           {rows.map((r, i) => (
-            <li key={`${r.label}-${i}`} className="flex items-center justify-between gap-3 text-[13px]">
-              <span className="min-w-0 flex-1 truncate text-[var(--cl-ink)]">{r.label}</span>
-              <span className="shrink-0 font-semibold">{r.value}</span>
+            <li key={`${r.label}-${i}`} className="relative overflow-hidden rounded-full">
+              {/* La jauge derrière la ligne : on compare d'un coup d'œil. */}
+              <motion.span aria-hidden="true" className="absolute inset-y-0 left-0 rounded-full" style={{ background: "#F3EFFE" }}
+                initial={{ width: 0 }} animate={{ width: `${Math.max(6, ((r.n || 0) / max) * 100)}%` }} transition={{ ...RESSORT, delay: Math.min(i, 10) * 0.03 }} />
+              <span className="relative flex items-center justify-between gap-3 px-3.5 py-2 text-[13px]">
+                <span className="min-w-0 flex-1 truncate" style={{ color: "var(--cl-ink)" }} title={r.label}>{r.label}</span>
+                <span className="flex-shrink-0 font-medium tabular-nums" style={{ color: "var(--cl-ink)" }}>{r.value}</span>
+              </span>
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </motion.section>
   );
 }
