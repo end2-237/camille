@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
-import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search, Upload, ImageIcon, UtensilsCrossed } from "lucide-react";
+import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search, Upload, ImageIcon, UtensilsCrossed, Package, PackageX, Layers, Eye, EyeOff } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bouton, BoutonRond, Filtres, LienBouton, Pastille, Squelettes, StylesUI, Tuile, Vide, apparait } from "@/components/dashboard/ui";
+import { RESSORT } from "@/components/dashboard/coquille/Entete";
 import { toast } from "sonner";
-import { JOURS, ProductCard, type OptionGroup, type Product } from "@/components/catalog/ProductCard";
+import { JOURS, optImage, optValue, type OptionGroup, type Product } from "@/components/catalog/ProductCard";
 import { authHeaders } from "@/lib/auth-client";
 import { sertDesRepas } from "@/lib/sectorProfiles";
 
@@ -31,7 +35,11 @@ export default function CatalogPage() {
   // n'apparaît pas du tout.
   const [restauration, setRestauration] = useState(false);
 
-  const publicLink = typeof window !== "undefined" ? `${window.location.origin}/catalog/${agentId}` : "";
+  // Construit après le montage : le serveur ne connaît pas l'adresse du site
+  // (sinon le lien diffère entre le rendu serveur et le navigateur).
+  const [publicLink, setPublicLink] = useState("");
+  useEffect(() => { setPublicLink(`${window.location.origin}/catalog/${agentId}`); }, [agentId]);
+  const [rayon, setRayon] = useState("tous");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,9 +84,21 @@ export default function CatalogPage() {
     }
   }
 
-  const filtered = q.trim()
-    ? products.filter((p) => (p.name + " " + (p.category ?? "")).toLowerCase().includes(q.toLowerCase()))
-    : products;
+  const rayons = [...new Set(products.map((p) => (p.category ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  const filtered = products
+    .filter((p) => rayon === "tous" || (p.category ?? "").trim() === rayon)
+    .filter((p) => !q.trim() || (p.name + " " + (p.category ?? "")).toLowerCase().includes(q.toLowerCase()));
+  const actifs = products.filter((p) => p.active !== false).length;
+  const ruptures = products.filter((p) => p.stock != null && Number(p.stock) <= 0).length;
+
+  const modifier = (p: Product) => setEditing({
+    ...p,
+    tagsStr: (p.tags ?? []).join(", "),
+    variants: (p.variants ?? []).map((v) => ({
+      name: v.name,
+      options: (v.options ?? []).map((o) => (typeof o === "string" ? { value: o, image: null } : { value: o.value, image: o.image ?? null })),
+    })),
+  });
 
   async function save() {
     if (!editing?.name?.trim()) { toast.error("Le nom est requis"); return; }
@@ -186,153 +206,84 @@ export default function CatalogPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8">
-      {/* En-tête */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>
-            Catalogue
-          </h1>
-          <p className="mt-1 text-[13px]" style={{ color: "var(--cl-ink-soft)" }}>
-            {products.length} produit{products.length > 1 ? "s" : ""} · exploitable par API et via un lien unique
-          </p>
+    <div className="py-6 lg:py-8">
+      <StylesUI />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <Tuile rang={0} icone={Package} titre="Produits" valeur={products.length} sous={`${actifs} visible${actifs > 1 ? "s" : ""} par l'agent`} />
+        <Tuile rang={1} icone={Layers} titre="Rayons" valeur={rayons.length} sous={rayons.slice(0, 2).join(", ") || "aucun rayon"} />
+        <Tuile rang={2} icone={PackageX} titre="En rupture" valeur={ruptures} fort={ruptures > 0} sous={ruptures ? "à réapprovisionner" : "tout est en stock"} />
+        <Tuile rang={3} icone={EyeOff} titre="Masqués" valeur={products.length - actifs} sous="invisibles pour les clients" />
+      </div>
+
+      {/* La barre d'outils */}
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="relative w-full sm:w-[300px]">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--cl-ink-faint)" }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un produit…" className="ui-champ" style={{ paddingLeft: 42 }} />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => { navigator.clipboard.writeText(publicLink); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium"
-            style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)", background: "#fff" }}
-          >
-            {copied ? <Check className="h-4 w-4" style={{ color: "var(--cl-green)" }} /> : <Link2 className="h-4 w-4" />}
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <Bouton variante="clair" icone={copied ? Check : Link2}
+            onClick={() => { navigator.clipboard.writeText(publicLink); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
             {copied ? "Lien copié" : "Lien du catalogue"}
-          </button>
-          <a
-            href={publicLink} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium"
-            style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink-soft)", background: "#fff" }}
-          >
-            <ExternalLink className="h-4 w-4" /> Aperçu
-          </a>
-          <button
-            onClick={() => setEditing({ ...EMPTY })}
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold text-white"
-            style={{ background: "#16141A" }}
-          >
-            <Plus className="h-4 w-4" /> Ajouter un produit
-          </button>
+          </Bouton>
+          <LienBouton variante="clair" icone={ExternalLink} href={publicLink || undefined} target="_blank" rel="noopener noreferrer">Aperçu</LienBouton>
+          <Bouton variante="encre" icone={Plus} onClick={() => setEditing({ ...EMPTY })}>Ajouter un produit</Bouton>
         </div>
       </div>
 
-      {/* Barre de recherche */}
-      <div className="mt-6 flex items-center gap-2 rounded-lg px-3 py-2" style={{ border: "1px solid var(--cl-line)", background: "#fff", maxWidth: 320 }}>
-        <Search className="h-4 w-4" style={{ color: "var(--cl-ink-faint)" }} />
-        <input
-          value={q} onChange={(e) => setQ(e.target.value)}
-          placeholder="Rechercher un produit…"
-          className="w-full bg-transparent text-[13px] outline-none"
-          style={{ color: "var(--cl-ink)" }}
-        />
-      </div>
-
-      {/* Grille */}
-      {loading ? (
-        <p className="mt-10 text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>Chargement…</p>
-      ) : filtered.length === 0 ? (
-        <div className="mt-10 rounded-xl px-6 py-16 text-center" style={{ border: "1px dashed var(--cl-line)" }}>
-          <p className="text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>Aucun produit</p>
-          <p className="mt-1 text-[13px]" style={{ color: "var(--cl-ink-soft)" }}>
-            Ajoutez votre premier produit pour construire le catalogue de votre agent.
-          </p>
-          <button
-            onClick={() => setEditing({ ...EMPTY })}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold text-white"
-            style={{ background: "#16141A" }}
-          >
-            <Plus className="h-4 w-4" /> Ajouter un produit
-          </button>
-        </div>
-      ) : (
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.map((p) => (
-            <ProductCard
-              key={p.id}
-              product={p}
-              footer={
-                <div className="space-y-2">
-                  {restauration && (
-                    <button
-                      onClick={() => basculerMenuDuJour(p)}
-                      aria-pressed={!!p.daily_menu}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12.5px] font-semibold"
-                      style={{
-                        border: `1px solid ${p.daily_menu ? "#E8A6B4" : "var(--cl-line)"}`,
-                        background: p.daily_menu ? "#FFF3F6" : "#fff",
-                        color: p.daily_menu ? "#8E2A47" : "var(--cl-ink-soft)",
-                      }}
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <UtensilsCrossed className="h-3.5 w-3.5" /> Au menu du jour
-                      </span>
-                      <span
-                        className="relative inline-flex h-[18px] w-[32px] flex-shrink-0 items-center rounded-full transition"
-                        style={{ background: p.daily_menu ? "#E8A6B4" : "var(--cl-line)" }}
-                      >
-                        <span
-                          className="absolute h-[14px] w-[14px] rounded-full bg-white transition-all"
-                          style={{ left: p.daily_menu ? 16 : 2 }}
-                        />
-                      </span>
-                    </button>
-                  )}
-                  <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setEditing({
-                      ...p,
-                      tagsStr: (p.tags ?? []).join(", "),
-                      variants: (p.variants ?? []).map((v) => ({
-                        name: v.name,
-                        options: (v.options ?? []).map((o) => (typeof o === "string" ? { value: o, image: null } : { value: o.value, image: o.image ?? null })),
-                      })),
-                    })}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] font-semibold text-white"
-                    style={{ background: "#16141A" }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" /> Modifier
-                  </button>
-                  <button
-                    onClick={() => remove(p)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg"
-                    style={{ border: "1px solid var(--cl-line)", color: "#C2504B" }}
-                    aria-label="Supprimer"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                  </div>
-                </div>
-              }
-            />
-          ))}
+      {rayons.length > 1 && (
+        <div className="mt-4">
+          <Filtres id="rayons" label="Filtrer par rayon" valeur={rayon} onChange={setRayon}
+            options={[{ cle: "tous", libelle: "Tous", compte: products.length },
+              ...rayons.map((r) => ({ cle: r, libelle: r, compte: products.filter((p) => (p.category ?? "").trim() === r).length }))]} />
         </div>
       )}
 
+      {/* La grille */}
+      <div className="mt-5">
+        {loading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"><Squelettes n={4} hauteur={300} /></div>
+        ) : filtered.length === 0 ? (
+          <Vide doodle="unboxing" titre={products.length ? "Aucun produit ne correspond." : "Votre catalogue est vide."}
+            texte={products.length ? "Essayez un autre mot ou un autre rayon." : "Ajoutez votre premier produit : l'agent pourra le présenter, l'envoyer en fiche WhatsApp et le vendre."}
+            action={!products.length ? <Bouton variante="encre" icone={Plus} onClick={() => setEditing({ ...EMPTY })}>Ajouter un produit</Bouton> : undefined} />
+        ) : (
+          <motion.div layout className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <AnimatePresence initial={false}>
+              {filtered.map((p, i) => (
+                <CarteProduit key={p.id} p={p} rang={i} restauration={restauration}
+                  onModifier={() => modifier(p)} onSupprimer={() => remove(p)} onMenuDuJour={() => basculerMenuDuJour(p)} />
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </div>
+
       {/* Formulaire modal */}
+      {/* Rendu à la racine du document : dans la feuille du tableau de bord,
+          le panneau passerait sous la barre de navigation. */}
+      {publicLink && createPortal(
+      <AnimatePresence>
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" style={{ background: "rgba(25,23,27,0.45)" }} onClick={() => setEditing(null)}>
-          <div
-            className="w-full max-w-lg overflow-y-auto rounded-t-2xl sm:rounded-2xl"
-            style={{ background: "#fff", maxHeight: "92vh" }}
+        <motion.div key="voile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] flex items-end justify-end sm:items-stretch sm:p-3" style={{ background: "rgba(25,23,27,0.38)" }} onClick={() => setEditing(null)}>
+          <motion.div
+            initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 40, opacity: 0 }} transition={RESSORT}
+            className="cat-panneau flex w-full flex-col overflow-hidden rounded-t-[30px] sm:max-w-[560px] sm:rounded-[30px]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--cl-line)" }}>
-              <h2 className="text-[16px] font-semibold" style={{ color: "var(--cl-ink)" }}>
-                {editing.id ? "Modifier le produit" : "Nouveau produit"}
-              </h2>
-              <button onClick={() => setEditing(null)} className="rounded-lg p-1.5" style={{ color: "var(--cl-ink-faint)" }}>
-                <X className="h-5 w-5" />
-              </button>
+            <div className="flex items-center justify-between gap-3 px-6 pb-3 pt-5">
+              <div>
+                <p className="text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>Catalogue</p>
+                <h2 className="text-[22px] font-medium tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>
+                  {editing.id ? "Modifier le produit" : "Nouveau produit"}
+                </h2>
+              </div>
+              <BoutonRond icone={X} label="Fermer" onClick={() => setEditing(null)} />
             </div>
 
-            <div className="space-y-3.5 p-5">
+            <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-6 pt-2">
               <Field label="Nom du produit *">
                 <input className="cl-input" value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Ex : Macbook Pro M1 14''" />
               </Field>
@@ -354,7 +305,7 @@ export default function CatalogPage() {
               <Field label="Image du produit">
                 <div className="flex items-center gap-3">
                   <div
-                    className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg"
+                    className="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-[20px]"
                     style={{ border: "1px solid var(--cl-line)", background: "var(--cl-bg-soft)" }}
                   >
                     {editing.image_url ? (
@@ -366,7 +317,7 @@ export default function CatalogPage() {
                   </div>
                   <div className="flex-1">
                     <label
-                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[12.5px] font-medium"
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium"
                       style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)" }}
                     >
                       <Upload className="h-4 w-4" />
@@ -402,7 +353,7 @@ export default function CatalogPage() {
               <Field label="Images supplémentaires (galerie)">
                 <div className="flex flex-wrap items-center gap-2">
                   {(editing.images ?? []).map((url, i) => (
-                    <div key={i} className="relative h-14 w-14 overflow-hidden rounded-lg" style={{ border: "1px solid var(--cl-line)" }}>
+                    <div key={i} className="relative h-16 w-16 overflow-hidden rounded-[16px]" style={{ border: "1px solid var(--cl-line)" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={url} alt="" className="h-full w-full object-cover" />
                       <button type="button"
@@ -412,7 +363,7 @@ export default function CatalogPage() {
                       </button>
                     </div>
                   ))}
-                  <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-lg" style={{ border: "1px dashed var(--cl-line)", color: "var(--cl-ink-faint)" }}>
+                  <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-[16px]" style={{ border: "1px dashed var(--cl-line)", color: "var(--cl-ink-faint)" }}>
                     {uploading ? <span className="text-[9px]">…</span> : <Plus className="h-4 w-4" />}
                     <input type="file" accept="image/*" className="hidden" disabled={uploading}
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, true); e.currentTarget.value = ""; }} />
@@ -434,19 +385,19 @@ export default function CatalogPage() {
                       setEditing({ ...editing, variants: vs });
                     };
                     return (
-                      <div key={gi} className="rounded-lg p-2.5" style={{ border: "1px solid var(--cl-line)" }}>
+                      <div key={gi} className="rounded-[20px] p-3" style={{ background: "#FAF9FC" }}>
                         <div className="flex items-center gap-2">
                           <input className="cl-input" style={{ maxWidth: 160 }} value={v.name ?? ""} placeholder="Nom (Couleur, Taille…)"
                             onChange={(e) => setGroup({ name: e.target.value })} />
                           <button type="button" onClick={() => setEditing({ ...editing, variants: (editing.variants ?? []).filter((_, j) => j !== gi) })}
-                            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ border: "1px solid var(--cl-line)", color: "#C2504B" }} aria-label="Retirer">
+                            className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white" style={{ color: "#C2504B" }} aria-label="Retirer">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                         <div className="mt-2 space-y-1.5">
                           {opts.map((o, oi) => (
                             <div key={oi} className="flex items-center gap-2">
-                              <label className="flex h-9 w-9 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg" style={{ border: "1px solid var(--cl-line)", background: "var(--cl-bg-soft)" }}>
+                              <label className="flex h-10 w-10 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full" style={{ border: "1px solid var(--cl-line)", background: "var(--cl-bg-soft)" }}>
                                 {o.image
                                   // eslint-disable-next-line @next/next/no-img-element
                                   ? <img src={o.image} alt="" className="h-full w-full object-cover" />
@@ -457,7 +408,7 @@ export default function CatalogPage() {
                               <input className="cl-input flex-1" value={o.value ?? ""} placeholder="Ex : Noir"
                                 onChange={(e) => { const os = [...opts]; os[oi] = { ...os[oi], value: e.target.value }; setGroup({ options: os }); }} />
                               <button type="button" onClick={() => setGroup({ options: opts.filter((_, j) => j !== oi) })}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: "var(--cl-ink-faint)" }} aria-label="Retirer option">
+                                className="flex h-8 w-8 items-center justify-center rounded-full" style={{ color: "var(--cl-ink-faint)" }} aria-label="Retirer option">
                                 <X className="h-3.5 w-3.5" />
                               </button>
                             </div>
@@ -472,8 +423,8 @@ export default function CatalogPage() {
                   })}
                   <button type="button"
                     onClick={() => setEditing({ ...editing, variants: [...(editing.variants ?? []), { name: "", options: [] }] })}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium"
-                    style={{ border: "1px dashed var(--cl-line)", color: "var(--cl-ink-soft)" }}>
+                    className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium"
+                    style={{ background: "#F4F0FF", color: "var(--cl-accent-deep)" }}>
                     <Plus className="h-3.5 w-3.5" /> Ajouter une variation
                   </button>
                 </div>
@@ -490,7 +441,7 @@ export default function CatalogPage() {
                         setEditing({ ...editing, options: gs });
                       };
                       return (
-                        <div key={gi} className="rounded-lg p-2.5" style={{ border: "1px solid var(--cl-line)" }}>
+                        <div key={gi} className="rounded-[20px] p-3" style={{ background: "#FAF9FC" }}>
                           <div className="flex items-center gap-2">
                             <input className="cl-input" style={{ maxWidth: 170 }} value={g.name ?? ""} placeholder="Ex : Accompagnement"
                               onChange={(e) => setGroupe({ name: e.target.value })} />
@@ -500,7 +451,7 @@ export default function CatalogPage() {
                               Obligatoire
                             </label>
                             <button type="button" onClick={() => setEditing({ ...editing, options: (editing.options ?? []).filter((_, j) => j !== gi) })}
-                              className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ border: "1px solid var(--cl-line)", color: "#C2504B" }} aria-label="Retirer le groupe">
+                              className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white" style={{ color: "#C2504B" }} aria-label="Retirer le groupe">
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
@@ -512,7 +463,7 @@ export default function CatalogPage() {
                                 <input className="cl-input" style={{ maxWidth: 110 }} type="number" min={0} value={c.price ?? ""} placeholder="+ prix (0)"
                                   onChange={(e) => { const cs = [...choices]; cs[ci] = { ...cs[ci], price: e.target.value }; setGroupe({ choices: cs }); }} />
                                 <button type="button" onClick={() => setGroupe({ choices: choices.filter((_, j) => j !== ci) })}
-                                  className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: "var(--cl-ink-faint)" }} aria-label="Retirer le choix">
+                                  className="flex h-8 w-8 items-center justify-center rounded-full" style={{ color: "var(--cl-ink-faint)" }} aria-label="Retirer le choix">
                                   <X className="h-3.5 w-3.5" />
                                 </button>
                               </div>
@@ -530,8 +481,8 @@ export default function CatalogPage() {
                     {(editing.options ?? []).length < 5 && (
                       <button type="button"
                         onClick={() => setEditing({ ...editing, options: [...(editing.options ?? []), { name: "", required: true, choices: [] }] })}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium"
-                        style={{ border: "1px dashed var(--cl-line)", color: "var(--cl-ink-soft)" }}>
+                        className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium"
+                        style={{ background: "#F4F0FF", color: "var(--cl-accent-deep)" }}>
                         <Plus className="h-3.5 w-3.5" /> Ajouter un groupe d&apos;options
                       </button>
                     )}
@@ -546,25 +497,11 @@ export default function CatalogPage() {
               <Field label="Tags (séparés par des virgules)">
                 <input className="cl-input" value={editing.tagsStr ?? ""} onChange={(e) => setEditing({ ...editing, tagsStr: e.target.value })} placeholder="Apple, Électronique, Display" />
               </Field>
-              <label className="flex items-center gap-2 text-[13px]" style={{ color: "var(--cl-ink)" }}>
-                <input type="checkbox" checked={editing.active ?? true} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} />
-                Produit actif (visible dans le catalogue et par l'agent)
-              </label>
+              <Interrupteur actif={editing.active ?? true} onChange={(v) => setEditing({ ...editing, active: v })}
+                titre="Produit visible" texte="Dans le catalogue et pour l'agent. Décochez pour le masquer sans le supprimer." />
               {restauration && (
-                <label className="flex items-start gap-2 text-[13px]" style={{ color: "var(--cl-ink)" }}>
-                  <input
-                    type="checkbox"
-                    checked={editing.daily_menu ?? false}
-                    onChange={(e) => setEditing({ ...editing, daily_menu: e.target.checked })}
-                    className="mt-[3px]"
-                  />
-                  <span>
-                    Au menu du jour
-                    <span className="mt-0.5 block text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>
-                      Mis en avant sur votre site et annoncé comme plat du jour. À décocher quand il quitte la carte du jour.
-                    </span>
-                  </span>
-                </label>
+                <Interrupteur actif={editing.daily_menu ?? false} onChange={(v) => setEditing({ ...editing, daily_menu: v })}
+                  titre="Au menu du jour" texte="Mis en avant sur votre site et annoncé comme plat du jour." />
               )}
               {restauration && (
                 <Field label="Jours où ce plat est servi">
@@ -583,11 +520,10 @@ export default function CatalogPage() {
                             })
                           }
                           aria-pressed={coche}
-                          className="rounded-lg px-3 py-1.5 text-[12.5px] font-semibold"
+                          className="rounded-full px-4 py-2 text-[13px] font-medium transition-colors"
                           style={{
-                            border: `1px solid ${coche ? "#7C5AF8" : "var(--cl-line)"}`,
-                            background: coche ? "#F1ECFF" : "#fff",
-                            color: coche ? "#4B32B5" : "var(--cl-ink-soft)",
+                            background: coche ? "var(--cl-ink)" : "#F4F2F7",
+                            color: coche ? "#fff" : "var(--cl-ink-soft)",
                           }}
                         >
                           {JOURS[j]}
@@ -603,30 +539,28 @@ export default function CatalogPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t px-5 py-4" style={{ borderColor: "var(--cl-line)" }}>
-              <button onClick={() => setEditing(null)} className="rounded-lg px-4 py-2 text-[13px] font-medium" style={{ border: "1px solid var(--cl-line)", color: "var(--cl-ink)" }}>
-                Annuler
-              </button>
-              <button onClick={save} disabled={saving} className="rounded-lg px-5 py-2 text-[13px] font-semibold text-white disabled:opacity-60" style={{ background: "#16141A" }}>
-                {saving ? "Enregistrement…" : editing.id ? "Enregistrer" : "Ajouter"}
-              </button>
+            <div className="flex items-center justify-end gap-2 border-t px-6 py-4" style={{ borderColor: "var(--cl-line-soft)" }}>
+              <Bouton variante="clair" onClick={() => setEditing(null)}>Annuler</Bouton>
+              <Bouton variante="encre" icone={Check} occupe={saving} disabled={saving} onClick={save}>
+                {saving ? "Enregistrement…" : editing.id ? "Enregistrer" : "Ajouter au catalogue"}
+              </Bouton>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>,
+      document.body)}
 
       <style jsx>{`
         :global(.cl-input) {
-          width: 100%;
-          border: 1px solid var(--cl-line);
-          border-radius: 8px;
-          padding: 8px 10px;
-          font-size: 13px;
-          color: var(--cl-ink);
-          background: #fff;
-          outline: none;
+          width: 100%; height: 44px; border: 1px solid transparent; border-radius: 999px; padding: 0 16px;
+          font-size: 14px; color: var(--cl-ink); background: #F7F6FA; outline: none;
+          transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
         }
-        :global(.cl-input:focus) { border-color: var(--cl-accent); box-shadow: 0 0 0 3px rgba(124,90,248,0.12); }
+        :global(textarea.cl-input) { height: auto; border-radius: 20px; padding: 12px 16px; line-height: 1.5; }
+        :global(.cl-input:focus) { background: #fff; border-color: var(--cl-accent); box-shadow: 0 0 0 4px rgba(124,90,248,0.12); }
+        :global(.cat-panneau) { background: #fff; max-height: 94dvh; box-shadow: -20px 0 60px rgba(25,23,27,0.18); }
+        @media (min-width: 640px) { :global(.cat-panneau) { max-height: none; height: 100%; } }
       `}</style>
     </div>
   );
@@ -635,8 +569,114 @@ export default function CatalogPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1 block text-[11.5px] font-medium" style={{ color: "var(--cl-ink-soft)" }}>{label}</label>
+      <label className="mb-1.5 block px-1 text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>{label}</label>
       {children}
     </div>
+  );
+}
+
+/** Un interrupteur arrondi, avec son explication. */
+function Interrupteur({ actif, onChange, titre, texte }: { actif: boolean; onChange: (v: boolean) => void; titre: string; texte?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={actif} onClick={() => onChange(!actif)}
+      className="flex w-full items-center gap-3 rounded-[20px] p-3.5 text-left" style={{ background: actif ? "#F4F0FF" : "#F7F6FA" }}>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>{titre}</span>
+        {texte && <span className="mt-0.5 block text-[12px] leading-snug" style={{ color: "var(--cl-ink-faint)" }}>{texte}</span>}
+      </span>
+      <span className="relative h-7 w-12 flex-shrink-0 rounded-full transition-colors" style={{ background: actif ? "var(--cl-accent)" : "#DCD6E6" }}>
+        <motion.span animate={{ x: actif ? 20 : 0 }} transition={RESSORT} className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow" />
+      </span>
+    </button>
+  );
+}
+
+const prixDe = (p: Product) => {
+  const cur = (p.currency || "XAF") === "XAF" ? "FCFA" : p.currency;
+  const a = p.price != null ? Number(p.price) : null;
+  const b = p.price_max != null ? Number(p.price_max) : null;
+  if (a == null) return "Prix sur demande";
+  const n = (x: number) => x.toLocaleString("fr-FR");
+  return b != null && b > a ? `${n(a)} – ${n(b)} ${cur}` : `${n(a)} ${cur}`;
+};
+
+/** Un produit, dans l'identité du tableau de bord. */
+function CarteProduit({ p, rang, restauration, onModifier, onSupprimer, onMenuDuJour }: {
+  p: Product; rang: number; restauration: boolean;
+  onModifier: () => void; onSupprimer: () => void; onMenuDuJour: () => void;
+}) {
+  const masque = p.active === false;
+  const rupture = p.stock != null && Number(p.stock) <= 0;
+  const variantes = Array.isArray(p.variants) ? p.variants : [];
+  const photos = 1 + (Array.isArray(p.images) ? p.images.length : 0);
+  return (
+    <motion.article layout {...apparait(rang)} exit={{ opacity: 0, scale: 0.96 }}
+      className="ui-carte group flex flex-col overflow-hidden rounded-[28px]" style={masque ? { opacity: 0.7 } : undefined}>
+      <div className="relative m-2 mb-0 aspect-square overflow-hidden rounded-[22px]" style={{ background: "#F4F2F7" }}>
+        {p.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.image_url} alt={p.name} className="h-full w-full object-contain p-4 transition-transform duration-500 group-hover:scale-[1.05]" />
+        ) : (
+          <div className="flex h-full items-center justify-center"><ImageIcon className="h-8 w-8" style={{ color: "#C9C4D2" }} /></div>
+        )}
+        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+          {p.category && <Pastille ton="gris" className="bg-white/90">{p.category}</Pastille>}
+          {masque && <Pastille ton="ambre"><EyeOff className="h-3 w-3" /> Masqué</Pastille>}
+          {rupture && <Pastille ton="rouge" point>Rupture</Pastille>}
+        </div>
+        {p.image_url && photos > 1 && (
+          <span className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[11.5px] text-white backdrop-blur">{photos} photos</span>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col p-4">
+        <h3 className="line-clamp-2 text-[15px] font-medium leading-snug" style={{ color: "var(--cl-ink)" }}>{p.name}</h3>
+        <p className="mt-1.5 text-[17px] font-semibold tracking-[-0.01em]" style={{ color: "var(--cl-ink)" }}>{prixDe(p)}</p>
+        <p className="mt-0.5 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+          {p.stock != null ? `${p.stock} en stock` : "Stock non suivi"} · min. {p.min_order ?? 1}
+        </p>
+
+        {variantes.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {variantes.slice(0, 2).map((v) => (
+              <div key={v.name} className="flex flex-wrap items-center gap-1.5">
+                {(v.options ?? []).slice(0, 5).map((o, i) => {
+                  const img = optImage(o);
+                  return (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-2.5 text-[11.5px]" style={{ background: "#F4F2F7", color: "var(--cl-ink-soft)" }}>
+                      {img
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={img} alt="" className="h-5 w-5 rounded-full object-cover" />
+                        : <span className="h-5 w-1" />}
+                      {optValue(o)}
+                    </span>
+                  );
+                })}
+                {(v.options ?? []).length > 5 && <span className="text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>+{(v.options ?? []).length - 5}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {restauration && (
+          <button onClick={onMenuDuJour} aria-pressed={!!p.daily_menu}
+            className="mt-3 flex w-full items-center justify-between gap-2 rounded-full py-1.5 pl-3.5 pr-1.5 text-[13px] font-medium"
+            style={{ background: p.daily_menu ? "#FFF0F4" : "#F7F6FA", color: p.daily_menu ? "#8E2A47" : "var(--cl-ink-soft)" }}>
+            <span className="inline-flex items-center gap-1.5"><UtensilsCrossed className="h-3.5 w-3.5" /> Menu du jour</span>
+            <span className="relative h-6 w-10 rounded-full transition-colors" style={{ background: p.daily_menu ? "#E26D8C" : "#DCD6E6" }}>
+              <motion.span animate={{ x: p.daily_menu ? 16 : 0 }} transition={RESSORT} className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white" />
+            </span>
+          </button>
+        )}
+        {restauration && Array.isArray(p.available_days) && p.available_days.length > 0 && (
+          <p className="mt-2 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Servi : {p.available_days.map((j) => JOURS[j]).join(", ")}</p>
+        )}
+
+        <div className="mt-auto flex items-center gap-2 pt-4">
+          <Bouton variante="encre" icone={Pencil} className="flex-1" onClick={onModifier}>Modifier</Bouton>
+          <BoutonRond icone={Trash2} label="Supprimer" onClick={onSupprimer} className="!text-[#A63D28]" />
+        </div>
+      </div>
+    </motion.article>
   );
 }

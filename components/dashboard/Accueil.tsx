@@ -60,9 +60,8 @@ const SECTEURS: Record<string, string> = {
 };
 
 const montant = (n: number, cur = "XAF") =>
-  `${Math.round(n).toLocaleString("fr-FR")} ${cur === "XAF" ? "FCFA" : cur}`;
-const court = (n: number) =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(".", ",")} M` : n >= 1000 ? `${(n / 1000).toFixed(1).replace(".", ",")} k` : String(Math.round(n));
+  `${Math.round(Number(n) || 0).toLocaleString("fr-FR")} ${cur === "XAF" ? "FCFA" : cur}`;
+const court = (x: number) => { const n = Number(x) || 0; return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(".", ",")} M` : n >= 1000 ? `${(n / 1000).toFixed(1).replace(".", ",")} k` : String(Math.round(n)); };
 const pct = (x: number) => `${(Math.round(x * 100) / 100).toFixed(2).replace(".", ",")}%`;
 const heure = (d: string) => new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 

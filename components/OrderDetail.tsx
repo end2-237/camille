@@ -11,10 +11,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Bike, Building2, CalendarClock, CircleDot, Clock, CreditCard, FileText, Inbox, MapPin, MessageCircle,
+  Navigation, PackageCheck, Phone, ShoppingBag, Timer, UserRound, X,
+} from "lucide-react";
 import { authHeaders } from "@/lib/auth-client";
 import { statusLabel } from "@/lib/orderStatus";
-import { X } from "lucide-react";
 
 const ItineraryMap = dynamic(() => import("@/components/ItineraryMap"), { ssr: false });
 
@@ -41,7 +46,7 @@ type Contact = {
   orders_count?: number | null; last_order_at?: string | null;
 };
 
-const money = (n: unknown, cur?: string) => `${Number(n || 0).toLocaleString("fr-FR")} ${cur || "XAF"}`;
+const money = (n: unknown, cur?: string) => `${Math.round(Number(n || 0)).toLocaleString("fr-FR")} ${!cur || cur === "XAF" ? "FCFA" : cur}`;
 
 const dateTime = (v?: string | null) =>
   v ? new Date(v).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "";
@@ -67,23 +72,26 @@ const cleanPhone = (p?: string | null) => String(p || "").replace(/@(c\.us|lid|s
 const isRealPhone = (p: string) => /^\d{8,14}$/.test(p);
 
 const ST: Record<string, { bg: string; fg: string }> = {
-  nouvelle:      { bg: "#F3F7E4", fg: "#4A6B00" },
-  en_traitement: { bg: "#FDF1DC", fg: "#8A5A00" },
-  traitee:       { bg: "#FDF1DC", fg: "#8A5A00" },
-  en_livraison:  { bg: "#E7F0FD", fg: "#1D4ED8" },
-  livree:        { bg: "#E4F8EC", fg: "#0e6b45" },
-  annulee:       { bg: "#FDECEC", fg: "#c0392b" },
+  nouvelle:      { bg: "#FDF1DC", fg: "#9A6510" },
+  en_traitement: { bg: "#F0EBFF", fg: "#6442E8" },
+  traitee:       { bg: "#F0EBFF", fg: "#6442E8" },
+  en_livraison:  { bg: "#E6EEFD", fg: "#1D4ED8" },
+  livree:        { bg: "#E4F6EA", fg: "#1E7A3A" },
+  annulee:       { bg: "#FBEAE6", fg: "#A63D28" },
 };
 
-/** Les suites possibles, dans l'ordre du cycle de vie. */
-const NEXT: Record<string, { status: string; label: string; bg: string; fg: string }[]> = {
-  nouvelle:      [{ status: "en_traitement", label: "Mettre en traitement", bg: "#101012", fg: "#fff" }],
-  en_traitement: [{ status: "en_livraison", label: "Partie en livraison", bg: "#2563EB", fg: "#fff" },
-                  { status: "livree", label: "Marquer livrée", bg: "#C6F24E", fg: "#101012" }],
-  traitee:       [{ status: "en_livraison", label: "Partie en livraison", bg: "#2563EB", fg: "#fff" },
-                  { status: "livree", label: "Marquer livrée", bg: "#C6F24E", fg: "#101012" }],
-  en_livraison:  [{ status: "livree", label: "Marquer livrée", bg: "#C6F24E", fg: "#101012" }],
+/** Les suites possibles, dans l'ordre du cycle de vie. La première est le geste principal. */
+type Suite = { status: string; label: string; Icone: React.ElementType; principal?: boolean };
+const NEXT: Record<string, Suite[]> = {
+  nouvelle:      [{ status: "en_traitement", label: "Mettre en traitement", Icone: Timer, principal: true }],
+  en_traitement: [{ status: "en_livraison", label: "Partie en livraison", Icone: Bike, principal: true },
+                  { status: "livree", label: "Marquer livrée", Icone: PackageCheck }],
+  traitee:       [{ status: "en_livraison", label: "Partie en livraison", Icone: Bike, principal: true },
+                  { status: "livree", label: "Marquer livrée", Icone: PackageCheck }],
+  en_livraison:  [{ status: "livree", label: "Marquer livrée", Icone: PackageCheck, principal: true }],
 };
+
+const RESSORT = { type: "spring", stiffness: 420, damping: 32, mass: 0.8 } as const;
 
 export default function OrderDetail({
   order: base,
@@ -131,225 +139,262 @@ export default function OrderDetail({
   const st = ST[order.status] || ST.nouvelle;
   const retrait = order.fulfillment === "retrait";
 
-  return (
-    <div
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(16,16,18,.45)",
-        display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 0 }}
-      className="sm:!items-center sm:!p-6"
-    >
-      <div style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 720,
-        maxHeight: "92vh", overflow: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.22)" }}>
+  const [monte, setMonte] = useState(false);
+  useEffect(() => setMonte(true), []);
+  const etapes = [
+    { label: "Commande reçue", at: order.created_at, Icone: Inbox },
+    { label: "En préparation", at: order.processing_at, Icone: Timer },
+    { label: "En livraison", at: order.dispatched_at, Icone: Bike },
+    { label: "Livrée", at: order.delivered_at, Icone: PackageCheck },
+  ];
+  const annulee = order.status === "annulee";
 
-        {/* En-tête */}
-        <div style={{ position: "sticky", top: 0, background: "#fff", zIndex: 2, padding: "18px 20px 12px",
-          borderBottom: "1px solid var(--cl-line)", display: "flex", alignItems: "center", gap: 10 }}>
-          <strong style={{ fontSize: 17, color: "var(--cl-ink)" }}>Commande n° {order.ref}</strong>
-          <span style={{ background: st.bg, color: st.fg, borderRadius: 999, padding: "2px 10px",
-            fontSize: 10.5, fontWeight: 800, letterSpacing: .3 }}>
-            {statusLabel(order.status).toUpperCase()}
-          </span>
-          <span style={{ background: "#F4F4F5", color: "var(--cl-sub)", borderRadius: 999,
-            padding: "2px 10px", fontSize: 10.5, fontWeight: 700 }}>
-            {order.source === "site" ? "SITE WEB" : "WHATSAPP"}
-          </span>
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} aria-label="Fermer"
-            style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--cl-sub)" }}>
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+  // Rendu à la racine du document : dans la feuille du tableau de bord, la
+  // fiche passerait sous la barre de navigation.
+  if (!monte) return null;
+  return createPortal(
+    <AnimatePresence>
+      <motion.div key="voile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+        className="fixed inset-0 z-[90] flex items-end justify-end sm:items-stretch sm:p-3"
+        style={{ background: "rgba(25,23,27,0.38)" }}>
+        <motion.aside initial={{ x: 48, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 48, opacity: 0 }} transition={RESSORT}
+          className="od-panneau flex w-full flex-col overflow-hidden rounded-t-[30px] sm:max-w-[600px] sm:rounded-[30px]">
 
-        <div style={{ padding: 20, display: "grid", gap: 18 }}>
-
-          {/* Quand — l'information qui manquait le plus */}
-          <Block title="Quand">
-            <Line label="Commande reçue" value={`${dateTime(order.created_at)} · ${ago(order.created_at)}`} strong />
-            <Line
-              label={retrait ? "Retrait demandé" : "Livraison demandée"}
-              value={order.scheduled_at ? dateTime(order.scheduled_at) : "Dès que possible"}
-              strong={!!order.scheduled_at}
-            />
-          </Block>
-
-          {/* Articles */}
-          <Block title={`Articles · ${items.length}`}>
-            {items.map((it, i) => {
-              const q = Number(it.qty) || 1;
-              const u = Number(it.price) || 0;
-              return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0",
-                  borderBottom: i === items.length - 1 ? "none" : "1px solid #F2F2F2" }}>
-                  <span style={{ minWidth: 26, height: 22, borderRadius: 6, background: "#101012", color: "#C6F24E",
-                    fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {q}×
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--cl-ink)" }}>{it.name}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>
-                      {it.variant ? `${it.variant} · ` : ""}{money(u, order.currency)} l&apos;unité
-                    </div>
-                  </div>
-                  <strong style={{ fontSize: 13.5, whiteSpace: "nowrap" }}>{money(u * q, order.currency)}</strong>
-                </div>
-              );
-            })}
-            <div style={{ marginTop: 10, borderTop: "1px solid var(--cl-line)", paddingTop: 10 }}>
-              <Line label="Sous-total" value={money(sousTotal, order.currency)} />
-              <Line label="Livraison" value={fee > 0 ? money(fee, order.currency) : "Offerte"} />
-              <Line label="Total" value={money(order.total, order.currency)} strong big />
+          {/* En-tête */}
+          <div className="px-6 pb-4 pt-5" style={{ background: "linear-gradient(150deg, #F4F0FF 0%, #fff 70%)" }}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>Commande</p>
+                <h2 className="truncate text-[26px] font-medium tracking-[-0.03em]" style={{ color: "var(--cl-ink)" }}>n° {order.ref}</h2>
+              </div>
+              <button onClick={onClose} aria-label="Fermer"
+                className="od-rond flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full"><X className="h-4 w-4" /></button>
             </div>
-          </Block>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium" style={{ background: st.bg, color: st.fg }}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: st.fg }} />{statusLabel(order.status)}
+              </span>
+              <span className="rounded-full px-3 py-1 text-[12.5px]" style={{ background: "#fff", color: "var(--cl-ink-soft)", boxShadow: "inset 0 0 0 1px var(--cl-line-soft)" }}>
+                {order.source === "site" ? "Site web" : "WhatsApp"}
+              </span>
+              <span className="rounded-full px-3 py-1 text-[12.5px]" style={{ background: "#fff", color: "var(--cl-ink-soft)", boxShadow: "inset 0 0 0 1px var(--cl-line-soft)" }}>
+                {retrait ? "Retrait en boutique" : "Livraison"}
+              </span>
+              <span className="ml-auto text-[24px] font-semibold tracking-[-0.02em] tabular-nums" style={{ color: "var(--cl-ink)" }}>{money(order.total, order.currency)}</span>
+            </div>
+          </div>
 
-          {/* Paiement — annoncé par le client, jamais encaissé ici */}
-          <Block title="Paiement">
-            <Line label="Moyen annoncé" value={order.payment_method || "Non précisé"} strong={!!order.payment_method} />
-            {order.promo_code && <Line label="Code promo" value={order.promo_code} />}
-            {order.note && <Line label="Note" value={order.note} />}
-            <p style={{ marginTop: 6, fontSize: 11.5, color: "var(--cl-sub)" }}>
-              Camille n&apos;encaisse rien : le client annonce comment il paiera, vous confirmez avec lui.
-            </p>
-            {order.doc_url && (
-              <a href={order.doc_url} target="_blank" rel="noreferrer"
-                style={{ display: "inline-block", marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "#2563EB" }}>
-                Bon de commande {order.doc_number ? `n° ${order.doc_number}` : ""} →
-              </a>
-            )}
-          </Block>
+          <div className="flex-1 space-y-3 overflow-y-auto px-4 pb-6 pt-2 sm:px-5">
+            {/* Quand — l'information qui manquait le plus */}
+            <Bloc titre="Quand" Icone={Clock}>
+              <Ligne label="Commande reçue" valeur={dateTime(order.created_at)} sous={ago(order.created_at)} fort />
+              <Ligne label={retrait ? "Retrait demandé" : "Livraison demandée"}
+                valeur={order.scheduled_at ? dateTime(order.scheduled_at) : "Dès que possible"} fort={!!order.scheduled_at}
+                accent={order.scheduled_at ? "ambre" : undefined} />
+            </Bloc>
 
-          {/* L'entreprise qui paie, quand un employé a commandé avec son code */}
-          {(order.company_name || order.company_code) && (
-            <Block title="Compte entreprise">
-              <Line label="Entreprise" value={order.company_name || "—"} strong />
-              <Line label="Code" value={order.company_code || "—"} />
-              <p style={{ marginTop: 6, fontSize: 11.5, color: "var(--cl-sub)" }}>
-                Commande rattachée au compte de l&apos;entreprise : c&apos;est elle qui règle, pas l&apos;employé.
-              </p>
-            </Block>
-          )}
-
-          {/* Client */}
-          <Block title="Client">
-            <Line label="Nom" value={order.customer_name || customer?.display_name || "—"} strong />
-            <Line label="Téléphone" value={phone || "—"} />
-            {customer?.email && <Line label="E-mail" value={customer.email} />}
-            {customer?.company && <Line label="Entreprise" value={customer.company} />}
-            {!!customer?.orders_count && (
-              <Line
-                label="Historique"
-                value={`${customer.orders_count} commande(s)${customer.last_order_at ? ` · dernière ${shortTime(customer.last_order_at)}` : ""}`}
-              />
-            )}
-            {phone && isRealPhone(phone) && (
-              <a href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer"
-                style={{ display: "inline-block", marginTop: 8, padding: "8px 16px", borderRadius: 999,
-                  fontSize: 12.5, fontWeight: 700, background: "#E4F8EC", color: "#0e6b45", textDecoration: "none" }}>
-                Répondre sur WhatsApp
-              </a>
-            )}
-          </Block>
-
-          {/* Livraison */}
-          <Block title={retrait ? "Retrait" : "Livraison"}>
-            <Line label="Mode" value={retrait ? "Le client vient chercher" : "Livraison à l'adresse"} />
-            <Line label="Adresse" value={lieu || "—"} strong={!!lieu} />
-            {hasGeo && <Line label="Position" value={`${Number(order.lat).toFixed(5)}, ${Number(order.lng).toFixed(5)}`} />}
-            {hasGeo && (
-              <>
-                <div style={{ marginTop: 10 }}>
-                  <MapPreview lat={Number(order.lat)} lng={Number(order.lng)} />
-                </div>
-                <button onClick={() => setItinerary(true)}
-                  style={{ marginTop: 8, width: "100%", padding: "9px 12px", borderRadius: 999, border: "none",
-                    background: "#2563EB", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
-                  Lancer l&apos;itinéraire
-                </button>
-              </>
-            )}
-          </Block>
-
-          {/* Suivi */}
-          <Block title="Suivi">
-            {[
-              { label: "Commande reçue", at: order.created_at },
-              { label: "En préparation", at: order.processing_at },
-              { label: "En livraison", at: order.dispatched_at },
-              { label: "Livrée", at: order.delivered_at },
-            ].map((sp, i, all) => (
-              <div key={sp.label} style={{ display: "flex", gap: 8 }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16 }}>
-                  <div style={{ width: 11, height: 11, borderRadius: 6, marginTop: 3,
-                    background: sp.at ? (order.status === "annulee" ? "#c0392b" : "#C6F24E") : "#E4E4E4",
-                    border: sp.at ? "none" : "1px solid #D8D8D8" }} />
-                  {i < all.length - 1 && <div style={{ width: 2, flex: 1, minHeight: 16, background: sp.at ? "#C6F24E" : "#EEE" }} />}
-                </div>
-                <div style={{ paddingBottom: i < all.length - 1 ? 8 : 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: sp.at ? 700 : 500, color: sp.at ? "var(--cl-ink)" : "var(--cl-sub)" }}>
-                    {sp.label}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--cl-sub)" }}>{sp.at ? shortTime(sp.at) : "En attente"}</div>
+            {/* Articles */}
+            <Bloc titre={`Articles · ${items.length}`} Icone={ShoppingBag}>
+              <ul className="space-y-2">
+                {items.map((it, i) => {
+                  const q = Number(it.qty) || 1;
+                  const u = Number(it.price) || 0;
+                  return (
+                    <li key={i} className="flex items-center gap-3 rounded-[18px] p-2 pr-3" style={{ background: "#FAF9FC" }}>
+                      <div className="relative flex-shrink-0">
+                        {it.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={it.image} alt="" className="h-12 w-12 rounded-[14px] object-cover" />
+                        ) : <div className="h-12 w-12 rounded-[14px]" style={{ background: "#EEEBF4" }} />}
+                        <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white px-1 text-[10.5px] font-semibold text-white" style={{ background: "var(--cl-ink)" }}>{q}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-[14px] font-medium leading-snug" style={{ color: "var(--cl-ink)" }}>{it.name}</p>
+                        <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>{it.variant ? `${it.variant} · ` : ""}{money(u, order.currency)} l&apos;unité</p>
+                      </div>
+                      <span className="whitespace-nowrap text-[14px] font-medium tabular-nums" style={{ color: "var(--cl-ink)" }}>{money(u * q, order.currency)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-3 space-y-1 rounded-[18px] p-3.5" style={{ background: "#FAF9FC" }}>
+                <Ligne label="Sous-total" valeur={money(sousTotal, order.currency)} compact />
+                <Ligne label="Livraison" valeur={fee > 0 ? money(fee, order.currency) : "Offerte"} compact />
+                <div className="mt-1.5 flex items-baseline justify-between border-t pt-2.5" style={{ borderColor: "var(--cl-line-soft)" }}>
+                  <span className="text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>Total</span>
+                  <span className="text-[20px] font-semibold tabular-nums" style={{ color: "var(--cl-ink)" }}>{money(order.total, order.currency)}</span>
                 </div>
               </div>
-            ))}
-            {order.status === "annulee" && (
-              <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: "#c0392b" }}>Commande annulée</div>
+            </Bloc>
+
+            {/* Paiement — annoncé par le client, jamais encaissé ici */}
+            <Bloc titre="Paiement" Icone={CreditCard}>
+              <Ligne label="Moyen annoncé" valeur={order.payment_method || "Non précisé"} fort={!!order.payment_method} />
+              {order.promo_code && <Ligne label="Code promo" valeur={order.promo_code} />}
+              {order.note && <Ligne label="Note" valeur={order.note} />}
+              <p className="mt-2 rounded-[14px] px-3 py-2 text-[12px] leading-snug" style={{ background: "#F4F0FF", color: "#4B32B5" }}>
+                Camille n&apos;encaisse rien : le client annonce comment il paiera, vous confirmez avec lui.
+              </p>
+              {order.doc_url && (
+                <a href={order.doc_url} target="_blank" rel="noreferrer"
+                  className="mt-2.5 inline-flex h-10 items-center gap-2 rounded-full px-4 text-[13.5px] font-medium"
+                  style={{ background: "#F4F2F7", color: "var(--cl-ink)" }}>
+                  <FileText className="h-4 w-4" /> Bon de commande {order.doc_number ? `n° ${order.doc_number}` : ""}
+                </a>
+              )}
+            </Bloc>
+
+            {/* L'entreprise qui paie, quand un employé a commandé avec son code */}
+            {(order.company_name || order.company_code) && (
+              <Bloc titre="Compte entreprise" Icone={Building2}>
+                <Ligne label="Entreprise" valeur={order.company_name || "—"} fort />
+                <Ligne label="Code" valeur={order.company_code || "—"} />
+                <p className="mt-2 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>C&apos;est l&apos;entreprise qui règle, pas l&apos;employé.</p>
+              </Bloc>
             )}
-          </Block>
 
-          {loading && <div style={{ fontSize: 11.5, color: "var(--cl-sub)" }}>Chargement du détail…</div>}
-        </div>
+            {/* Client */}
+            <Bloc titre="Client" Icone={UserRound}>
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-[15px] font-semibold"
+                  style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+                  {(order.customer_name || customer?.display_name || "C").trim().charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>{order.customer_name || customer?.display_name || "Client"}</p>
+                  <p className="truncate text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+                    {phone || "Numéro inconnu"}{customer?.orders_count ? ` · ${customer.orders_count} commande${customer.orders_count > 1 ? "s" : ""}` : ""}
+                  </p>
+                </div>
+                {phone && isRealPhone(phone) && (
+                  <>
+                    <a href={`tel:${phone}`} aria-label="Appeler" className="od-rond flex h-10 w-10 items-center justify-center rounded-full"><Phone className="h-4 w-4" /></a>
+                    <a href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer" aria-label="WhatsApp"
+                      className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "#E4F6EA", color: "#1E6A37" }}><MessageCircle className="h-4 w-4" /></a>
+                  </>
+                )}
+              </div>
+              {(customer?.email || customer?.company || customer?.last_order_at) && (
+                <div className="mt-3 space-y-1">
+                  {customer?.email && <Ligne label="E-mail" valeur={customer.email} compact />}
+                  {customer?.company && <Ligne label="Entreprise" valeur={customer.company} compact />}
+                  {customer?.last_order_at && <Ligne label="Dernière commande" valeur={shortTime(customer.last_order_at)} compact />}
+                </div>
+              )}
+            </Bloc>
 
-        {/* Actions */}
-        <div style={{ position: "sticky", bottom: 0, background: "#fff", borderTop: "1px solid var(--cl-line)",
-          padding: "12px 20px", display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {(NEXT[order.status] || []).map((a) => (
-            <button key={a.status}
-              onClick={() => { setOrder((o) => ({ ...o, status: a.status })); onChange(order, a.status); }}
-              style={{ padding: "9px 16px", borderRadius: 999, border: "none", cursor: "pointer",
-                fontSize: 12.5, fontWeight: 700, background: a.bg, color: a.fg }}>
-              {a.label}
-            </button>
-          ))}
-          {order.status !== "annulee" && order.status !== "livree" && (
-            <button onClick={() => { setOrder((o) => ({ ...o, status: "annulee" })); onChange(order, "annulee"); }}
-              style={{ padding: "9px 16px", borderRadius: 999, cursor: "pointer", fontSize: 12.5, fontWeight: 600,
-                border: "1px solid var(--cl-line)", background: "#fff", color: "#c0392b" }}>
-              Annuler
-            </button>
-          )}
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose}
-            style={{ padding: "9px 16px", borderRadius: 999, cursor: "pointer", fontSize: 12.5, fontWeight: 600,
-              border: "1px solid var(--cl-line)", background: "#fff", color: "var(--cl-sub)" }}>
-            Fermer
-          </button>
-        </div>
-      </div>
+            {/* Livraison */}
+            <Bloc titre={retrait ? "Retrait" : "Livraison"} Icone={MapPin}>
+              <p className="flex items-start gap-2 text-[14px]" style={{ color: lieu ? "var(--cl-ink)" : "var(--cl-ink-faint)" }}>
+                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "var(--cl-accent-deep)" }} />
+                {lieu || (retrait ? "Le client vient chercher sa commande" : "Pas d'adresse sur cette commande")}
+              </p>
+              {hasGeo && (
+                <>
+                  <div className="mt-3 overflow-hidden rounded-[20px]">
+                    <MapPreview lat={Number(order.lat)} lng={Number(order.lng)} height={150} radius="20px" />
+                  </div>
+                  <button onClick={() => setItinerary(true)}
+                    className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13.5px] font-medium"
+                    style={{ background: "#F4F2F7", color: "var(--cl-ink)" }}>
+                    <Navigation className="h-4 w-4" /> Lancer l&apos;itinéraire
+                  </button>
+                </>
+              )}
+            </Bloc>
 
-      {itinerary && (
-        <ItineraryMap orderId={String(order.id)} reference={order.ref} address={lieu} onClose={() => setItinerary(false)} />
-      )}
-    </div>
+            {/* Suivi */}
+            <Bloc titre="Suivi" Icone={CalendarClock}>
+              {etapes.map((sp, i) => {
+                const on = !!sp.at;
+                const dernier = i === etapes.length - 1;
+                const couleur = annulee ? "#C2504B" : "var(--cl-accent)";
+                return (
+                  <div key={sp.label} className="flex gap-3">
+                    <div className="flex w-7 flex-col items-center">
+                      <motion.span initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ ...RESSORT, delay: 0.12 + i * 0.06 }}
+                        className="flex h-7 w-7 items-center justify-center rounded-full"
+                        style={{ background: on ? couleur : "#fff", color: on ? "#fff" : "#C9C4D2", boxShadow: on ? "none" : "inset 0 0 0 1.5px #E2DEE9" }}>
+                        {on ? <sp.Icone className="h-3.5 w-3.5" /> : <CircleDot className="h-3.5 w-3.5" />}
+                      </motion.span>
+                      {!dernier && <span className="my-1 w-[2px] flex-1 rounded-full" style={{ minHeight: 14, background: on ? "#D9CEFF" : "#ECE9F1" }} />}
+                    </div>
+                    <div className={dernier ? "pt-1" : "pb-3 pt-1"}>
+                      <p className="text-[14px]" style={{ color: on ? "var(--cl-ink)" : "var(--cl-ink-faint)", fontWeight: on ? 500 : 400 }}>{sp.label}</p>
+                      <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>{on ? shortTime(sp.at) : "En attente"}</p>
+                    </div>
+                  </div>
+                );
+              })}
+              {annulee && <p className="mt-2 text-[13px] font-medium" style={{ color: "#A63D28" }}>Commande annulée</p>}
+            </Bloc>
+
+            {loading && <p className="px-2 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Chargement du détail…</p>}
+          </div>
+
+          {/* Les gestes, toujours à portée */}
+          <div className="flex flex-wrap items-center gap-2 border-t px-5 py-4" style={{ borderColor: "var(--cl-line-soft)" }}>
+            {(NEXT[order.status] || []).map((a) => (
+              <motion.button key={a.status} whileTap={{ scale: 0.97 }}
+                onClick={() => { setOrder((o) => ({ ...o, status: a.status })); onChange(order, a.status); }}
+                className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-[14px] font-medium"
+                style={a.principal ? { background: "var(--cl-ink)", color: "#fff" } : { background: "#F4F2F7", color: "var(--cl-ink)" }}>
+                <a.Icone className="h-4 w-4" /> {a.label}
+              </motion.button>
+            ))}
+            {order.status !== "annulee" && order.status !== "livree" && (
+              <motion.button whileTap={{ scale: 0.97 }}
+                onClick={() => { setOrder((o) => ({ ...o, status: "annulee" })); onChange(order, "annulee"); }}
+                className="inline-flex h-11 items-center gap-2 rounded-full px-4 text-[14px] font-medium"
+                style={{ background: "#fff", color: "#A63D28", boxShadow: "inset 0 0 0 1px #F0D2CB" }}>
+                <X className="h-4 w-4" /> Annuler
+              </motion.button>
+            )}
+            <button onClick={onClose} className="ml-auto hidden h-11 items-center rounded-full px-4 text-[14px] sm:inline-flex" style={{ color: "var(--cl-ink-soft)" }}>Fermer</button>
+          </div>
+        </motion.aside>
+
+        {itinerary && (
+          <ItineraryMap orderId={String(order.id)} reference={order.ref} address={lieu} onClose={() => setItinerary(false)} />
+        )}
+      </motion.div>
+      <style>{`
+        .od-panneau { background: #fff; max-height: 94dvh; box-shadow: -20px 0 60px rgba(25,23,27,0.18); }
+        @media (min-width: 640px) { .od-panneau { max-height: none; height: 100%; } }
+        .od-rond { background: #fff; color: var(--cl-ink); box-shadow: inset 0 0 0 1px var(--cl-line); }
+      `}</style>
+    </AnimatePresence>,
+    document.body
   );
 }
 
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
+function Bloc({ titre, Icone, children }: { titre: string; Icone: React.ElementType; children: React.ReactNode }) {
   return (
-    <section>
-      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: .4, color: "var(--cl-sub)", marginBottom: 8 }}>
-        {title.toUpperCase()}
-      </div>
-      <div style={{ border: "1px solid var(--cl-line)", borderRadius: 12, padding: 14 }}>{children}</div>
+    <section className="rounded-[24px] p-4" style={{ boxShadow: "inset 0 0 0 1px var(--cl-line-soft)" }}>
+      <p className="mb-3 flex items-center gap-2 text-[13px] font-medium" style={{ color: "var(--cl-ink-faint)" }}>
+        <span className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+          <Icone className="h-3.5 w-3.5" />
+        </span>
+        {titre}
+      </p>
+      {children}
     </section>
   );
 }
 
-function Line({ label, value, strong, big }: { label: string; value: string; strong?: boolean; big?: boolean }) {
+function Ligne({ label, valeur, sous, fort, compact, accent }: {
+  label: string; valeur: string; sous?: string; fort?: boolean; compact?: boolean; accent?: "ambre";
+}) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "3px 0" }}>
-      <span style={{ fontSize: 12.5, color: "var(--cl-sub)", flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: big ? 15 : 13, fontWeight: strong || big ? 700 : 500, color: "var(--cl-ink)", textAlign: "right" }}>
-        {value}
+    <div className={"flex items-baseline justify-between gap-4 " + (compact ? "py-0.5" : "py-1.5")}>
+      <span className="flex-shrink-0 text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>{label}</span>
+      <span className="text-right">
+        <span className={"text-[13.5px] " + (fort ? "font-medium" : "")}
+          style={accent === "ambre" ? { color: "#8A5A00", background: "#FDF1DC", padding: "2px 10px", borderRadius: 999 } : { color: "var(--cl-ink)" }}>
+          {valeur}
+        </span>
+        {sous && <span className="block text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>{sous}</span>}
       </span>
     </div>
   );
@@ -373,13 +418,15 @@ export function MapPreview({ lat, lng, height = 120, radius = "10px" }: {
   const uris = [-1, 0, 1].map((d) => `${TILE_HOST}/${ZOOM}/${tx + d}/${ty}.png`);
 
   return (
-    <div style={{ position: "relative", height, overflow: "hidden", background: "#E8E8E8",
-      border: "1px solid var(--cl-line)", borderRadius: radius }}>
+    <div style={{ position: "relative", height, overflow: "hidden", background: "#EDEDF2", borderRadius: radius }}>
       <div style={{ display: "flex", position: "absolute", top: -(fy * TILE - height / 2), left: 0 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {uris.map((u) => <img key={u} src={u} alt="" width={TILE} height={TILE} />)}
       </div>
-      <div style={{ position: "absolute", left: TILE + fx * TILE - 7, top: height / 2 - 20, fontSize: 22 }}>📍</div>
+      <div style={{ position: "absolute", left: TILE + fx * TILE - 14, top: height / 2 - 14, width: 28, height: 28, borderRadius: 999,
+        background: "rgba(124,90,248,0.22)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ width: 14, height: 14, borderRadius: 999, background: "#7C5AF8", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(70,40,190,.4)" }} />
+      </div>
       <div style={{ position: "absolute", right: 4, bottom: 1, fontSize: 8, color: "#5A5A5A" }}>
         © OpenStreetMap
       </div>

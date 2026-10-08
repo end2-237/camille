@@ -202,11 +202,11 @@ export function Coquille({ children }: { children: React.ReactNode }) {
            sous elle, pour que le contenu s'efface avant de la toucher au lieu
            d'avoir l'air collé dessous. */
         .coq-entete::before {
-          content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: -28px; z-index: -1; pointer-events: none;
-          background: linear-gradient(to bottom, #fff 0%, #fff 62%, rgba(255,255,255,0) 100%);
+          content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: -10px; z-index: -1; pointer-events: none;
+          background: linear-gradient(to bottom, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.45) 55%, rgba(255,255,255,0) 100%);
           opacity: 0; transition: opacity .35s ease;
         }
-        .coq-entete[data-accueil]::before { background: linear-gradient(to bottom, #A792F4 0%, rgba(167,146,244,0.92) 62%, rgba(167,146,244,0) 100%); }
+        .coq-entete[data-accueil]::before { background: linear-gradient(to bottom, rgba(167,146,244,0.55) 0%, rgba(167,146,244,0.3) 55%, rgba(167,146,244,0) 100%); }
         .coq-entete[data-compacte]::before { opacity: 1; }
         .coq-barre {
           pointer-events: auto; padding: 0 20px; border-radius: 0; background: transparent;
@@ -228,11 +228,12 @@ export function Coquille({ children }: { children: React.ReactNode }) {
         .coq-nouvel-plus { width: 28px; height: 28px; }
 
         .coq-entete[data-compacte] .coq-barre {
-          margin: 8px 12px 0; padding: 0 10px 0 16px; border-radius: 28px;
-          background: rgba(146,120,240,0.80); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+          margin: 12px 14px 0; padding: 0 10px 0 16px; border-radius: 28px;
+          background: rgba(146,120,240,0.86); backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2);
           box-shadow: 0 14px 34px rgba(60,30,170,0.24), inset 0 0 0 1px rgba(255,255,255,0.28);
         }
-        @media (min-width: 768px) { .coq-entete[data-compacte] .coq-barre { border-radius: 999px; margin: 10px 24px 0; } }
+        @media (min-width: 768px) { .coq-entete[data-compacte] .coq-barre { border-radius: 999px; margin: 18px 32px 0; } }
+        @media (min-width: 1280px) { .coq-entete[data-compacte] .coq-barre { margin: 18px 48px 0; } }
         .coq-entete[data-compacte] .coq-rang { height: 54px; }
         .coq-entete[data-compacte] .coq-rang-mobile { padding-bottom: 8px; }
         .coq-entete[data-compacte] .coq-menu { padding: 3px; }
