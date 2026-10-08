@@ -157,6 +157,32 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       }
     }
 
+    // ── Statut : valeurs connues seulement, et sortir un agent gratuit de
+    //    l'archive ne doit pas contourner la limite d'un agent gratuit par compte.
+    if (updates.status !== undefined) {
+      if (!["draft", "active", "paused", "archived"].includes(updates.status)) {
+        return NextResponse.json({ error: "Statut inconnu" }, { status: 400 });
+      }
+      if (updates.status !== "archived" && !user.is_admin) {
+        const r = await query(
+          `SELECT
+             (SELECT COALESCE(plan, 'free') = 'free' AND status = 'archived'
+                FROM camille.agents WHERE id = $1 AND user_id = $2) AS gratuit_archive,
+             (SELECT COUNT(*)::int FROM camille.agents
+               WHERE user_id = $2 AND id <> $1 AND status <> 'archived'
+                 AND COALESCE(plan, 'free') = 'free') AS autres`,
+          [agentId, user.id]
+        );
+        const maxGratuits = Math.max(0, Number(process.env.MAX_AGENTS_GRATUITS ?? 1));
+        if (r.rows[0]?.gratuit_archive && r.rows[0].autres >= maxGratuits) {
+          return NextResponse.json(
+            { error: "Votre compte a déjà un agent gratuit en service : passez-en un à un forfait payant pour réactiver celui-ci.", code: "limite_agents_gratuits" },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     // Flat scalar fields
     if (updates.status !== undefined)       flat.status = updates.status;
     if (updates.target_model !== undefined) flat.target_model = updates.target_model;
@@ -214,6 +240,11 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       if (ALLOWED_PATCH_FIELDS.has(k) && flat[k] === undefined) flat[k] = v;
     }
 
+    // Le webhook personnalisé (clients « sur devis ») est posé par l'équipe :
+    // ouvert au commerçant, il suffisait de le pointer vers le workflow N3 pour
+    // obtenir un niveau que son forfait n'inclut pas.
+    if (!user.is_admin) delete flat.n8n_webhook_url;
+
     const filtered = Object.entries(flat).filter(([key]) => ALLOWED_PATCH_FIELDS.has(key));
     if (filtered.length === 0) {
       return NextResponse.json({ error: "Aucun champ valide" }, { status: 400 });
@@ -242,7 +273,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     // ── Auto-config du webhook si le niveau ou le webhook perso a changé ──
     //   → chaque session de l'agent pointe vers le bon workflow (N1/N2/N3),
     //     ou vers le webhook personnalisé (clients « sur devis »). Zéro manuel.
-    if (updates.level !== undefined || updates.n8n_webhook_url !== undefined) {
+    if (updates.level !== undefined || (user.is_admin && updates.n8n_webhook_url !== undefined)) {
       try {
         const agentRow = result.rows[0];
         const lvl = Number(agentRow.level ?? 1);

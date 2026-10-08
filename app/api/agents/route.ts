@@ -100,6 +100,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
     }
 
+    // Un seul agent gratuit en service par compte (MAX_AGENTS_GRATUITS pour
+    // ajuster) : chaque agent porte son propre forfait, et un nouvel agent
+    // gratuit était un nouveau quota gratuit. Les agents payants, eux, ne sont
+    // pas plafonnés — chacun est payé.
+    const maxGratuits = Math.max(0, Number(process.env.MAX_AGENTS_GRATUITS ?? 1));
+    if (!user.is_admin) {
+      const gratuits = await query(
+        `SELECT COUNT(*)::int AS n FROM camille.agents
+          WHERE user_id = $1 AND status <> 'archived' AND COALESCE(plan, 'free') = 'free'`,
+        [user.id]
+      );
+      if (gratuits.rows[0].n >= maxGratuits) {
+        return NextResponse.json(
+          {
+            error:
+              "Votre compte a déjà un agent sur le forfait gratuit. Passez-le à un forfait payant " +
+              "(Abonnement et facturation) pour créer un autre agent.",
+            code: "limite_agents_gratuits",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const compiledPrompt = typeof systemPrompt === "string"
       ? systemPrompt
       : (systemPrompt as SystemPromptConfig).compiled_prompt ?? JSON.stringify(systemPrompt);

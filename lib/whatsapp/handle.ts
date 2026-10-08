@@ -18,6 +18,7 @@ import { query } from "@/lib/db";
 import { sectorProfile, sertDesRepas } from "@/lib/sectorProfiles";
 import * as meta from "./meta";
 import { avecAgent } from "./identifiants";
+import { etatQuota } from "@/lib/quota";
 import { repondreBoutique } from "./boutique";
 import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
 
@@ -287,9 +288,27 @@ export async function handleIncoming(msg: IncomingMessage): Promise<void> {
   return avecAgent(agent.id, () => traiterPourAgent(msg, agent, phone));
 }
 
+/** Clients déjà prévenus que l'agent est indisponible (agent:téléphone → instant). */
+const PREVENUS = new Map<string, number>();
+
 async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: string): Promise<void> {
   if (await humainEnCours(agent.id, phone)) {
     console.log("[meta] humain en cours pour", phone, "— l'agent se tait");
+    return;
+  }
+
+  // Abonnement et quota : la même règle que n8n (lib/quota.ts). Un agent
+  // expiré ou à court de tokens se tait ; le client est prévenu une fois par
+  // période de 6 h plutôt qu'à chaque message.
+  const droit = await etatQuota(agent.id);
+  if (!droit.allowed) {
+    console.log(`[meta] agent ${agent.id} muet : ${droit.reason}`);
+    const cle = `${agent.id}:${phone}`;
+    const dernier = PREVENUS.get(cle) || 0;
+    if (Date.now() - dernier > 6 * 3600_000 && droit.message) {
+      PREVENUS.set(cle, Date.now());
+      await meta.sendText(phone, droit.message).catch(() => {});
+    }
     return;
   }
 

@@ -9,6 +9,7 @@ import { currentPeriod } from "@/lib/plans";
 import { getPlanLimitDB } from "@/lib/plans-db";
 import { subscriptionState } from "@/lib/subscription";
 import { alerterQuota, alerterEcheance } from "@/lib/usage-alerts";
+import { consommation } from "@/lib/quota";
 
 export async function POST(req: NextRequest) {
   if (!appelInterne(req)) return refusInterne();
@@ -114,17 +115,12 @@ export async function POST(req: NextRequest) {
     if (owner) {
       try {
         const limit = await getPlanLimitDB(owner.plan ?? "free");
-        const usedRes = await query(
-          `SELECT COALESCE(total_tokens, 0) AS total
-             FROM camille.token_usage WHERE agent_id = $1 AND period = $2`,
-          [agentId, period]
-        );
         await alerterQuota({
           agentId,
           userId: owner.user_id,
           agentName: owner.name,
           period,
-          used: Number(usedRes.rows[0]?.total ?? 0),
+          used: await consommation(agentId, owner.user_id, owner.plan ?? "free", period),
           limit,
         });
 
