@@ -126,7 +126,8 @@ export async function commandeEnCours(agentId: string, phone: string): Promise<C
   try {
     const r = await query(
       `SELECT ref, status, fulfillment, items, delivery_fee, total, currency, address,
-              to_jsonb(o)->>'place_label' AS place_label
+              to_jsonb(o)->>'place_label' AS place_label,
+              to_jsonb(o)->>'scheduled_at' AS scheduled_at
          FROM camille.orders o
         WHERE agent_id = $1
           AND regexp_replace(COALESCE(contact_phone, ''), '[^0-9]', '', 'g') = $2

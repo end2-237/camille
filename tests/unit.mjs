@@ -749,6 +749,60 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("adresse non https (local) → aucune animation", urlAnimation("livree", { NEXT_PUBLIC_APP_URL: "http://localhost:3000" }), null);
 }
 
+// ═══ restaurant — options par plat, heure, fermeture ═══════════════════════
+{
+  groupe("restaurant — options, créneaux, heure demandée");
+  const R = await import(`${DIST}/whatsapp/restaurant.js`);
+  const opts = R.normaliserOptions([
+    { name: "Accompagnement", required: true, choices: ["Plantain", "Frites:500", { label: "Riz", price: 0 }, "plantain"] },
+    { name: "Piment", required: false, choices: ["Peu", "Beaucoup"] },
+    { name: "", choices: ["x"] },
+    { name: "Vide", choices: [] },
+  ]);
+  eq("options : groupes vides et sans nom écartés", opts.map((g) => g.name), ["Accompagnement", "Piment"]);
+  eq("options : « Frites:500 » → prix 500, doublon « plantain » écarté",
+    opts[0].choices, [{ label: "Plantain", price: 0 }, { label: "Frites", price: 500 }, { label: "Riz", price: 0 }]);
+  eq("options : facultatif reconnu", opts[1].required, false);
+
+  const ligne = { name: "Poulet DG", qty: 2, price: 3500, groupes: opts };
+  eq("une question par groupe et par ligne", R.questionsPour([ligne, { name: "Jus", qty: 1, price: 500 }]),
+    [{ ligne: 0, groupe: 0 }, { ligne: 0, groupe: 1 }]);
+  const l1 = R.appliquerChoix(ligne, 0, 1);
+  eq("frites : supplément ajouté au prix UNITAIRE", l1.price, 4000);
+  eq("frites : écrit sur la ligne pour la cuisine", l1.variant, "Frites");
+  const l2 = R.appliquerChoix(l1, 1, -1);
+  eq("« Sans » sur un groupe facultatif → « Sans piment »", l2.variant, "Frites, Sans piment");
+  eq("« Sans » refusé sur un groupe obligatoire", R.appliquerChoix(ligne, 0, -1).variant, undefined);
+
+  eq("liste : « Sans » seulement si facultatif", R.lignesListe(opts[1]).map((r) => r.title), ["Peu", "Beaucoup", "Sans"]);
+  eq("liste : le supplément en description", R.lignesListe(opts[0])[1].description, "+ 500 FCFA");
+  eq("texte : « frites » → Frites", R.lireChoixTexte(opts[0], "frites stp"), 1);
+  eq("texte : « 3 » → le 3e choix", R.lireChoixTexte(opts[0], "3"), 2);
+  eq("texte : « sans » → -1 si facultatif", R.lireChoixTexte(opts[1], "sans"), -1);
+  eq("texte : inconnu → null", R.lireChoixTexte(opts[0], "pizza"), null);
+
+  // Douala = UTC+1. 10:10 UTC = 11:10 locale.
+  const midi = new Date("2026-10-08T10:10:00Z");
+  const c = R.creneaux("11h - 22h", midi, 1, 3);
+  eq("créneaux : 30 min de délai, arrondis à la demi-heure",
+    c.map((d) => R.libelleCreneau(d, midi, 1)), ["Aujourd'hui 12:00", "Aujourd'hui 12:30", "Aujourd'hui 13:00"]);
+  const nuit = new Date("2026-10-08T22:30:00Z"); // 23:30 locale, fermé
+  eq("fermé la nuit : premiers créneaux à l'ouverture, demain",
+    R.creneaux("11h - 22h", nuit, 1, 2).map((d) => R.libelleCreneau(d, nuit, 1)), ["Demain 11:00", "Demain 11:30"]);
+  eq("ouvert maintenant ?", [R.ouvertMaintenant("11h - 22h", midi, 1), R.ouvertMaintenant("11h - 22h", nuit, 1)], [true, false]);
+  eq("horaires illisibles → on ne sait pas", R.ouvertMaintenant("sur rendez-vous", midi, 1), null);
+
+  const lire = (t, now = midi) => { const r = R.lireHeureDemandee(t, "11h - 22h", now, 1); return r && [R.libelleCreneau(r.quand, now, 1), r.hors]; };
+  eq("« pour 13h »", lire("pour 13h"), ["Aujourd'hui 13:00", false]);
+  eq("« à 20h30 »", lire("à 20h30 stp"), ["Aujourd'hui 20:30", false]);
+  eq("« midi » à 11h10 → aujourd'hui", lire("midi"), ["Aujourd'hui 12:00", false]);
+  eq("« ce soir 8h » → 20:00", lire("ce soir 8h"), ["Aujourd'hui 20:00", false]);
+  eq("« demain 12h »", lire("demain 12h"), ["Demain 12:00", false]);
+  eq("heure passée → demain", lire("10h"), ["Demain 10:00", true]);
+  eq("« 23h » → hors horaires", lire("23h")[1], true);
+  eq("pas d'heure → null", lire("le plus vite possible"), null);
+}
+
 // ═══ voix — un vocal devient un message écrit ══════════════════════════════
 {
   groupe("voix — transcription des vocaux");

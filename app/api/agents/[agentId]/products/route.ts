@@ -51,7 +51,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     "stock", "min_order", "rating", "image_url", "product_url", "active", "sort_order",
     "variants", "images",
   ];
-  const colonnes = [...BASE, "daily_menu", "available_days"];
+  // `options` (restaurant : accompagnement, sauce…) arrive par migration_restaurant.sql.
+  const colonnes = [...BASE, "daily_menu", "available_days", "options"];
   const inserer = (cols: string[], valeurs: unknown[]) =>
     query(
       `INSERT INTO camille.products (${cols.join(", ")})
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       coerce("images", b.images),
       coerce("daily_menu", b.daily_menu),
       coerce("available_days", b.available_days),
+      coerce("options", b.options),
     ];
     try {
       r = await inserer(colonnes, valeurs);

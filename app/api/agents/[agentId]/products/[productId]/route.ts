@@ -13,7 +13,7 @@ type RouteContext = { params: Promise<{ agentId: string; productId: string }> };
 const FIELDS = new Set([
   "name", "description", "price", "price_max", "currency", "category",
   "tags", "stock", "min_order", "rating", "image_url", "product_url", "active", "sort_order",
-  "variants", "images", "daily_menu", "available_days",
+  "variants", "images", "daily_menu", "available_days", "options",
 ]);
 
 async function assertOwner(req: NextRequest, agentId: string) {

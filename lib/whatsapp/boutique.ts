@@ -63,6 +63,11 @@ import { sendOrderDocument } from "@/lib/facturation";
 import { notify } from "@/lib/webhooks";
 import { sansAccent, chercher, veutToutVoir, estUneQuestion } from "./recherche";
 import { lirePrix } from "./prix";
+import {
+  appliquerChoix, creneaux, libelleCreneau, lignesListe, lireChoixTexte, lireHeureDemandee,
+  normaliserOptions, ouvertMaintenant, questionsPour, type GroupeOptions,
+} from "./restaurant";
+import { lireHoraires } from "@/lib/horaires";
 import { formatVitrine, formatNaturel, noterEnvoi } from "./repetition";
 import {
   articlesPour, libelleVariante, produitParent, retailerAffiche, varianteDemandee,
@@ -89,6 +94,10 @@ const B = {
   rode: "cam:rode",
   ok: "cam:ok",
   encore: "cam:encore",
+  asap: "cam:asap",
+  plustard: "cam:plustard",
+  /** Préfixe d'un créneau choisi : « cam:heure:<ms> ». */
+  heure: "cam:heure:",
 } as const;
 
 /**
@@ -123,6 +132,8 @@ export type Produit = {
   optionsTexte?: string;
   /** Chaque variante envoyable : la fiche à montrer quand le client en nomme une. */
   variantes?: VarianteAffichable[];
+  /** Les options du plat (accompagnement, sauce…), demandées après le panier. */
+  groupes?: GroupeOptions[];
 };
 
 /**
@@ -184,7 +195,8 @@ async function catalogue(agentId: string): Promise<Produit[]> {
     const r = await query(
       `SELECT id, name, price, COALESCE(currency,'XAF') AS currency, category, stock, image_url,
               to_jsonb(p)->>'meta_retailer_id' AS retailer,
-              COALESCE(to_jsonb(p)->'variants', '[]'::jsonb) AS variants
+              COALESCE(to_jsonb(p)->'variants', '[]'::jsonb) AS variants,
+              COALESCE(to_jsonb(p)->'options', '[]'::jsonb) AS options
          FROM camille.products p
         WHERE agent_id = $1 AND active = true
         ORDER BY sort_order ASC, created_at DESC
@@ -202,6 +214,7 @@ async function catalogue(agentId: string): Promise<Produit[]> {
         stock: x.stock != null ? Number(x.stock) : null,
         image_url: (x.image_url as string) || null,
         variants: Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null,
+        groupes: normaliserOptions(x.options),
         ...optionsDe(Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null),
         // Un produit publié avec ses variations n'existe chez Meta QUE sous
         // « <id>:<option> » : l'identifiant du parent donnerait « product not
@@ -553,52 +566,84 @@ async function envoyerTuto(ctx: Contexte, resto: boolean) {
 
 type LignePanier = {
   productId?: string; name: string; variant?: string; qty: number; price: number; currency: string; image?: string;
+  /** Les options du plat (restaurant), le temps de les demander. Jamais copiées sur la commande. */
+  groupes?: GroupeOptions[];
+  choix?: string[];
+};
+type EtapePanier = "options" | "heure" | "mode" | "adresse";
+type EtatPanier = {
+  /** Les questions d'options, et celle qu'on attend. */
+  q?: { ligne: number; groupe: number }[];
+  i?: number;
+  /** L'heure de commande : ISO, ou null pour « dès que possible ». */
+  quand?: string | null;
+  quandChoisi?: boolean;
 };
 type PanierEnAttente = {
-  etape: "mode" | "adresse"; items: LignePanier[]; note: string; contactName: string;
+  etape: EtapePanier; items: LignePanier[]; note: string; contactName: string; etat: EtatPanier;
 };
 
 /** Un panier n'attend pas indéfiniment : au-delà, il ne correspond plus à rien. */
 const PANIER_TTL = "2 hours";
 
+/**
+ * Met le panier de côté. Renvoie false si la table d'attente manque, et
+ * marque `etat` comme indisponible si seule la colonne `etat` manque
+ * (migration_restaurant.sql) : on saute alors options et heure.
+ */
 async function garderPanier(agentId: string, phone: string, p: PanierEnAttente): Promise<boolean> {
-  try {
-    await query(
-      `INSERT INTO camille.meta_paniers (agent_id, phone, etape, items, note, contact_name, created_at)
+  const avecEtat = `INSERT INTO camille.meta_paniers (agent_id, phone, etape, items, note, contact_name, etat, created_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, now())
+       ON CONFLICT (agent_id, phone) DO UPDATE
+         SET etape = EXCLUDED.etape, items = EXCLUDED.items, note = EXCLUDED.note,
+             contact_name = EXCLUDED.contact_name, etat = EXCLUDED.etat, created_at = now()`;
+  const sansEtat = `INSERT INTO camille.meta_paniers (agent_id, phone, etape, items, note, contact_name, created_at)
        VALUES ($1, $2, $3, $4::jsonb, $5, $6, now())
        ON CONFLICT (agent_id, phone) DO UPDATE
          SET etape = EXCLUDED.etape, items = EXCLUDED.items, note = EXCLUDED.note,
-             contact_name = EXCLUDED.contact_name, created_at = now()`,
-      [agentId, phone, p.etape, JSON.stringify(p.items), p.note || null, p.contactName || null]
-    );
+             contact_name = EXCLUDED.contact_name, created_at = now()`;
+  const base = [agentId, phone, p.etape, JSON.stringify(p.items), p.note || null, p.contactName || null];
+  try {
+    await query(avecEtat, [...base, JSON.stringify(p.etat || {})]);
     return true;
   } catch (e) {
+    if ((e as { code?: string }).code === "42703") {
+      try {
+        await query(sansEtat, base);
+        etatIndisponible = true;
+        return true;
+      } catch { /* on tombe sur le cas général ci-dessous */ }
+    }
     console.warn("[boutique] panier non mis en attente (migration_meta_paniers.sql ?) :", (e as Error).message);
     return false;
   }
 }
+/** La colonne `etat` manque : options et heure ne peuvent pas être suivies. */
+let etatIndisponible = false;
 
 async function lirePanier(agentId: string, phone: string): Promise<PanierEnAttente | null> {
   try {
     const r = await query(
-      `SELECT etape, items, note, contact_name FROM camille.meta_paniers
+      `SELECT etape, items, note, contact_name, to_jsonb(m)->'etat' AS etat FROM camille.meta_paniers m
         WHERE agent_id = $1 AND phone = $2 AND created_at > now() - interval '${PANIER_TTL}'`,
       [agentId, phone]
     );
     const row = r.rows[0];
     if (!row) return null;
+    const etape: EtapePanier = ["options", "heure", "adresse"].includes(row.etape) ? row.etape : "mode";
     return {
-      etape: row.etape === "adresse" ? "adresse" : "mode",
+      etape,
       items: (row.items || []) as LignePanier[],
       note: row.note || "",
       contactName: row.contact_name || "",
+      etat: (row.etat && typeof row.etat === "object" ? row.etat : {}) as EtatPanier,
     };
   } catch {
     return null; // table absente : aucun panier en attente
   }
 }
 
-async function etapePanier(agentId: string, phone: string, etape: "mode" | "adresse") {
+async function etapePanier(agentId: string, phone: string, etape: EtapePanier) {
   await query(
     "UPDATE camille.meta_paniers SET etape = $3 WHERE agent_id = $1 AND phone = $2",
     [agentId, phone, etape]
@@ -615,8 +660,8 @@ function recapPanier(items: LignePanier[], cur: string): { texte: string; total:
   return { texte: items.map((l) => `• ${l.qty} × ${l.name}${l.variant ? ` (${l.variant})` : ""}`).join("\n"), total };
 }
 
-/** Le panier natif reçu : on le met de côté et on demande comment le recevoir. */
-async function recevoirPanier(ctx: Contexte) {
+/** Le panier natif reçu : on le met de côté, puis on pose les questions utiles. */
+async function recevoirPanier(ctx: Contexte, resto: boolean) {
   const { agent, msg, phone } = ctx;
   const items = msg.order?.items || [];
   if (!items.length) return;
@@ -646,46 +691,156 @@ async function recevoirPanier(ctx: Contexte) {
       // La photo du catalogue : c'est ce qui permet au vendeur de reconnaître
       // l'article d'un coup d'œil au moment de le préparer.
       image: p?.image_url || undefined,
+      ...(p?.groupes?.length ? { groupes: p.groupes } : {}),
     };
   });
 
   const panier: PanierEnAttente = {
     etape: "mode", items: lignes, note: msg.order?.note || "", contactName: msg.contactName || "",
+    etat: { q: questionsPour(lignes), i: 0 },
   };
 
   // Il vient de commander : il sait commander. Lui proposer un tutoriel au
   // message suivant serait absurde.
   await marquerAccueilli(agent.id, phone);
 
-  // Pas de livraison chez ce commerçant : rien à demander, c'est un retrait.
-  if (!agent.delivery_enabled) return finaliserPanier(ctx, panier, { mode: "retrait" });
-
-  // Base sans table d'attente : l'ancien parcours (commande puis position).
+  // Base sans table d'attente : l'ancien parcours, sans questions.
   if (!(await garderPanier(agent.id, phone, panier))) {
+    if (!agent.delivery_enabled) return finaliserPanier(ctx, panier, { mode: "retrait" });
     await finaliserPanier(ctx, panier, { mode: "livraison" });
     return demanderPosition(ctx);
   }
+  if (etatIndisponible) panier.etat = { quandChoisi: true };
+  return avancerPanier(ctx, panier, resto);
+}
 
-  const cur = lignes[0]?.currency || "XAF";
-  const { texte, total } = recapPanier(lignes, cur);
+/**
+ * La question suivante pour ce panier, dans l'ordre où un serveur la poserait :
+ * les options de chaque plat, puis « pour quand ? » (restaurant), puis
+ * « livraison ou retrait ? ». Quand il n'y a plus rien à demander, la commande
+ * est passée.
+ */
+async function avancerPanier(ctx: Contexte, panier: PanierEnAttente, resto: boolean): Promise<void> {
+  const { agent, phone } = ctx;
+  const e = panier.etat || {};
+  const cur = panier.items[0]?.currency || "XAF";
+
+  // 1. Les options, une question à la fois.
+  const q = e.q || [];
+  const i = e.i || 0;
+  if (i < q.length) {
+    const { ligne, groupe } = q[i];
+    const l = panier.items[ligne];
+    const g = l?.groupes?.[groupe];
+    if (!l || !g) {
+      // Question devenue sans objet : on passe à la suivante.
+      return avancerPanier(ctx, { ...panier, etat: { ...e, i: i + 1 } }, resto);
+    }
+    panier.etape = "options";
+    await garderPanier(agent.id, phone, panier);
+    const r = await meta.sendList(
+      phone,
+      `*${l.name}*${l.qty > 1 ? ` ×${l.qty}` : ""} — ${g.name.toLowerCase()} ?` +
+        (g.required ? "" : "\n_Facultatif : choisis « Sans » si tu n'en veux pas._"),
+      "Choisir",
+      [{ title: g.name, rows: lignesListe(g, cur) }]
+    );
+    if (!r.ok) {
+      console.error("[boutique] liste d'options refusée :", r.error);
+      await meta.sendText(phone, `${l.name} — ${g.name} : ${g.choices.map((c, k) => `${k + 1}. ${c.label}`).join(", ")}. Réponds avec ton choix.`);
+    }
+    await tracer(agent.id, phone, "assistant", `[option] ${l.name} — ${g.name}`);
+    return;
+  }
+
+  // 2. Pour quand ? Seulement au restaurant, où l'heure compte.
+  if (resto && !e.quandChoisi) {
+    panier.etape = "heure";
+    await garderPanier(agent.id, phone, panier);
+    return demanderHeure(ctx);
+  }
+
+  // 3. Livraison ou retrait ?
+  if (!agent.delivery_enabled) return finaliserPanier(ctx, panier, { mode: "retrait" });
+  panier.etape = "mode";
+  await garderPanier(agent.id, phone, panier);
+  const { texte, total } = recapPanier(panier.items, cur);
   const frais = agent.delivery_fee ? Number(agent.delivery_fee) : 0;
+  const quand = e.quand ? `\nPour : *${libelleCreneau(new Date(e.quand))}*` : "";
   // Des boutons de réponse, pas le bouton de position : ils s'affichent sur
   // téléphone ET sur ordinateur.
   const r = await meta.sendButtons(
     phone,
-    `🛒 Ton panier\n\n${texte}\n\nSous-total : *${money(total, cur)}*` +
-      (frais ? `\n_Livraison : ${money(frais, cur)}_` : "") +
+    `Ton panier\n\n${texte}\n\nSous-total : *${money(total, cur)}*` +
+      (frais ? `\n_Livraison : ${money(frais, cur)}_` : "") + quand +
       `\n\nComment veux-tu le recevoir ?`,
     [
-      { id: B.livrer, title: "🛵 Me faire livrer" },
-      { id: B.retirer, title: "🏪 Je passe retirer" },
+      { id: B.livrer, title: "Me faire livrer" },
+      { id: B.retirer, title: "Je passe retirer" },
     ]
   );
   if (!r.ok) {
     console.error("[boutique] boutons livraison/retrait refusés :", r.error);
-    await meta.sendText(phone, "Écris *livrer* pour te faire livrer, ou *retirer* pour passer le chercher 🙂");
+    await meta.sendText(phone, "Écris *livrer* pour te faire livrer, ou *retirer* pour passer le chercher.");
   }
   await tracer(agent.id, phone, "assistant", `[panier en attente] ${money(total, cur)}`);
+}
+
+/** Le client a choisi une option : on l'applique à la ligne, et on passe à la suite. */
+async function repondreOption(ctx: Contexte, panier: PanierEnAttente, choix: number, resto: boolean) {
+  const e = panier.etat || {};
+  const q = (e.q || [])[e.i || 0];
+  if (!q || !Number.isFinite(choix)) return avancerPanier(ctx, panier, resto);
+  const items = panier.items.slice();
+  items[q.ligne] = appliquerChoix(items[q.ligne], q.groupe, choix);
+  await tracer(ctx.agent.id, ctx.phone, "user", `[option] ${items[q.ligne].variant || ""}`);
+  return avancerPanier(ctx, { ...panier, items, etat: { ...e, i: (e.i || 0) + 1 } }, resto);
+}
+
+/** L'heure de commande est choisie (null = dès que possible). Fermé : on programme. */
+async function choisirHeure(ctx: Contexte, panier: PanierEnAttente, quand: Date | null, resto: boolean) {
+  if (!quand && ouvertMaintenant(ctx.agent.business_hours) === false) return demanderHeure(ctx);
+  if (quand && Number.isNaN(quand.getTime())) return demanderHeure(ctx);
+  return avancerPanier(ctx, {
+    ...panier, etat: { ...panier.etat, quand: quand ? quand.toISOString() : null, quandChoisi: true },
+  }, resto);
+}
+
+/** « Pour quand ? » — ou, restaurant fermé, « à quelle heure veux-tu la programmer ? ». */
+async function demanderHeure(ctx: Contexte, intro = "") {
+  const { agent, phone } = ctx;
+  const ouvert = ouvertMaintenant(agent.business_hours);
+  if (ouvert === false || intro) {
+    const ho = lireHoraires(agent.business_hours);
+    const corps =
+      intro ||
+      `On est fermé pour le moment${ho ? ` (ouvert de ${heureLisible(ho.ouvre)} à ${heureLisible(ho.ferme)})` : ""}.\n` +
+        "Choisis l'heure à laquelle tu veux ta commande, on la prépare pour ce moment-là.";
+    return envoyerCreneaux(ctx, corps);
+  }
+  const r = await meta.sendButtons(phone, "C'est pour quand ?", [
+    { id: B.asap, title: "Dès que possible" },
+    { id: B.plustard, title: "Programmer" },
+  ]);
+  if (!r.ok) await meta.sendText(phone, "C'est pour maintenant, ou pour une heure précise (ex. : 13h) ?");
+  await tracer(agent.id, phone, "assistant", "[pour quand ?]");
+}
+
+async function envoyerCreneaux(ctx: Contexte, corps: string) {
+  const { agent, phone } = ctx;
+  const liste = creneaux(agent.business_hours);
+  const r = await meta.sendList(phone, `${corps}\n_Tu peux aussi écrire l'heure, ex. : 13h30._`, "Choisir l'heure", [
+    { title: "Créneaux", rows: liste.map((d) => ({ id: `${B.heure}${d.getTime()}`, title: libelleCreneau(d) })) },
+  ]);
+  if (!r.ok) await meta.sendText(phone, `${corps}\nÉcris l'heure qui t'arrange (ex. : 13h30).`);
+  await tracer(agent.id, phone, "assistant", "[créneaux proposés]");
+}
+
+/** 8.5 → « 8h30 ». */
+function heureLisible(x: number): string {
+  const h = Math.floor(x);
+  const m = Math.round((x - h) * 60);
+  return `${h}h${m ? String(m).padStart(2, "0") : ""}`;
 }
 
 /** Le panier devient une commande, avec tout ce qu'il faut pour la préparer. */
@@ -696,9 +851,19 @@ async function finaliserPanier(
 ) {
   const { agent, phone } = ctx;
   const livraison = opts.mode === "livraison";
+  // Les options ont servi : la commande garde le choix (dans `variant`) et le
+  // prix, pas la carte des possibles.
+  const items = panier.items.map((l) => {
+    const c = { ...l };
+    delete c.groupes;
+    delete c.choix;
+    return c;
+  });
+  const quand = panier.etat?.quand || null;
   const res = await createOrder({
     agentId: agent.id,
-    items: panier.items,
+    items,
+    scheduledAt: quand,
     phone,
     customerName: panier.contactName,
     note: panier.note,
@@ -737,6 +902,7 @@ async function finaliserPanier(
     (c.deliveryFee ? `Sous-total : ${money(Number(c.subtotal) || 0, cur)}\nLivraison : ${money(c.deliveryFee, cur)}\n` : "") +
     `Total : *${money(Number(c.total) || 0, cur)}*` +
     (lieu ? `\n${lieu}` : "") +
+    (quand ? `\nPour : *${libelleCreneau(new Date(quand))}*` : "") +
     (livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part." : "\n\nOn te prépare ça, tu es prévenu dès que c'est prêt.");
 
   // Le bon de commande part TOUT DE SUITE, la confirmation en légende : un seul
@@ -1104,7 +1270,7 @@ export async function repondreBoutique(
   const resto = mode === "restaurant";
 
   // 1. Un panier natif : c'est une commande, pas une phrase à comprendre.
-  if (msg.type === "order") return recevoirPanier(ctx);
+  if (msg.type === "order") return recevoirPanier(ctx, resto);
 
   // Un panier attend-il son mode de réception ou son adresse ?
   const enAttente = await lirePanier(agent.id, phone);
@@ -1163,6 +1329,18 @@ export async function repondreBoutique(
     // Un bouton de suivi de commande : la donnée demandée, et elle seule.
     const suivi = lireIdSuivi(id);
     if (suivi) return repondreSuivi(ctx, suivi.action, suivi.ref, resto);
+
+    // Les questions du panier en attente : option d'un plat, heure.
+    if (enAttente) {
+      if (enAttente.etape === "options" && id.startsWith("opt:")) {
+        return repondreOption(ctx, enAttente, Number(id.slice(4)), resto);
+      }
+      if (id === B.asap) return choisirHeure(ctx, enAttente, null, resto);
+      if (id === B.plustard) return envoyerCreneaux(ctx, "À quelle heure veux-tu ta commande ?");
+      if (id.startsWith(B.heure)) {
+        return choisirHeure(ctx, enAttente, new Date(Number(id.slice(B.heure.length))), resto);
+      }
+    }
 
     if (id === B.catalogue) {
       const prods = await catalogue(agent.id);
@@ -1243,10 +1421,37 @@ export async function repondreBoutique(
       await meta.sendText(phone, "D'accord, j'ai annulé ce panier 👍 Je reste là si tu changes d'avis.");
       return;
     }
-    if (/^(retirer|retrait|je viens|je passe|sur place|a emporter|take away)\b/.test(t)) {
+    // Une option écrite plutôt que touchée : « frites », « sans », « 2 ».
+    if (enAttente.etape === "options") {
+      const { ligne, groupe } = (enAttente.etat.q || [])[enAttente.etat.i || 0] || {};
+      const g = ligne != null && groupe != null ? enAttente.items[ligne]?.groupes?.[groupe] : undefined;
+      const choix = g ? lireChoixTexte(g, msg.text) : null;
+      if (choix != null) return repondreOption(ctx, enAttente, choix, resto);
+      // Une réponse courte qu'on ne comprend pas : on repose la question. Une
+      // vraie phrase passe à la compréhension (il pose peut-être une question).
+      if (msg.text.trim().length <= 25) return avancerPanier(ctx, enAttente, resto);
+    }
+    // L'heure écrite : « maintenant », « pour 13h », « ce soir 20h ».
+    if (enAttente.etape === "heure") {
+      if (/\b(maintenant|tout de suite|vite|asap|des que possible|direct|now)\b/.test(t)) {
+        return choisirHeure(ctx, enAttente, null, resto);
+      }
+      const h = lireHeureDemandee(msg.text, agent.business_hours);
+      if (h?.hors) {
+        const ho = lireHoraires(agent.business_hours);
+        return demanderHeure(
+          ctx,
+          `À cette heure-là on est fermé${ho ? ` (ouvert de ${heureLisible(ho.ouvre)} à ${heureLisible(ho.ferme)})` : ""}. Choisis un autre moment :`
+        );
+      }
+      if (h) return choisirHeure(ctx, enAttente, h.quand, resto);
+      if (msg.text.trim().length <= 25) return demanderHeure(ctx);
+    }
+    const auBonMoment = enAttente.etape === "mode" || enAttente.etape === "adresse";
+    if (auBonMoment && /^(retirer|retrait|je viens|je passe|sur place|a emporter|take away)\b/.test(t)) {
       return finaliserPanier(ctx, enAttente, { mode: "retrait" });
     }
-    if (/^(livrer|livraison|me faire livrer|livre moi|faites moi livrer)\b/.test(t)) {
+    if (auBonMoment && /^(livrer|livraison|me faire livrer|livre moi|faites moi livrer)\b/.test(t)) {
       return demanderPosition(ctx);
     }
     if (enAttente.etape === "adresse" && msg.text.trim().length >= 4) {

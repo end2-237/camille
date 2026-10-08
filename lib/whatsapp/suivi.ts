@@ -50,6 +50,8 @@ export type CommandeSuivie = {
   processing_at?: string | Date | null;
   dispatched_at?: string | Date | null;
   delivered_at?: string | Date | null;
+  /** Commande programmée (restaurant : « pour 13 h »). */
+  scheduled_at?: string | Date | null;
   customer_name?: string | null;
   courier_name?: string | null;
 };
@@ -152,6 +154,7 @@ export function recapCommande(o: CommandeSuivie): string {
     ...(frais > 0 ? [`Livraison : ${montant(frais, cur)}`] : []),
     ...(o.total != null ? [`Total : *${montant(Number(o.total), cur)}*`] : []),
     ...(lieu ? [lieu] : []),
+    ...(o.scheduled_at && heure(o.scheduled_at) ? [`Pour : ${heure(o.scheduled_at)}`] : []),
   ].join("\n");
 }
 
@@ -213,6 +216,7 @@ export function contexteCommande(o: CommandeSuivie): string {
     retrait(o) ? "RETRAIT en boutique (pas de livraison, pas de frais de livraison)" : `livraison${o.place_label || o.address ? ` à ${o.place_label || o.address}` : ""}`,
     articles,
     o.total != null ? `total ${Math.round(Number(o.total))} ${o.currency || "XAF"}` : "",
+    o.scheduled_at && heure(o.scheduled_at) ? `programmée pour ${heure(o.scheduled_at)}` : "",
   ].filter(Boolean).join(" · ");
 }
 
