@@ -2,6 +2,32 @@
 
 const TOKEN_KEY = "camille_token";
 const USER_KEY  = "camille_user";
+// « Se souvenir de moi » décoché : la session tient tant que le navigateur est
+// ouvert. Le jeton reste dans localStorage (partagé entre onglets), mais une
+// marque en sessionStorage — effacée à la fermeture — dit s'il est encore valable.
+const EPHEMERE_KEY = "camille_ephemere";
+const VIVANT_KEY   = "camille_session_vivante";
+
+/** À appeler juste après la connexion. */
+export function retenirConnexion(retenir: boolean) {
+  try {
+    if (retenir) {
+      localStorage.removeItem(EPHEMERE_KEY);
+    } else {
+      localStorage.setItem(EPHEMERE_KEY, "1");
+      sessionStorage.setItem(VIVANT_KEY, "1");
+    }
+  } catch { /* stockage bloqué : la session reste comme avant */ }
+}
+
+/** Session « sans souvenir » dont le navigateur a été fermé depuis. */
+function sessionExpiree(): boolean {
+  try {
+    return localStorage.getItem(EPHEMERE_KEY) === "1" && !sessionStorage.getItem(VIVANT_KEY);
+  } catch {
+    return false;
+  }
+}
 
 export interface AuthUser {
   id: string;
@@ -14,11 +40,13 @@ export interface AuthUser {
 
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
+  if (sessionExpiree()) { clearAuth(); return null; }
   return localStorage.getItem(TOKEN_KEY);
 }
 
 export function getStoredUser(): AuthUser | null {
   if (typeof window === "undefined") return null;
+  if (sessionExpiree()) { clearAuth(); return null; }
   const raw = localStorage.getItem(USER_KEY);
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
@@ -32,6 +60,7 @@ export function storeAuth(user: AuthUser, token: string) {
 export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(EPHEMERE_KEY);
 }
 
 export function authHeaders(): HeadersInit {

@@ -53,7 +53,8 @@ export function Navbar() {
   useEffect(() => { setOpen(false); }, [pathname]);
 
   // Le dashboard a sa propre barre ; ailleurs (accueil inclus) → nav du site.
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/livraison")) return null;
+  // La page de connexion a sa propre mise en page, pleine hauteur.
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/livraison") || pathname === "/login") return null;
 
   return (
     <>
