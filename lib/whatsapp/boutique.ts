@@ -57,6 +57,9 @@ import { sectorProfile } from "@/lib/sectorProfiles";
 import { createOrder } from "@/lib/orders";
 import * as meta from "./meta";
 import { tracer, sessionMeta, type Contexte } from "./handle";
+import { lireIdSuivi, recapCommande, etapesCommande, type ActionSuivi } from "./suivi";
+import { chargerCommande, envoyerAnimation } from "./suivi-envoi";
+import { notify } from "@/lib/webhooks";
 import { sansAccent, chercher, veutToutVoir, estUneQuestion } from "./recherche";
 import { lirePrix } from "./prix";
 import { formatVitrine, formatNaturel, noterEnvoi } from "./repetition";
@@ -717,6 +720,7 @@ async function finaliserPanier(
     return;
   }
   await oublierPanier(agent.id, phone);
+  await envoyerAnimation(phone, "commande");
 
   const c = res as { ref?: string; subtotal?: number; deliveryFee?: number; total?: number; currency?: string };
   const cur = c.currency || panier.items[0]?.currency || "XAF";
@@ -1121,6 +1125,10 @@ export async function repondreBoutique(
   if (msg.type === "interactive" && msg.choiceId) {
     const id = msg.choiceId;
 
+    // Un bouton de suivi de commande : la donnée demandée, et elle seule.
+    const suivi = lireIdSuivi(id);
+    if (suivi) return repondreSuivi(ctx, suivi.action, suivi.ref, resto);
+
     if (id === B.catalogue) {
       const prods = await catalogue(agent.id);
       return montrerVitrine(
@@ -1420,7 +1428,11 @@ async function alerterSansSeTaire(ctx: Contexte, sujet: string) {
  * client écrit déjà. On l'y renvoyait vers lui-même — le bug avait été signalé
  * en production. Le client est au bon endroit ; c'est l'humain qui vient à lui.
  */
-async function passerLaMain(ctx: Contexte) {
+async function passerLaMain(
+  ctx: Contexte,
+  /** Pour un souci sur une commande : le titre et le contenu de la tâche du commerçant. */
+  dossier?: { titre: string; contenu: Record<string, unknown>; message?: string }
+) {
   const { agent, msg, phone } = ctx;
 
   try {
@@ -1429,8 +1441,10 @@ async function passerLaMain(ctx: Contexte) {
        VALUES ($1, $2, 'complaint', $3, $4::jsonb)`,
       [
         agent.id, phone,
-        `Demande à parler à quelqu'un — ${phone}`,
-        JSON.stringify({ kind: "talk_to_human", message: msg.text || "(sans message)", contact: phone }),
+        dossier?.titre || `Demande à parler à quelqu'un — ${phone}`,
+        JSON.stringify(
+          dossier?.contenu || { kind: "talk_to_human", message: msg.text || "(sans message)", contact: phone }
+        ),
       ]
     );
     await query(
@@ -1445,8 +1459,116 @@ async function passerLaMain(ctx: Contexte) {
 
   await meta.sendText(
     phone,
-    "Bien sûr 🙏 Je passe le relais à l'équipe.\n\n" +
-      "Un conseiller prend la suite **dans cette conversation** — reste ici, tu n'as rien à faire 🙌"
+    dossier?.message ||
+      "Bien sûr 🙏 Je passe le relais à l'équipe.\n\n" +
+        "Un conseiller prend la suite **dans cette conversation** — reste ici, tu n'as rien à faire 🙌"
   );
   await tracer(agent.id, phone, "assistant", "[relais humain]");
+}
+
+// ── Le suivi de commande : la réponse à un bouton « cmd:<action>:<ref> » ────
+
+/**
+ * Le client a touché un bouton de suivi. On ne répond qu'avec ce qu'il a
+ * demandé, et seulement sur SA commande : la référence vient d'un bouton, qui
+ * se recopie — chargerCommande vérifie que le numéro est bien le sien.
+ */
+async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, resto: boolean) {
+  const { agent, phone } = ctx;
+  const o = await chargerCommande({ agentId: agent.id, ref, phone });
+  if (!o) {
+    await meta.sendText(phone, "Je ne retrouve pas cette commande 🤔 Dis-moi *conseiller* et quelqu'un vérifie pour toi.");
+    return;
+  }
+  await tracer(agent.id, phone, "user", `[suivi] ${action} ${ref}`);
+
+  switch (action) {
+    case "recap": {
+      await meta.sendText(phone, recapCommande(o));
+      // Le bon de commande, s'il existe : c'est lui qui fait foi.
+      if (o.doc_url) {
+        await meta.sendDocument(phone, o.doc_url, `${o.doc_number || `BC-${o.ref}`}.pdf`, "📄 Ton bon de commande");
+      }
+      return;
+    }
+
+    case "etapes":
+      await meta.sendText(phone, etapesCommande(o));
+      return;
+
+    case "livreur": {
+      if (!o.courier_name && !o.courier_phone) {
+        await meta.sendText(phone, `${etapesCommande(o)}\n\nLe livreur n'est pas encore désigné, je te préviens dès qu'il part 🛵`);
+        return;
+      }
+      // Sa position, seulement si elle est fraîche : une position d'il y a une
+      // heure rassure à tort.
+      const vu = o.courier_seen_at ? Date.now() - new Date(o.courier_seen_at).getTime() : Infinity;
+      const recente = o.courier_lat != null && o.courier_lng != null && vu < 15 * 60_000;
+      await meta.sendText(
+        phone,
+        `🛵 Ton livreur : *${o.courier_name || "notre livreur"}*` +
+          (o.courier_phone ? `\n📞 ${o.courier_phone}` : "") +
+          (recente ? "\n\nSa position il y a quelques minutes 👇" : "")
+      );
+      if (recente) {
+        await meta.sendLocation(phone, Number(o.courier_lat), Number(o.courier_lng), "Ton livreur", `Commande ${o.ref}`);
+      }
+      return;
+    }
+
+    case "aide":
+      await meta.sendButtons(
+        phone,
+        `Pose ta question sur la commande *${o.ref}* ici, je te réponds tout de suite 🙂`,
+        [{ id: B.conseiller, title: "Parler à quelqu'un" }]
+      );
+      return;
+
+    case "parfait":
+      await meta.sendText(
+        phone,
+        "Ça fait vraiment plaisir 😊🙏\n\nSi tu as un moment, parle de nous autour de toi — c'est ce qui nous aide le plus. À très vite !"
+      );
+      notify(agent.id, "order.feedback", { ref: o.ref, avis: "positif", customer_phone: phone }).catch(() => {});
+      return;
+
+    case "souci":
+      notify(agent.id, "order.feedback", { ref: o.ref, avis: "souci", customer_phone: phone }).catch(() => {});
+      return passerLaMain(ctx, {
+        titre: `Souci sur la commande ${o.ref} — ${phone}`,
+        contenu: { kind: "order_issue", ref: o.ref, contact: phone, status: o.status },
+        message:
+          `Désolé pour ça 😔 L'équipe est prévenue pour la commande *${o.ref}* et te répond ici.\n\n` +
+          "Dis-moi ce qui ne va pas — une photo aide beaucoup si c'est un article abîmé ou différent.",
+      });
+
+    case "encore": {
+      // Les mêmes articles, dans la même variante quand elle existe encore.
+      const prods = await catalogue(agent.id);
+      const repris = (o.items || []).flatMap((it) => {
+        const nom = sansAccent(String(it.name || "")).trim();
+        const p = prods.find((x) => sansAccent(x.name.split(" — ")[0]).trim() === nom.split(" — ")[0]);
+        return p ? preciserVariantes([p], String(it.variant || "")) : [];
+      });
+      if (!repris.length) {
+        return montrerVitrine(
+          ctx, prods, resto ? "Notre carte" : "Notre boutique",
+          "Ce que tu avais pris n'est plus dispo 😕 Voilà ce qu'on a en ce moment 🛍️", true
+        );
+      }
+      return montrerVitrine(ctx, repris, "", "Voilà ta dernière commande, ajoute-la au panier 👇");
+    }
+
+    case "boutique": {
+      const prods = await catalogue(agent.id);
+      return montrerVitrine(
+        ctx, prods, resto ? "Notre carte" : "Notre boutique",
+        resto ? "Voici ce qu'on propose 🍽️" : "Voici ce qu'on a en ce moment 🛍️", true
+      );
+    }
+
+    case "adresse":
+      return montrerOuNousSommes(ctx);
+  }
 }

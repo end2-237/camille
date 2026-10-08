@@ -683,6 +683,47 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("20 au plus (limite Meta)", imagesSupplementaires(A, trente).length, 20);
 }
 
+// ═══ suivi — après la commande, des boutons à chaque étape ═══════════════
+{
+  groupe("suivi de commande — étapes, boutons, données à la demande");
+  const { annonce, recapCommande, etapesCommande, lireIdSuivi, idSuivi } = await import(`${DIST}/whatsapp/suivi.js`);
+  const base = { ref: "K7Q2", customer_name: "Awa Ngono", fulfillment: "livraison", currency: "XAF",
+    items: [{ name: "Tasse inox", variant: "Rouge", qty: 2, price: 6000 }], delivery_fee: 1000, total: 13000,
+    address: "Bonamoussadi", created_at: "2026-10-08T09:00:00Z", processing_at: "2026-10-08T10:00:00Z" };
+  const ids = (a) => a.boutons.map((b) => b.id);
+  const titres = (a) => a.boutons.map((b) => b.title);
+
+  eq("nouvelle → rien (la confirmation est déjà partie)", annonce({ ...base, status: "nouvelle" }), null);
+  eq("en préparation → récap, où en est-elle, question",
+    ids(annonce({ ...base, status: "en_traitement" })), ["cmd:recap:K7Q2", "cmd:etapes:K7Q2", "cmd:aide:K7Q2"]);
+  eq("en route avec livreur → « Mon livreur » en premier",
+    ids(annonce({ ...base, status: "en_livraison" }, { avecLivreur: true }))[0], "cmd:livreur:K7Q2");
+  eq("en route sans livreur → les étapes à la place",
+    ids(annonce({ ...base, status: "en_livraison" }))[0], "cmd:etapes:K7Q2");
+  chk("retrait prêt → « prête », et l'adresse de la boutique",
+    /prête/.test(annonce({ ...base, fulfillment: "retrait", status: "en_livraison" }).texte) &&
+    ids(annonce({ ...base, fulfillment: "retrait", status: "en_livraison" }))[0] === "cmd:adresse:K7Q2");
+  const livree = annonce({ ...base, status: "livree" }, { boutique: "Buyticle" });
+  chk("livrée → merci au prénom, et le nom de la boutique", /Merci Awa/.test(livree.texte) && /Buyticle/.test(livree.texte));
+  eq("livrée → parfait / souci / recommander", ids(livree), ["cmd:parfait:K7Q2", "cmd:souci:K7Q2", "cmd:encore:K7Q2"]);
+  eq("annulée → boutique / question", ids(annonce({ ...base, status: "annulee" })), ["cmd:boutique:K7Q2", "cmd:aide:K7Q2"]);
+  chk("aucun titre de bouton au-delà de 20 caractères (Meta refuserait tout le message)",
+    ["en_traitement", "en_livraison", "livree", "annulee"].every((s) =>
+      titres(annonce({ ...base, status: s }, { avecLivreur: true })).every((t) => [...t].length <= 20)));
+
+  const r = recapCommande({ ...base, status: "en_traitement" });
+  chk("récap : la ligne avec variante et montant", r.includes("2× Tasse inox — Rouge : 12 000 FCFA"));
+  chk("récap : livraison et total", r.includes("Livraison : 1 000 FCFA") && r.includes("Total : *13 000 FCFA*"));
+  const e = etapesCommande({ ...base, status: "en_traitement" });
+  chk("étapes : reçue et préparation cochées, route en attente",
+    /✅ Commande reçue/.test(e) && /✅ En préparation/.test(e) && /⏳ En route/.test(e));
+  chk("étapes : heure de Douala (UTC+1)", /10:00|11:00/.test(e) && e.includes("11:00"));
+
+  eq("lecture d'un bouton", lireIdSuivi(idSuivi("recap", "K7Q2")), { action: "recap", ref: "K7Q2" });
+  eq("bouton inconnu → null", lireIdSuivi("cmd:pirater:K7Q2"), null);
+  eq("identifiant de catalogue → null", lireIdSuivi("cup_noir"), null);
+}
+
 // ═══ voix — un vocal devient un message écrit ══════════════════════════════
 {
   groupe("voix — transcription des vocaux");

@@ -10,7 +10,8 @@
 //   BUYFACT_API_KEY   optionnelle, doit correspondre à celle de buyfacturation
 // ─────────────────────────────────────────────────────────────────────────────
 import { query } from "@/lib/db";
-import { envoyerDocument, envoyerTexte } from "@/lib/whatsapp/envoi";
+import { envoyerDocument, envoyerTexte, transportDe } from "@/lib/whatsapp/envoi";
+import { annoncerStatut } from "@/lib/whatsapp/suivi-envoi";
 
 const BUYFACT_URL = (process.env.BUYFACT_URL ?? "https://buyfacturation-jdbf.vercel.app").replace(/\/$/, "");
 const BUYFACT_KEY = process.env.BUYFACT_API_KEY ?? "";
@@ -241,6 +242,16 @@ export async function sendThankYou(orderId: string): Promise<SendResult> {
 
   const chatId = String(o.contact_phone || "").trim();
   if (!chatId) return { ok: false, reason: "aucun contact pour cette commande" };
+
+  // Agent Meta : le remerciement porte des boutons (tout va bien / un souci /
+  // recommander) et une animation, cf. lib/whatsapp/suivi.ts.
+  const { transport } = await transportDe(String(o.agent_id), (o.session_name as string) || null);
+  if (transport === "meta") {
+    const r = await annoncerStatut(orderId);
+    if (!r.ok) return { ok: false, reason: r.error || "envoi refusé" };
+    try { await query("UPDATE camille.orders SET thanked_at = NOW() WHERE id = $1", [orderId]); } catch { /* idem */ }
+    return { ok: true };
+  }
 
   const prenom = String(o.customer_name || "").trim().split(/\s+/)[0] || "";
   const shop = (o.business_name as string) || "Nous";

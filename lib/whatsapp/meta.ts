@@ -104,6 +104,15 @@ export function sendImage(to: string, url: string, caption?: string): Promise<Me
 }
 
 /**
+ * Un autocollant, par URL publique — c'est ainsi qu'on envoie une animation :
+ * l'API ne prend pas de GIF, mais accepte un WebP animé (512×512, 500 Ko au
+ * plus). Il s'affiche en boucle, sans bulle, comme un vrai sticker.
+ */
+export function sendSticker(to: string, url: string): Promise<MetaResult> {
+  return send(to, { type: "sticker", sticker: { link: url } });
+}
+
+/**
  * Un document (bon de commande, facture…), par URL publique.
  *
  * Même règle que la vidéo : Meta télécharge lui-même le fichier, il doit donc

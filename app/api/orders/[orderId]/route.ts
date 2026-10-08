@@ -10,6 +10,7 @@ import { sendOrderDocument, sendThankYou } from "@/lib/facturation";
 import { restoreStock } from "@/lib/orders";
 import { ORDER_STATUSES, statusLabel, statusStep } from "@/lib/orderStatus";
 import { notify } from "@/lib/webhooks";
+import { annoncerStatut } from "@/lib/whatsapp/suivi-envoi";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 const ALLOWED: readonly string[] = ORDER_STATUSES;
@@ -199,5 +200,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     thanks = await sendThankYou(orderId);
   }
 
-  return NextResponse.json({ order, ...(doc ? { doc } : {}), ...(thanks ? { thanks } : {}) });
+  // Les autres étapes s'annoncent au client avec des boutons (agents Meta ;
+  // camille-core garde son parcours). Après le bon de commande, pour qu'il
+  // arrive en premier. « livree » passe par sendThankYou ci-dessus.
+  let suivi: Awaited<ReturnType<typeof annoncerStatut>> | undefined;
+  if (before.status !== status && ["en_traitement", "en_livraison", "annulee"].includes(status)) {
+    suivi = await annoncerStatut(orderId).catch(() => undefined);
+  }
+
+  return NextResponse.json({
+    order, ...(doc ? { doc } : {}), ...(thanks ? { thanks } : {}), ...(suivi && !suivi.skipped ? { suivi } : {}),
+  });
 }
