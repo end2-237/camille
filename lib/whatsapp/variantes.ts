@@ -24,6 +24,8 @@
 // et on le dit au marchand, en lui expliquant pourquoi.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { PONTS, PONTS_INVERSES, sansAccent } from "./recherche";
+
 export type OptionVariante = string | { value: string; image?: string | null };
 export type AxeVariante = { name: string; options: OptionVariante[] };
 
@@ -281,3 +283,31 @@ export function libelleVariante(retailerId: string, axes: AxeVariante[] | null |
   }
   return null;
 }
+
+// ── La variante que le client demande ──────────────────────────────────────
+
+/** Une variante envoyable : la valeur lisible et l'article Meta qui la porte. */
+export type VarianteAffichable = { option: string; retailerId: string };
+
+/**
+ * Les variantes que ce texte désigne — « la rouge », « en vert ? »,
+ * « do you have it in black » — dans l'ordre du catalogue, ou [] si rien.
+ *
+ * Sans ça, la fiche envoyée était toujours celle du premier article du groupe :
+ * Camille annonçait « oui, il existe en rouge » en montrant la tasse noire.
+ *
+ * Le français et l'anglais se rejoignent par les ponts de la recherche, et un
+ * accord se tolère (« noire », « vertes » désignent « Noir », « Vert »).
+ */
+export function varianteDemandee(variantes: VarianteAffichable[], texte: string): VarianteAffichable[] {
+  if (!variantes.length || !texte) return [];
+  const bruts = sansAccent(texte).split(/[^a-z0-9]+/).filter((w) => w.length >= 2);
+  const mots = new Set(bruts.flatMap((w) => [w, ...(PONTS[w] || []), ...(PONTS_INVERSES[w] || [])]));
+  const designe = (option: string) =>
+    sansAccent(option)
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 2)
+      .some((t) => mots.has(t) || (t.length >= 4 && [...mots].some((m) => m.startsWith(t) && m.length - t.length <= 2)));
+  return variantes.filter((v) => designe(v.option));
+}
+

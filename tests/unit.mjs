@@ -643,6 +643,32 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("8h30 s'écrit « 8h30 »", closedNotice("8h30 - 18h", 1, a(1)).includes("8h30"));
 }
 
+// ═══ variantes — montrer LA couleur demandée ═══════════════════════════════
+{
+  groupe("variantes — la couleur demandée est celle qu'on montre");
+  const { varianteDemandee } = await import(`${DIST}/whatsapp/variantes.js`);
+  // Le cas réel : « oui, il existe en rouge » arrivait avec la fiche noire.
+  const tasse = [
+    { option: "Noir", retailerId: "cup_noir" },
+    { option: "Rouge", retailerId: "cup_rouge" },
+    { option: "Vert", retailerId: "cup_vert" },
+    { option: "Violet", retailerId: "cup_violet" },
+  ];
+  const ids = (t) => varianteDemandee(tasse, t).map((v) => v.retailerId);
+  eq("« bon pour un cup vert c'est possible » → la verte", ids("bon pour un cup vert c'est possib;le"), ["cup_vert"]);
+  eq("« Oui, il est disponible en rouge ! » → la rouge", ids("Oui, il est disponible en rouge !"), ["cup_rouge"]);
+  eq("« do you have it in black? » → la noire", ids("do you have it in black?"), ["cup_noir"]);
+  eq("« la noire » (accordé) → la noire", ids("je veux la noire"), ["cup_noir"]);
+  eq("« GREEN » en majuscules → la verte", ids("GREEN please"), ["cup_vert"]);
+  eq("deux couleurs → les deux, dans l'ordre du catalogue", ids("la verte ou la noire"), ["cup_noir", "cup_vert"]);
+  eq("aucune couleur nommée → rien (on garde la fiche du groupe)", ids("c'est combien la tasse ?"), []);
+  eq("couleur absente (bleu) → rien", ids("t'as en bleu ?"), []);
+  eq("« vertes » ne désigne pas « Vert » par hasard d'un autre mot", ids("convertir"), []);
+  const tailles = [{ option: "S", retailerId: "t_s" }, { option: "XL", retailerId: "t_xl" }, { option: "42", retailerId: "t_42" }];
+  eq("taille XL", varianteDemandee(tailles, "en XL svp").map((v) => v.retailerId), ["t_xl"]);
+  eq("pointure 42", varianteDemandee(tailles, "tu as du 42 ?").map((v) => v.retailerId), ["t_42"]);
+}
+
 // ═══ voix — un vocal devient un message écrit ══════════════════════════════
 {
   groupe("voix — transcription des vocaux");

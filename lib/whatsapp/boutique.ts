@@ -60,7 +60,10 @@ import { tracer, sessionMeta, type Contexte } from "./handle";
 import { sansAccent, chercher, veutToutVoir, estUneQuestion } from "./recherche";
 import { lirePrix } from "./prix";
 import { formatVitrine, formatNaturel, noterEnvoi } from "./repetition";
-import { libelleVariante, produitParent, retailerAffiche, type AxeVariante } from "./variantes";
+import {
+  articlesPour, libelleVariante, produitParent, retailerAffiche, varianteDemandee,
+  type AxeVariante, type VarianteAffichable,
+} from "./variantes";
 import {
   resumeMemoire, fusionnerNotes, faitsDesAchats, MAX_NOTES,
   type Souvenir,
@@ -114,7 +117,32 @@ export type Produit = {
   options?: string[];
   /** Les mêmes, lisibles pour le modèle : « Couleur : Noir, Bleu ». */
   optionsTexte?: string;
+  /** Chaque variante envoyable : la fiche à montrer quand le client en nomme une. */
+  variantes?: VarianteAffichable[];
 };
+
+/**
+ * Remplace chaque produit à variantes par la ou les variantes que le texte
+ * nomme. Un produit dont aucune variante n'est nommée reste tel quel ; une
+ * variante choisie perd sa liste, pour ne pas être re-choisie plus loin.
+ */
+function preciserVariantes(prods: Produit[], ...textes: string[]): Produit[] {
+  return prods.flatMap((p) => {
+    if (!p.variantes || p.variantes.length < 2) return [p];
+    for (const t of textes) {
+      const v = varianteDemandee(p.variantes, t || "");
+      if (v.length) {
+        return v.map((x) => ({
+          ...p,
+          retailerId: x.retailerId,
+          name: `${p.name.split(" — ")[0]} — ${x.option}`,
+          variantes: undefined,
+        }));
+      }
+    }
+    return [p];
+  });
+}
 
 /** Les variations d'un produit Camille, sous les deux formes utiles. */
 function optionsDe(axes: AxeVariante[] | null | undefined): { options: string[]; optionsTexte: string } {
@@ -174,6 +202,15 @@ async function catalogue(agentId: string): Promise<Produit[]> {
         // Un produit publié avec ses variations n'existe chez Meta QUE sous
         // « <id>:<option> » : l'identifiant du parent donnerait « product not
         // found ». Un article importé de Meta garde, lui, son propre identifiant.
+        variantes:
+          String(x.retailer) === String(x.id)
+            ? articlesPour(
+                { id: String(x.id), name: String(x.name), image_url: (x.image_url as string) || null },
+                Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null
+              ).articles
+                .filter((a) => a.itemGroupId && a.valeur)
+                .map((a) => ({ option: String(a.valeur), retailerId: a.retailerId }))
+            : undefined,
         retailerId:
           String(x.retailer) === String(x.id)
             ? retailerAffiche(
@@ -210,8 +247,19 @@ async function catalogue(agentId: string): Promise<Produit[]> {
   // Les options de chaque groupe, rassemblées AVANT de n'en garder qu'une
   // fiche : sinon « t'as la noire ? » ne saurait pas que le noir existe.
   const optionsGroupe = new Map<string, Set<string>>();
+  // Et les articles de chaque groupe, pour envoyer LA couleur demandée.
+  const variantesGroupe = new Map<string, VarianteAffichable[]>();
   for (const it of m.items) {
     if (!it.item_group_id) continue;
+    if (it.availability !== "out of stock" && it.sendable !== false) {
+      const option = [it.color, it.size, it.pattern, it.material, it.custom_label_0]
+        .find(Boolean) || String(it.name || "").split(" — ")[1];
+      if (option) {
+        const liste = variantesGroupe.get(it.item_group_id) || [];
+        liste.push({ option: String(option).trim(), retailerId: it.retailer_id });
+        variantesGroupe.set(it.item_group_id, liste);
+      }
+    }
     const set = optionsGroupe.get(it.item_group_id) || new Set<string>();
     for (const v of [it.color, it.size, it.pattern, it.material, it.custom_label_0]) if (v) set.add(String(v));
     // Repli : la variation lue dans le nom, « Tasse — Noir ».
@@ -240,6 +288,7 @@ async function catalogue(agentId: string): Promise<Produit[]> {
         name: opts.length > 1 ? String(it.name).split(" — ")[0] : it.name,
         options: opts,
         optionsTexte: opts.length > 1 ? `options : ${opts.join(", ")}` : "",
+        variantes: it.item_group_id ? variantesGroupe.get(it.item_group_id) : undefined,
         price: n != null && n > 0 ? n : null,
         currency: "XAF",
         category: null,
@@ -283,6 +332,9 @@ async function montrerVitrine(
   complete = false
 ) {
   const { phone } = ctx;
+
+  // Une sélection ciblée montre la couleur demandée, pas la première du groupe.
+  if (!complete) prods = preciserVariantes(prods, ctx.msg.text || "");
 
   if (!prods.length) {
     await meta.sendText(phone, "Je n'ai rien à te montrer pour le moment 😔 Réécris-moi un peu plus tard.");
@@ -853,7 +905,13 @@ async function executer(
         break;
 
       case "montrer": {
-        const choisis = a.produits.map((id) => parId.get(id)).filter(Boolean) as Produit[];
+        // La couleur se lit d'abord dans le message du client, sinon dans la
+        // réponse du modèle (« oui, il existe en rouge ») qui l'accompagne.
+        const dits = actions.filter((x) => x.faire === "repondre").map((x) => (x as { texte: string }).texte);
+        const choisis = preciserVariantes(
+          a.produits.map((id) => parId.get(id)).filter(Boolean) as Produit[],
+          ctx.msg.text || "", ...dits
+        );
         if (!choisis.length) break;
         await montrerVitrine(
           ctx, choisis,

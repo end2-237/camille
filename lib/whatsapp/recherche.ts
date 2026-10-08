@@ -87,7 +87,7 @@ export const PONTS: Record<string, string[]> = {
  * option « Noir ». Construit une fois à partir de PONTS, pour qu'une
  * correspondance ajoutée là-haut serve dans les deux langues.
  */
-const PONTS_INVERSES: Record<string, string[]> = (() => {
+export const PONTS_INVERSES: Record<string, string[]> = (() => {
   const inv: Record<string, Set<string>> = {};
   for (const [fr, ens] of Object.entries(PONTS)) {
     for (const en of ens) (inv[en] ||= new Set()).add(fr);
