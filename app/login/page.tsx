@@ -87,24 +87,26 @@ export default function LoginPage() {
   const erreur = (m?: string) => m ? <p className="mt-1.5 text-[12px]" style={{ color: "#C2504B" }}>{m}</p> : null;
 
   return (
-    <div className="cnx flex min-h-dvh flex-col">
-      <div className="flex flex-1 flex-col lg:flex-row">
+    <div className="cnx flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* ── Gauche : ce que fait Camille ─────────────────────────────── */}
-        <aside className="cnx-gauche hidden flex-col justify-between px-12 py-12 lg:flex lg:w-1/2 xl:px-16">
+        <aside className="cnx-gauche cnx-pv hidden min-h-0 flex-col px-12 lg:flex lg:w-1/2 xl:px-16">
           <div>
             <Marque />
-            <h1 className="mt-14 text-[44px] font-bold leading-[1.08] tracking-[-0.03em]" style={{ color: "var(--cl-ink)" }}>
+            <h1 className="cnx-titre font-bold leading-[1.08] tracking-[-0.03em]" style={{ color: "var(--cl-ink)" }}>
               Répondre. Vendre.<br />Livrer.
             </h1>
-            <p className="mt-5 max-w-[440px] text-[17px] leading-[1.6]" style={{ color: "var(--cl-ink-soft)" }}>
+            <p className="cnx-accroche max-w-[460px] leading-[1.55]" style={{ color: "var(--cl-ink-soft)" }}>
               Votre vendeur WhatsApp qui répond, montre le catalogue et prend les commandes —
               jour et nuit, depuis une seule plateforme.
             </p>
           </div>
 
-          <IllustrationConnexion className="my-8 w-full max-w-[620px]" />
+          <div className="cnx-illu flex min-h-0 flex-1 items-center">
+            <IllustrationConnexion className="h-full max-h-full w-full max-w-[620px]" />
+          </div>
 
-          <ul className="grid max-w-[560px] grid-cols-3 gap-4">
+          <ul className="grid max-w-[560px] flex-shrink-0 grid-cols-3 gap-4">
             {ATOUTS.map(({ icon: Icon, titre, sous, couleur }) => (
               <li key={titre} className="flex items-center gap-3">
                 <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-white" style={{ boxShadow: "0 4px 14px rgba(100,66,232,0.08)" }}>
@@ -119,19 +121,19 @@ export default function LoginPage() {
         </aside>
 
         {/* ── Droite : la carte de connexion ───────────────────────────── */}
-        <main className="flex flex-1 flex-col items-center justify-center px-5 py-10 sm:px-10">
-          <div className="mb-8 lg:hidden"><Marque /></div>
+        <main className="cnx-pv flex min-h-0 flex-1 flex-col items-center justify-center px-5 sm:px-10">
+          <div className="cnx-marque-mobile lg:hidden"><Marque /></div>
 
-          <div className="cnx-carte w-full max-w-[548px] rounded-2xl bg-white px-6 py-9 sm:px-9">
-            <h2 className="text-[28px] font-bold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>
+          <div className="cnx-carte w-full max-w-[520px] rounded-2xl bg-white px-6 sm:px-9">
+            <h2 className="cnx-h2 font-bold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>
               {connexion ? "Bon retour" : "Créer un compte"}
             </h2>
-            <p className="mt-1 text-[16px]" style={{ color: "var(--cl-ink-soft)" }}>
+            <p className="mt-1 text-[15px]" style={{ color: "var(--cl-ink-soft)" }}>
               {connexion ? "Connectez-vous pour continuer" : "Quelques secondes, et votre agent est à vous"}
             </p>
 
             {connexion ? (
-              <form onSubmit={loginForm.handleSubmit(onLogin)} noValidate className="mt-8 space-y-5">
+              <form onSubmit={loginForm.handleSubmit(onLogin)} noValidate className="cnx-form">
                 <Champ label="Adresse e-mail">
                   <input type="email" autoComplete="email" autoFocus {...loginForm.register("email")}
                     placeholder="nom@entreprise.com" className="cnx-input" />
@@ -159,7 +161,7 @@ export default function LoginPage() {
                 <BoutonPrincipal loading={loading}>Se connecter</BoutonPrincipal>
               </form>
             ) : (
-              <form onSubmit={registerForm.handleSubmit(onRegister)} noValidate className="mt-8 space-y-5">
+              <form onSubmit={registerForm.handleSubmit(onRegister)} noValidate className="cnx-form">
                 <Champ label="Prénom (optionnel)">
                   <input type="text" autoFocus {...registerForm.register("full_name")} placeholder="Marie" className="cnx-input" />
                   {erreur(registerForm.formState.errors.full_name?.message)}
@@ -181,7 +183,7 @@ export default function LoginPage() {
               </form>
             )}
 
-            <div className="my-7 flex items-center gap-4">
+            <div className="cnx-ou flex items-center gap-4">
               <span className="h-px flex-1" style={{ background: "var(--cl-line)" }} />
               <span className="text-[12px] font-semibold tracking-[0.12em]" style={{ color: "var(--cl-ink-faint)" }}>OU</span>
               <span className="h-px flex-1" style={{ background: "var(--cl-line)" }} />
@@ -192,7 +194,7 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <p className="mt-7 text-center text-[15px]" style={{ color: "var(--cl-ink-soft)" }}>
+          <p className="cnx-lien text-center text-[14px]" style={{ color: "var(--cl-ink-soft)" }}>
             Pas encore d&apos;agent ?{" "}
             <Link href="/configure" className="font-medium hover:underline" style={{ color: "var(--cl-accent-deep)" }}>
               Créer mon premier agent.
@@ -202,22 +204,34 @@ export default function LoginPage() {
       </div>
 
       {/* ── Pied de page ─────────────────────────────────────────────────── */}
-      <footer className="flex flex-wrap items-center justify-center gap-x-14 gap-y-2 border-t px-6 py-5 text-[13px] font-medium sm:justify-between lg:px-16"
+      <footer className="flex flex-wrap items-center justify-center gap-x-8 gap-y-1 border-t px-6 py-3 text-[12px] font-medium sm:justify-between lg:px-16"
         style={{ borderColor: "var(--cl-line)", background: "#FBFAFD", color: "var(--cl-ink-soft)" }}>
-        <span>© {new Date().getFullYear()} Camille by Buyticle</span>
-        <span className="flex gap-10">
+        <span>© {new Date().getFullYear()} Camille<span className="hidden sm:inline"> by Buyticle</span></span>
+        <span className="flex gap-6 sm:gap-10">
           <Link href="/privacy" className="hover:underline">Confidentialité</Link>
-          <Link href="/terms" className="hover:underline">Conditions d&apos;utilisation</Link>
+          <Link href="/terms" className="hover:underline">Conditions<span className="hidden sm:inline"> d&apos;utilisation</span></Link>
         </span>
-        <span style={{ color: "var(--cl-ink-faint)" }}>Version {pkg.version} •</span>
+        <span className="hidden sm:inline" style={{ color: "var(--cl-ink-faint)" }}>Version {pkg.version} •</span>
       </footer>
 
       <style jsx>{`
         .cnx { background: #fff; font-family: "Inter Variable", "Inter", system-ui, sans-serif; }
+        /* Tout se règle sur la HAUTEUR de l'écran : la page tient sans défiler,
+           d'un portable 1366×768 à un grand écran, et sur téléphone. */
+        .cnx-pv { padding-top: clamp(14px, 3.2vh, 44px); padding-bottom: clamp(14px, 3.2vh, 44px); }
+        .cnx-titre { margin-top: clamp(16px, 4.5vh, 56px); font-size: clamp(30px, 4.6vh, 44px); }
+        .cnx-accroche { margin-top: clamp(8px, 1.8vh, 20px); font-size: clamp(14.5px, 1.9vh, 17px); }
+        .cnx-illu { padding: clamp(8px, 2.5vh, 32px) 0; }
+        .cnx-carte { padding-top: clamp(18px, 3.4vh, 36px); padding-bottom: clamp(18px, 3.4vh, 36px); }
+        .cnx-h2 { font-size: clamp(22px, 3vh, 28px); }
+        :global(.cnx-form) { margin-top: clamp(14px, 2.8vh, 30px); display: flex; flex-direction: column; gap: clamp(10px, 1.9vh, 20px); }
+        .cnx-ou { margin: clamp(10px, 2.2vh, 26px) 0; }
+        .cnx-lien { margin-top: clamp(10px, 2.2vh, 26px); }
+        .cnx-marque-mobile { margin-bottom: clamp(10px, 2.4vh, 20px); }
         .cnx-gauche { background: linear-gradient(180deg, #FAF8FF 0%, #F5F1FF 100%); }
         .cnx-carte { box-shadow: 0 1px 2px rgba(25,23,27,0.04), 0 18px 50px rgba(100,66,232,0.08); border: 1px solid var(--cl-line-soft); }
         :global(.cnx-input) {
-          width: 100%; height: 52px; border-radius: 8px; padding: 0 16px; font-size: 16px;
+          width: 100%; height: clamp(42px, 5.4vh, 52px); border-radius: 8px; padding: 0 16px; font-size: 16px;
           color: var(--cl-ink); background: #fff; border: 1px solid #D9D5DF; outline: none;
           transition: border-color .15s, box-shadow .15s;
         }
@@ -225,9 +239,10 @@ export default function LoginPage() {
         :global(.cnx-input:focus) { border-color: var(--cl-accent); box-shadow: 0 0 0 3px rgba(124,90,248,0.14); }
         :global(.cnx-case) { width: 18px; height: 18px; accent-color: var(--cl-accent-deep); }
         :global(.cnx-secondaire) {
-          width: 100%; height: 56px; border-radius: 8px; font-size: 17px; font-weight: 500;
+          width: 100%; height: clamp(42px, 5.6vh, 54px); border-radius: 8px; font-size: 16px; font-weight: 500;
           color: var(--cl-ink); background: #fff; border: 1px solid #D9D5DF; transition: background .15s, border-color .15s;
         }
+        :global(.cnx-btn) { height: clamp(44px, 6vh, 56px); font-size: clamp(16px, 2vh, 18px); box-shadow: 0 8px 22px rgba(100,66,232,0.28); }
         :global(.cnx-secondaire:hover) { background: var(--cl-accent-soft); border-color: var(--cl-lavender); }
       `}</style>
     </div>
@@ -249,7 +264,7 @@ function Marque() {
 function Champ({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-2 block text-[14.5px] font-medium" style={{ color: "var(--cl-ink)" }}>{label}</label>
+      <label className="mb-1.5 block text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>{label}</label>
       {children}
     </div>
   );
@@ -268,8 +283,8 @@ function BoutonOeil({ voir, onClick }: { voir: boolean; onClick: () => void }) {
 function BoutonPrincipal({ loading, children }: { loading: boolean; children: React.ReactNode }) {
   return (
     <button type="submit" disabled={loading}
-      className="flex h-[58px] w-full items-center justify-center gap-2 rounded-lg text-[19px] font-semibold text-white transition disabled:opacity-70"
-      style={{ background: "var(--cl-accent-deep)", boxShadow: "0 8px 22px rgba(100,66,232,0.28)" }}>
+      className="cnx-btn flex w-full items-center justify-center gap-2 rounded-lg font-semibold text-white transition disabled:opacity-70"
+      style={{ background: "var(--cl-accent-deep)" }}>
       {loading && <Loader2 className="h-5 w-5 animate-spin" />}
       {children}
     </button>

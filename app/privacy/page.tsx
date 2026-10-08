@@ -64,7 +64,7 @@ const TOC = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PrivacyPage() {
-  const lastUpdated = "18 mai 2026";
+  const lastUpdated = "8 octobre 2026";
 
   return (
     <div className="min-h-dvh" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -136,7 +136,7 @@ export default function PrivacyPage() {
               <P>
                 Camille est une plateforme SaaS éditée par <strong style={{ color: "var(--text-primary)" }}>Buyticle</strong>,
                 permettant aux entreprises de déployer des agents IA conversationnels sur WhatsApp.
-                Elle intègre des services tiers (Google Calendar, WhatsApp via WAHA, Groq) pour offrir
+                Elle s'appuie sur l'API officielle WhatsApp Business de Meta (WhatsApp Cloud API) et sur des services tiers (Groq, Google Calendar) pour offrir
                 des fonctionnalités de planification de rendez-vous, de capture de leads et de réponses
                 automatisées.
               </P>
@@ -371,16 +371,16 @@ export default function PrivacyPage() {
               <div className="space-y-3">
                 {[
                   {
-                    nom: "Groq Inc.",
-                    role: "Fournisseur de modèles LLM",
-                    donnees: "Contenu des messages WhatsApp (pour générer les réponses IA)",
-                    lien: "https://groq.com/privacy-policy/",
+                    nom: "Meta Platforms (WhatsApp Business Platform)",
+                    role: "Acheminement des messages WhatsApp via l'API officielle WhatsApp Cloud API",
+                    donnees: "Numéros de téléphone, nom de profil WhatsApp, contenu des messages (texte, notes vocales, images, positions partagées), catalogue de produits et paniers",
+                    lien: "https://www.whatsapp.com/legal/business-data-processing-terms",
                   },
                   {
-                    nom: "WAHA (WhatsApp HTTP API)",
-                    role: "Passerelle WhatsApp Business",
-                    donnees: "Numéros de téléphone, sessions WhatsApp, textes des messages",
-                    lien: "https://waha.devlike.pro/",
+                    nom: "Groq Inc.",
+                    role: "Fournisseur de modèles LLM et de transcription vocale",
+                    donnees: "Contenu des messages WhatsApp et notes vocales (pour comprendre la demande et générer les réponses ; les notes vocales sont transcrites en texte)",
+                    lien: "https://groq.com/privacy-policy/",
                   },
                   {
                     nom: "Google LLC",
@@ -408,6 +408,11 @@ export default function PrivacyPage() {
                   </div>
                 ))}
               </div>
+              <P>
+                Transition : certains comptes créés avant le passage à l&apos;API officielle restent
+                connectés par une liaison « appareil lié » WhatsApp, exploitée par Buyticle sur ses propres
+                serveurs, sans autre intermédiaire. Ils migrent progressivement vers l&apos;API officielle de Meta.
+              </P>
               <P>
                 En dehors de ces sous-traitants, vos données ne sont partagées qu'en cas d'obligation
                 légale (décision judiciaire, réquisition d'autorité compétente).

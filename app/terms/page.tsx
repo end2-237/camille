@@ -64,7 +64,7 @@ const TOC = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TermsPage() {
-  const lastUpdated = "18 mai 2026";
+  const lastUpdated = "8 octobre 2026";
 
   return (
     <div className="min-h-dvh" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -246,8 +246,8 @@ export default function TermsPage() {
                     label: "CGU Google",
                   },
                   {
-                    service: "WhatsApp Business (via WAHA)",
-                    detail: "L'utilisation de WhatsApp doit être conforme aux Conditions d'utilisation de WhatsApp Business et aux politiques d'utilisation acceptable de Meta. Buyticle décline toute responsabilité en cas de suspension de votre compte WhatsApp par Meta.",
+                    service: "WhatsApp Business Platform (Meta)",
+                    detail: "Camille utilise l'API officielle WhatsApp Business de Meta (WhatsApp Cloud API). L'utilisation de WhatsApp doit être conforme aux Conditions d'utilisation de WhatsApp Business, à la Politique commerciale WhatsApp et aux politiques d'utilisation acceptable de Meta. Les frais de conversation facturés par Meta, le cas échéant, sont à la charge du titulaire du compte WhatsApp Business. Buyticle décline toute responsabilité en cas de suspension de votre compte WhatsApp par Meta.",
                     lien: "https://www.whatsapp.com/legal/business-terms",
                     label: "CGU WhatsApp Business",
                   },
