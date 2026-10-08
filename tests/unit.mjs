@@ -737,6 +737,9 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("contexte : l'étape et la référence", /COMMANDE EN COURS XDLGC8/.test(retraitPrep) && /étape : en préparation/.test(retraitPrep));
   chk("contexte : retrait « en route » se dit « prête, à récupérer »",
     /prête, à récupérer/.test(contexteCommande({ ...base, fulfillment: "retrait", status: "en_livraison" })));
+  const prog = { ...base, status: "en_traitement", scheduled_at: "2026-10-08T12:00:00Z" };
+  chk("commande programmée : l'heure dans le récap (heure de Douala)", recapCommande(prog).includes("Pour : 08/10 13:00"));
+  chk("commande programmée : l'heure dans le contexte du modèle", /programmée pour 08\/10 13:00/.test(contexteCommande(prog)));
   chk("contexte : livraison avec l'adresse", /livraison à Bonamoussadi/.test(contexteCommande({ ...base, status: "en_livraison" })));
   chk("aucun bouton ne porte d'émoji (trop chargé)", ["en_traitement", "en_livraison", "livree", "annulee"].every((s) =>
     titres(annonce({ ...base, status: s }, { avecLivreur: true })).every((t) => !/\p{Extended_Pictographic}/u.test(t))));

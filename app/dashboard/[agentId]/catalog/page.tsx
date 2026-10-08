@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Plus, Pencil, Trash2, Link2, Check, X, ExternalLink, Search, Upload, ImageIcon, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
-import { JOURS, ProductCard, type Product } from "@/components/catalog/ProductCard";
+import { JOURS, ProductCard, type OptionGroup, type Product } from "@/components/catalog/ProductCard";
 import { authHeaders } from "@/lib/auth-client";
 import { sertDesRepas } from "@/lib/sectorProfiles";
 
@@ -99,6 +99,19 @@ export default function CatalogPage() {
       daily_menu: restauration ? editing.daily_menu ?? false : undefined,
       available_days: restauration
         ? (editing.available_days ?? []).filter((j) => j >= 1 && j <= 6).sort()
+        : undefined,
+      // Options du plat : seulement en restauration. Un groupe sans nom ou sans
+      // choix est écarté ; un prix vide vaut 0 (pas de supplément).
+      options: restauration
+        ? (editing.options ?? [])
+            .map((g) => ({
+              name: (g.name ?? "").trim(),
+              required: g.required !== false,
+              choices: (g.choices ?? [])
+                .map((c) => ({ label: (c.label ?? "").trim(), price: Number(c.price) || 0 }))
+                .filter((c) => c.label),
+            }))
+            .filter((g) => g.name && g.choices.length)
         : undefined,
       tags: (editing.tagsStr ?? "").split(",").map((t) => t.trim()).filter(Boolean),
       variants: (editing.variants ?? [])
@@ -465,6 +478,70 @@ export default function CatalogPage() {
                   </button>
                 </div>
               </Field>
+
+              {restauration && (
+                <Field label="Options du plat (accompagnement, sauce, piment…)">
+                  <div className="space-y-3">
+                    {(editing.options ?? []).map((g, gi) => {
+                      const choices = g.choices ?? [];
+                      const setGroupe = (patch: Partial<OptionGroup>) => {
+                        const gs = [...(editing.options ?? [])];
+                        gs[gi] = { ...gs[gi], ...patch };
+                        setEditing({ ...editing, options: gs });
+                      };
+                      return (
+                        <div key={gi} className="rounded-lg p-2.5" style={{ border: "1px solid var(--cl-line)" }}>
+                          <div className="flex items-center gap-2">
+                            <input className="cl-input" style={{ maxWidth: 170 }} value={g.name ?? ""} placeholder="Ex : Accompagnement"
+                              onChange={(e) => setGroupe({ name: e.target.value })} />
+                            <label className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--cl-ink-soft)" }}>
+                              <input type="checkbox" checked={g.required !== false}
+                                onChange={(e) => setGroupe({ required: e.target.checked })} />
+                              Obligatoire
+                            </label>
+                            <button type="button" onClick={() => setEditing({ ...editing, options: (editing.options ?? []).filter((_, j) => j !== gi) })}
+                              className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ border: "1px solid var(--cl-line)", color: "#C2504B" }} aria-label="Retirer le groupe">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="mt-2 space-y-1.5">
+                            {choices.map((c, ci) => (
+                              <div key={ci} className="flex items-center gap-2">
+                                <input className="cl-input flex-1" value={c.label ?? ""} placeholder="Ex : Plantain"
+                                  onChange={(e) => { const cs = [...choices]; cs[ci] = { ...cs[ci], label: e.target.value }; setGroupe({ choices: cs }); }} />
+                                <input className="cl-input" style={{ maxWidth: 110 }} type="number" min={0} value={c.price ?? ""} placeholder="+ prix (0)"
+                                  onChange={(e) => { const cs = [...choices]; cs[ci] = { ...cs[ci], price: e.target.value }; setGroupe({ choices: cs }); }} />
+                                <button type="button" onClick={() => setGroupe({ choices: choices.filter((_, j) => j !== ci) })}
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: "var(--cl-ink-faint)" }} aria-label="Retirer le choix">
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                            {choices.length < 10 && (
+                              <button type="button" onClick={() => setGroupe({ choices: [...choices, { label: "", price: "" }] })}
+                                className="inline-flex items-center gap-1 text-[11.5px] font-medium" style={{ color: "var(--cl-accent-deep)" }}>
+                                <Plus className="h-3 w-3" /> Ajouter un choix
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(editing.options ?? []).length < 5 && (
+                      <button type="button"
+                        onClick={() => setEditing({ ...editing, options: [...(editing.options ?? []), { name: "", required: true, choices: [] }] })}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium"
+                        style={{ border: "1px dashed var(--cl-line)", color: "var(--cl-ink-soft)" }}>
+                        <Plus className="h-3.5 w-3.5" /> Ajouter un groupe d&apos;options
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-[11px]" style={{ color: "var(--cl-ink-faint)" }}>
+                    Demandées au client sur WhatsApp après son panier. Le prix est un supplément (laisser vide = 0).
+                    « Obligatoire » décoché : le client peut répondre « Sans ».
+                  </p>
+                </Field>
+              )}
 
               <Field label="Tags (séparés par des virgules)">
                 <input className="cl-input" value={editing.tagsStr ?? ""} onChange={(e) => setEditing({ ...editing, tagsStr: e.target.value })} placeholder="Apple, Électronique, Display" />

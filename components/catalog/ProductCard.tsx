@@ -24,7 +24,12 @@ export interface Product {
   daily_menu?: boolean;
   /** Jours de service, 1 = lundi … 6 = samedi. Vide = pas de jour fixe. */
   available_days?: number[];
+  /** Options d'un plat (accompagnement, sauce…), demandées au client après le panier. */
+  options?: OptionGroup[];
 }
+
+/** Un groupe d'options : « Accompagnement » obligatoire, « Piment » facultatif… */
+export type OptionGroup = { name: string; required?: boolean; choices: { label: string; price?: number | string | null }[] };
 
 // Une option de variation : texte simple OU { valeur + image liée }
 export type VariantOption = string | { value: string; image?: string | null };
