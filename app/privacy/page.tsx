@@ -49,6 +49,7 @@ const TOC = [
   { id: "qui-sommes-nous",       label: "Qui sommes-nous ?" },
   { id: "donnees-collectees",    label: "Données collectées" },
   { id: "application-mobile",    label: "Application mobile Android" },
+  { id: "meta-whatsapp",         label: "Données WhatsApp (Meta)" },
   { id: "google-api",            label: "Utilisation des données Google" },
   { id: "finalites",             label: "Finalités du traitement" },
   { id: "partage",               label: "Partage des données" },
@@ -185,7 +186,8 @@ export default function PrivacyPage() {
                     style={{ color: "var(--text-disabled)" }}>Données de l'agent IA</p>
                   <Ul items={[
                     "Configuration de l'agent (nom, personnalité, base de connaissance)",
-                    "Historique des conversations WhatsApp (messages entrants et réponses générées)",
+                    "Historique des conversations WhatsApp (messages entrants et réponses générées), y compris la transcription texte des notes vocales",
+                    "Commandes passées sur WhatsApp : articles, montants, mode de réception, adresse ou position partagée par le client",
                     "Leads capturés (nom, e-mail, numéro de téléphone des contacts WhatsApp)",
                     "Tokens d'utilisation des modèles LLM",
                   ]} />
@@ -195,7 +197,8 @@ export default function PrivacyPage() {
                   <p className="text-xs font-semibold uppercase tracking-wider mb-3"
                     style={{ color: "var(--text-disabled)" }}>Données d'intégration tierce</p>
                   <Ul items={[
-                    "Token de rafraîchissement (refresh_token) Google OAuth — voir section 3",
+                    "Connexion WhatsApp Business (Meta) : identifiants du compte et du numéro, nom vérifié, jeton d'accès chiffré — voir « Données WhatsApp (Meta) »",
+                    "Token de rafraîchissement (refresh_token) Google OAuth — voir section « Données Google »",
                     "Adresse e-mail Google associée au calendrier connecté",
                     "Données techniques de connexion (logs d'accès, adresse IP, user-agent)",
                   ]} />
@@ -236,6 +239,55 @@ export default function PrivacyPage() {
                 Les fonds de carte et le calcul d&apos;itinéraire sont fournis par des
                 services cartographiques ouverts (OpenStreetMap, CARTO, OSRM),
                 interrogés sans identifiant de compte.
+              </P>
+            </Section>
+
+            <Section id="meta-whatsapp" title="Données WhatsApp (Meta Platform)">
+              <P>
+                Camille utilise l&apos;API officielle <strong style={{ color: "var(--text-primary)" }}>WhatsApp Business
+                Platform (Cloud API)</strong> de Meta. Lorsqu&apos;un commerçant connecte son compte WhatsApp Business
+                à Camille par la fenêtre officielle de Meta (« Embedded Signup »), il nous autorise à envoyer et
+                recevoir des messages en son nom, avec son numéro.
+              </P>
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                Ce que nous recevons de Meta et pourquoi :
+              </p>
+              <Ul items={[
+                "Identifiants du compte WhatsApp Business et du numéro, nom vérifié et numéro affiché : pour relier le numéro au bon agent et l'afficher au commerçant.",
+                "Un jeton d'accès propre au commerçant : uniquement pour envoyer et recevoir les messages de son agent, gérer ses modèles de message et son catalogue.",
+                "Les messages de ses clients (texte, notes vocales, images, positions, paniers du catalogue) : pour y répondre, enregistrer les commandes et les suivre.",
+                "Le catalogue de produits relié au compte : pour montrer les articles et recevoir les paniers.",
+              ]} />
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                Ce que nous ne faisons pas :
+              </p>
+              <Ul items={[
+                "Nous ne vendons ni ne louons aucune donnée reçue de Meta, et ne l'utilisons à aucune fin publicitaire.",
+                "Nous n'accédons ni aux paiements, ni aux utilisateurs, ni aux autres paramètres du compte Meta du commerçant : seuls les droits nécessaires à la messagerie, aux numéros, aux modèles et au catalogue sont demandés.",
+                "Nous n'envoyons pas de messages non sollicités : l'agent répond aux clients qui écrivent au commerce, et les messages hors conversation passent par des modèles approuvés par Meta.",
+                "Les conversations des clients d'un commerçant ne sont jamais visibles par un autre commerçant.",
+              ]} />
+              <P>
+                <strong style={{ color: "var(--text-primary)" }}>Stockage du jeton :</strong> le jeton d&apos;accès
+                Meta et le code PIN du numéro sont chiffrés (AES-256-GCM) dans notre base ; la clé de chiffrement est
+                conservée hors de la base. Ils ne sont jamais renvoyés au navigateur.
+              </P>
+              <P>
+                <strong style={{ color: "var(--text-primary)" }}>Déconnexion :</strong> le commerçant peut déconnecter
+                son WhatsApp à tout moment depuis la page <em>WhatsApp officiel</em> de son agent : le jeton est effacé
+                et notre application cesse d&apos;écouter son compte. Il peut aussi retirer l&apos;accès depuis les
+                paramètres de son entreprise sur Meta (Business Manager → Intégrations). La suppression du compte
+                Camille efface ces données, comme indiqué plus bas.
+              </P>
+              <P>
+                Le traitement est conforme aux{" "}
+                <a href="https://developers.facebook.com/terms/" target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-gold)" }}>
+                  Conditions de la plateforme Meta
+                </a>{" "}
+                et aux{" "}
+                <a href="https://www.whatsapp.com/legal/business-policy/" target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-gold)" }}>
+                  Politiques commerciales de WhatsApp
+                </a>.
               </P>
             </Section>
 
@@ -425,6 +477,8 @@ export default function PrivacyPage() {
                 "Données de compte : conservées pendant toute la durée de l'abonnement actif, puis supprimées dans un délai de 90 jours après résiliation.",
                 "Historique des conversations WhatsApp : conservé 12 mois glissants par défaut, configurable par l'utilisateur.",
                 "Données Google (refresh_token, e-mail Google) : supprimées immédiatement lors de la déconnexion du calendrier ou de la suppression du compte.",
+                "Jeton et identifiants WhatsApp (Meta) : supprimés immédiatement lors de la déconnexion du WhatsApp ou de la suppression du compte.",
+                "Paniers WhatsApp non terminés : effacés automatiquement après 2 heures.",
                 "Leads capturés : conservés jusqu'à suppression manuelle ou résiliation du compte.",
                 "Logs techniques : conservés 30 jours à des fins de sécurité.",
               ]} />
@@ -440,10 +494,12 @@ export default function PrivacyPage() {
                 "Chiffrement des communications par TLS 1.3 (HTTPS obligatoire sur toutes les routes).",
                 "Authentification par JWT avec expiration et rotation régulière.",
                 "Mots de passe hashés avec bcrypt (facteur de coût élevé).",
-                "Tokens Google stockés dans une base PostgreSQL privée, accessible uniquement depuis nos serveurs.",
-                "Aucun token Google n'est jamais exposé dans les réponses API côté client.",
-                "Infrastructure hébergée sur un VPS privé en Europe, sans accès public à la base de données.",
-                "Accès administrateur restreint par liste blanche d'adresses IP.",
+                "Jetons Google et Meta stockés dans une base PostgreSQL privée, accessible uniquement depuis nos serveurs ; les jetons Meta sont en plus chiffrés (AES-256-GCM).",
+                "Aucun jeton n'est jamais exposé dans les réponses API côté client.",
+                "Messages WhatsApp reçus vérifiés par signature (HMAC SHA-256) avant tout traitement.",
+                "Infrastructure hébergée sur un serveur privé, sans accès public à la base de données ; pare-feu et blocage automatique des adresses malveillantes.",
+                "Accès administrateur aux serveurs par clé cryptographique uniquement (aucun mot de passe).",
+                "Sauvegardes quotidiennes chiffrées.",
               ]} />
             </Section>
 
