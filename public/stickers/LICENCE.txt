@@ -1,0 +1,4 @@
+commande.webp (✅) et livree.webp (🎉) : emojis animés Noto de Google,
+https://googlefonts.github.io/noto-emoji-animation/ — licence CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). Non modifiés.
+Format exigé par WhatsApp pour un sticker animé : WebP, 512×512, 500 Ko au plus.

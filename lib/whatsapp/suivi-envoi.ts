@@ -5,7 +5,7 @@
 import { query } from "@/lib/db";
 import * as meta from "./meta";
 import { transportDe, type EnvoiResult } from "./envoi";
-import { annonce, type CommandeSuivie } from "./suivi";
+import { annonce, urlAnimation, type CommandeSuivie } from "./suivi";
 
 export type CommandeComplete = CommandeSuivie & {
   id: string;
@@ -21,13 +21,15 @@ export type CommandeComplete = CommandeSuivie & {
 };
 
 /**
- * Les animations de réussite (WebP animé, 512×512, ≤ 500 Ko), par variable
- * d'environnement. Aucune configurée → rien n'est envoyé, sans erreur.
- *   STICKER_COMMANDE_URL : commande enregistrée
- *   STICKER_LIVREE_URL   : commande livrée
+ * Les animations de réussite : un sticker WebP animé (512×512, ≤ 500 Ko).
+ *
+ * Par défaut, ceux livrés avec Camille dans public/stickers (✅ et 🎉, emojis
+ * animés Noto, CC BY 4.0), servis depuis NEXT_PUBLIC_APP_URL. Pour en mettre
+ * d'autres : STICKER_COMMANDE_URL / STICKER_LIVREE_URL. Pour n'en envoyer
+ * aucun : la variable à « off ». Best-effort : un refus ne bloque rien.
  */
 export async function envoyerAnimation(phone: string, moment: "commande" | "livree"): Promise<void> {
-  const url = moment === "commande" ? process.env.STICKER_COMMANDE_URL : process.env.STICKER_LIVREE_URL;
+  const url = urlAnimation(moment);
   if (!url) return;
   const r = await meta.sendSticker(phone, url);
   if (!r.ok) console.warn(`[suivi] animation « ${moment} » refusée :`, r.error);

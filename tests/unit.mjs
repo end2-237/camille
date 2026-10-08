@@ -722,6 +722,13 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("lecture d'un bouton", lireIdSuivi(idSuivi("recap", "K7Q2")), { action: "recap", ref: "K7Q2" });
   eq("bouton inconnu → null", lireIdSuivi("cmd:pirater:K7Q2"), null);
   eq("identifiant de catalogue → null", lireIdSuivi("cup_noir"), null);
+
+  const { urlAnimation } = await import(`${DIST}/whatsapp/suivi.js`);
+  const app = { NEXT_PUBLIC_APP_URL: "https://camille.vps.buyticle.com/" };
+  eq("animation par défaut : celle livrée avec Camille", urlAnimation("livree", app), "https://camille.vps.buyticle.com/stickers/livree.webp");
+  eq("animation choisie par le commerçant", urlAnimation("commande", { ...app, STICKER_COMMANDE_URL: "https://x/y.webp" }), "https://x/y.webp");
+  eq("« off » → aucune animation", urlAnimation("commande", { ...app, STICKER_COMMANDE_URL: "off" }), null);
+  eq("adresse non https (local) → aucune animation", urlAnimation("livree", { NEXT_PUBLIC_APP_URL: "http://localhost:3000" }), null);
 }
 
 // ═══ voix — un vocal devient un message écrit ══════════════════════════════

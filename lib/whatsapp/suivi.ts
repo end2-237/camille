@@ -173,3 +173,15 @@ export function etapesCommande(o: CommandeSuivie): string {
     ligne(fait(3), retrait(o) ? "Récupérée" : "Livrée", o.delivered_at),
   ].join("\n");
 }
+
+/** L'adresse du sticker animé de ce moment, ou null (voir envoyerAnimation). */
+export function urlAnimation(
+  moment: "commande" | "livree",
+  env: Record<string, string | undefined> = process.env
+): string | null {
+  const reglee = moment === "commande" ? env.STICKER_COMMANDE_URL : env.STICKER_LIVREE_URL;
+  if (reglee) return /^(off|non|0|false)$/i.test(reglee.trim()) ? null : reglee.trim();
+  const base = String(env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  // WhatsApp télécharge le sticker lui-même : il lui faut une adresse publique en https.
+  return /^https:\/\//.test(base) ? `${base}/stickers/${moment}.webp` : null;
+}
