@@ -134,6 +134,7 @@ function Compte() {
             exit={{ opacity: 0, y: -4, scale: 0.97 }} transition={RESSORT} style={{ transformOrigin: "top right" }}
             className="coq-deroulant absolute right-0 top-[calc(100%+12px)] z-50 w-64 rounded-[22px] p-1.5">
             <p className="truncate px-3 py-2 text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>{monte ? user?.email : ""}</p>
+            <Link href="/dashboard/profil" className="block rounded-2xl px-3 py-2.5 text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "var(--cl-ink)" }}>Mon profil</Link>
             <Link href="/dashboard/billing" className="block rounded-2xl px-3 py-2.5 text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "var(--cl-ink)" }}>Abonnement</Link>
             <Link href="/" className="block rounded-2xl px-3 py-2.5 text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "var(--cl-ink)" }}>Retour au site</Link>
             <button onClick={logout} className="flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "#A63D28" }}>

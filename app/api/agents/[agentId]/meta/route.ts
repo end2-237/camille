@@ -178,10 +178,25 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
        FROM camille.agents a WHERE a.id = $1`,
     [agentId]
   );
-  // Seul un WhatsApp connecté par le commerçant se déconnecte d'ici : un agent
-  // qui parle avec les identifiants de l'application ne doit pas être éteint
-  // par erreur.
-  if (!r.rows[0]?.token_enc) return NextResponse.json({ error: "Aucun WhatsApp connecté par ce commerçant" }, { status: 400 });
+  // Sans jeton propre : l'agent parle peut-être avec le numéro de
+  // l'APPLICATION. Le déconnecter le rend à camille-core (WhatsApp Web) ; la
+  // page l'a annoncé et demandé confirmation. Rien n'est désabonné chez Meta :
+  // le numéro de l'application sert encore aux autres agents.
+  if (!r.rows[0]?.token_enc) {
+    const mode = modeDe(agentId, await etat(agentId).catch(() => null));
+    if (mode !== "application") return NextResponse.json({ error: "Aucun WhatsApp officiel connecté sur cet agent" }, { status: 400 });
+    await query(
+      `UPDATE camille.agents
+          SET transport = 'core',
+              meta_phone_number_id = CASE WHEN to_jsonb(agents)->>'meta_phone_number_id' = $2 THEN NULL
+                                          ELSE to_jsonb(agents)->>'meta_phone_number_id' END,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [agentId, process.env.PHONE_NUMBER_ID || ""]
+    );
+    oublierIdentifiants(agentId);
+    return NextResponse.json({ ok: true, mode: "application" });
+  }
   const token = dechiffrer(r.rows[0].token_enc);
   if (token && r.rows[0].waba_id) await desabonner(r.rows[0].waba_id, token).catch(() => {});
   await query(

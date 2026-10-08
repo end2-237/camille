@@ -40,6 +40,7 @@ export const PAGES: Page[] = [
   { famille: "reglages", titre: "Configuration de l'agent", segment: "settings", parAgent: true },
   { famille: "reglages", titre: "Intégrations", segment: "integrations", parAgent: true },
   { famille: "reglages", titre: "Trafic du site", segment: "trafic", parAgent: true },
+  { famille: "reglages", titre: "Mon profil", chemin: "/dashboard/profil", parAgent: false },
   { famille: "reglages", titre: "Notifications", chemin: "/dashboard/notifications", parAgent: false },
   { famille: "reglages", titre: "Exploitation", chemin: "/dashboard/admin", parAgent: false },
   { famille: "reglages", titre: "Qualité de l'agent", chemin: "/dashboard/insights", parAgent: false },

@@ -58,7 +58,7 @@ function Feuille({ children }: { children: React.ReactNode }) {
   const famille = page ? FAMILLES[page.famille] : "Camille";
 
   return (
-    <main ref={ref} className="coq-feuille relative z-10 rounded-t-[36px]">
+    <main ref={ref} className="coq-feuille relative rounded-t-[36px]">
       <motion.div key={chemin} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.38, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
         className="coq-titre flex flex-col gap-4 pt-6 lg:flex-row lg:items-end lg:justify-between lg:pt-8" style={{ paddingLeft: "var(--coq-marge)", paddingRight: "var(--coq-marge)" }}>
         <div className="min-w-0">

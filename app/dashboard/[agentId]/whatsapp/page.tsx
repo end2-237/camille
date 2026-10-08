@@ -14,6 +14,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { BadgeCheck, CheckCircle2, AlertTriangle, Loader2, RefreshCw, Unplug, ShieldCheck, ShoppingBag, MousePointerClick, Phone, CalendarClock, BookOpen } from "lucide-react";
@@ -152,14 +153,19 @@ export default function WhatsappOfficielPage() {
     }
   };
 
+  // La déconnexion passe par une vraie fenêtre de confirmation : ses
+  // conséquences diffèrent selon que l'agent a son numéro ou celui de l'application.
+  const [confirmer, setConfirmer] = useState(false);
   const deconnecter = async () => {
-    if (!confirm("Déconnecter ce WhatsApp de Camille ? L'agent ne répondra plus sur ce numéro.")) return;
+    setConfirmer(false);
     setOccupe(true);
     try {
       const r = await fetch(`/api/agents/${agentId}/meta`, { method: "DELETE", headers: await authHeaders() });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Déconnexion impossible");
-      setMsg({ ok: true, texte: "WhatsApp déconnecté." });
+      setMsg({ ok: true, texte: d.mode === "application"
+        ? "WhatsApp officiel déconnecté : l'agent repasse sur camille-core."
+        : "WhatsApp déconnecté : l'agent ne répond plus sur ce numéro." });
       await charger();
     } catch (e) {
       setMsg({ ok: false, texte: (e as Error).message });
@@ -208,10 +214,56 @@ export default function WhatsappOfficielPage() {
           <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--cl-accent)" }} />
         </div>
       ) : etat.connecte ? (
-        <Connecte etat={etat} occupe={occupe} onActualiser={actualiser} onDeconnecter={deconnecter} />
+        <Connecte etat={etat} occupe={occupe} onActualiser={actualiser} onDeconnecter={() => setConfirmer(true)} />
       ) : (
         <AConnecter test={etat.transport === "meta"} occupe={occupe} bloque={manque.length > 0} onConnecter={connecter} />
       )}
+
+      {/* À la racine du document : rien de la page (ni la barre, ni le bouton
+          d'agent) ne doit passer par-dessus la confirmation. */}
+      {typeof document !== "undefined" && confirmer && createPortal(
+      <AnimatePresence>
+        {confirmer && etat?.connecte && (
+          <motion.div key="voile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] flex items-end justify-center p-3 sm:items-center"
+            style={{ background: "rgba(25,23,27,0.38)" }} onClick={() => setConfirmer(false)}>
+            <motion.div initial={{ y: 24, scale: 0.97, opacity: 0 }} animate={{ y: 0, scale: 1, opacity: 1 }} exit={{ y: 16, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 420, damping: 32 }} onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-[460px] rounded-[30px] bg-white p-6 shadow-2xl">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "#FBEAE6", color: "#A63D28" }}>
+                <Unplug className="h-5 w-5" />
+              </span>
+              <h3 className="mt-4 text-[20px] font-medium tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>
+                Déconnecter le WhatsApp officiel ?
+              </h3>
+              <ul className="mt-3 space-y-2 text-[13.5px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+                {etat.mode === "application" ? (
+                  <>
+                    <li>• L&apos;agent cesse de répondre par Meta sur {etat.numero || "le numéro de l'application"}.</li>
+                    <li>• Il repasse sur <strong>camille-core</strong> (WhatsApp Web) : il ne répondra que si une session y est active.</li>
+                    <li>• Le numéro de l&apos;application reste en service pour les autres agents.</li>
+                  </>
+                ) : (
+                  <>
+                    <li>• L&apos;agent ne répondra plus sur {etat.numero || "ce numéro"}.</li>
+                    <li>• Camille cesse d&apos;écouter ce compte WhatsApp Business ; votre numéro reste à vous chez Meta.</li>
+                    <li>• Vous pourrez le reconnecter plus tard depuis cette page.</li>
+                  </>
+                )}
+              </ul>
+              <div className="mt-6 flex flex-wrap justify-end gap-2">
+                <button onClick={() => setConfirmer(false)} className="h-11 rounded-full px-5 text-[14px] font-medium"
+                  style={{ background: "#F4F2F7", color: "var(--cl-ink)" }}>Garder la connexion</button>
+                <button onClick={deconnecter} className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-[14px] font-medium text-white"
+                  style={{ background: "#A63D28" }}>
+                  <Unplug className="h-4 w-4" /> Déconnecter
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>,
+      document.body)}
     </div>
   );
 }
@@ -329,23 +381,24 @@ function Connecte({ etat, occupe, onActualiser, onDeconnecter }: { etat: Etat; o
           <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
             Chaque message reçu sur {etat.numero || "votre numéro"} est traité par votre agent, avec votre nom vérifié et votre catalogue.
           </p>
-          {etat.mode === "application" ? (
+          {etat.mode === "application" && (
             <p className="mt-5 max-w-[52ch] rounded-[18px] bg-white/70 px-4 py-3 text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
               Cet agent utilise le numéro WhatsApp officiel configuré pour l&apos;application. Rien à connecter ici :
               il répond déjà par Meta, avec les boutons, les listes et le catalogue.
             </p>
-          ) : (
+          )}
           <div className="mt-6 flex flex-wrap gap-2.5">
+            {etat.mode !== "application" && (
             <motion.button onClick={onActualiser} disabled={occupe} whileTap={{ scale: 0.97 }}
               className="flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[14px] font-medium disabled:opacity-60" style={{ color: "var(--cl-ink)" }}>
               <RefreshCw className={"h-4 w-4 " + (occupe ? "animate-spin" : "")} /> Actualiser le catalogue
             </motion.button>
+            )}
             <motion.button onClick={onDeconnecter} disabled={occupe} whileTap={{ scale: 0.97 }}
               className="flex items-center gap-2 rounded-full px-4 py-2.5 text-[14px] font-medium disabled:opacity-60" style={{ color: "#A63D28", background: "rgba(255,255,255,0.55)" }}>
               <Unplug className="h-4 w-4" /> Déconnecter
             </motion.button>
           </div>
-          )}
         </div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, type: "spring", stiffness: 200, damping: 18 }}
           className="relative hidden justify-center lg:flex">

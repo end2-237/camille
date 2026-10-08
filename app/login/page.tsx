@@ -153,7 +153,7 @@ export default function LoginPage() {
                     <input type="checkbox" checked={retenir} onChange={(e) => setRetenir(e.target.checked)} className="cnx-case" />
                     Se souvenir de moi
                   </label>
-                  <Link href="/contact" className="whitespace-nowrap font-medium hover:underline" style={{ color: "var(--cl-accent-deep)" }}>
+                  <Link href="/mot-de-passe-oublie" className="whitespace-nowrap font-medium hover:underline" style={{ color: "var(--cl-accent-deep)" }}>
                     Mot de passe oublié ?
                   </Link>
                 </div>
