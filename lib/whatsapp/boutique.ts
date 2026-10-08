@@ -110,7 +110,22 @@ export type Produit = {
   retailerId: string;
   /** Les axes de variation Camille (null pour un article lu chez Meta). */
   variants?: AxeVariante[] | null;
+  /** Les valeurs de variation à reconnaître dans une demande (« Noir », « 42 »). */
+  options?: string[];
+  /** Les mêmes, lisibles pour le modèle : « Couleur : Noir, Bleu ». */
+  optionsTexte?: string;
 };
+
+/** Les variations d'un produit Camille, sous les deux formes utiles. */
+function optionsDe(axes: AxeVariante[] | null | undefined): { options: string[]; optionsTexte: string } {
+  const propres = (Array.isArray(axes) ? axes : []).filter((a) => a?.name && Array.isArray(a.options));
+  const valeurs = (a: AxeVariante) =>
+    a.options.map((o) => (typeof o === "string" ? o : String(o?.value || ""))).filter(Boolean);
+  return {
+    options: propres.flatMap(valeurs),
+    optionsTexte: propres.map((a) => `${a.name} : ${valeurs(a).join(", ")}`).join(" ; "),
+  };
+}
 
 function money(n: number, cur = "XAF"): string {
   return `${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ${cur}`;
@@ -155,6 +170,7 @@ async function catalogue(agentId: string): Promise<Produit[]> {
         stock: x.stock != null ? Number(x.stock) : null,
         image_url: (x.image_url as string) || null,
         variants: Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null,
+        ...optionsDe(Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null),
         // Un produit publié avec ses variations n'existe chez Meta QUE sous
         // « <id>:<option> » : l'identifiant du parent donnerait « product not
         // found ». Un article importé de Meta garde, lui, son propre identifiant.
@@ -191,6 +207,18 @@ async function catalogue(agentId: string): Promise<Produit[]> {
   // Sans ça, « Watch 6 — Noir », « — Bleu », « — Rouge » défilaient comme
   // trois produits différents.
   const groupesVus = new Set<string>();
+  // Les options de chaque groupe, rassemblées AVANT de n'en garder qu'une
+  // fiche : sinon « t'as la noire ? » ne saurait pas que le noir existe.
+  const optionsGroupe = new Map<string, Set<string>>();
+  for (const it of m.items) {
+    if (!it.item_group_id) continue;
+    const set = optionsGroupe.get(it.item_group_id) || new Set<string>();
+    for (const v of [it.color, it.size, it.pattern, it.material, it.custom_label_0]) if (v) set.add(String(v));
+    // Repli : la variation lue dans le nom, « Tasse — Noir ».
+    const suffixe = String(it.name || "").split(" — ")[1];
+    if (suffixe) set.add(suffixe.trim());
+    optionsGroupe.set(it.item_group_id, set);
+  }
   return m.items
     .filter((it) => it.availability !== "out of stock" && it.sendable !== false)
     .filter((it) => {
@@ -205,9 +233,13 @@ async function catalogue(agentId: string): Promise<Produit[]> {
       // devine plus — la supposition « il y a toujours deux décimales »
       // annonçait 90 XAF pour un article à 9 000.
       const n = lirePrix(it.price);
+      const opts = it.item_group_id ? [...(optionsGroupe.get(it.item_group_id) || [])] : [];
       return {
         id: it.retailer_id,
-        name: it.name,
+        // Le nom du groupe, sans « — Noir » : la fiche propose toutes les options.
+        name: opts.length > 1 ? String(it.name).split(" — ")[0] : it.name,
+        options: opts,
+        optionsTexte: opts.length > 1 ? `options : ${opts.join(", ")}` : "",
         price: n != null && n > 0 ? n : null,
         currency: "XAF",
         category: null,
@@ -1142,6 +1174,7 @@ export async function repondreBoutique(
       prods.map((p) => ({
         id: p.id, name: p.name, price: p.price,
         currency: p.currency, category: p.category, stock: p.stock,
+        options: p.optionsTexte || null,
       })),
       faitsDe(agent),
       resto,

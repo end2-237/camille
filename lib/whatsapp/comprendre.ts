@@ -59,6 +59,8 @@ export type ProduitConnu = {
   currency: string;
   category: string | null;
   stock: number | null;
+  /** Les variations proposées, lisibles : « Couleur : Noir, Bleu ». */
+  options?: string | null;
 };
 
 /** Les faits vérifiables du commerce. Rien ici n'est négociable par le modèle. */
@@ -377,7 +379,7 @@ function consigne(prods: ProduitConnu[], faits: FaitsCommerce, resto: boolean): 
       (p) =>
         `- ${p.id} | ${p.name}${p.category ? ` | ${p.category}` : ""}${
           p.price != null ? ` | ${p.price} ${p.currency}` : ""
-        }`
+        }${p.options ? ` | existe en ${p.options}` : ""}`
     )
     .join("\n");
 
@@ -397,6 +399,11 @@ Tu as une boîte à outils. Chaque outil PRODUIT quelque chose chez le client �
 {"faire":"accueil"} → une salutation, rien de plus à faire.
 
 COMBINER est normal, et souvent meilleur : un prix se répond ET se montre (repondre + montrer), « des écouteurs, et vous livrez ? » c'est montrer + repondre. Mets les outils dans l'ordre utile.
+
+LANGUE ET VARIATIONS
+• Le client écrit en français ou en anglais, et les noms du catalogue sont souvent en anglais : rapproche par le SENS (tasse = cup/mug, montre = watch, écouteurs = earbuds/headphones, micro = microphone, noir = black, rouge = red…). Ne réponds jamais « on n'a pas ça » parce que les mots diffèrent.
+• « existe en … » liste les couleurs, tailles ou versions d'un article. Le client demande une couleur ou une taille qui y figure → montre CET article : sa fiche WhatsApp porte le choix de la variante. Une couleur absente de toutes les listes → dis-le avec repondre, puis montre ce qui s'en rapproche.
+• Réponds dans la langue du client.
 
 INTERDITS
 • Un identifiant hors catalogue. Ce qu'il cherche n'y est pas → dis-le avec repondre, puis vitrine.
@@ -422,7 +429,7 @@ Livraison : ${
       : "non, retrait sur place uniquement"
   }
 
-CATALOGUE — id | nom | catégorie | prix
+CATALOGUE — id | nom | catégorie | prix | variations
 ${liste || "(vide)"}
 
 SI ON TE DONNE « CE CLIENT » : la discrétion est une RÈGLE. Ne lui parle de son passé QUE si ça sert sa demande du moment — « la même chose que la dernière fois ? » quand il hésite, oui ; « je vois que tu as déjà commandé… » à chaque message, jamais. C'est étouffant, et un client étouffé s'en va. S'il ne demande rien, tu ne proposes rien.

@@ -18,6 +18,8 @@
 export type ProduitCherchable = {
   name: string;
   category?: string | null;
+  /** Les options de variation (« Noir », « Bleu », « 42 »…) : on les cherche aussi. */
+  options?: string[] | null;
 };
 
 export function sansAccent(s: string): string {
@@ -58,7 +60,40 @@ export const PONTS: Record<string, string[]> = {
   sac: ["bag", "backpack"],
   chaussure: ["shoe", "sneaker"],
   chaussures: ["shoe", "sneaker"],
+  tasse: ["cup", "mug"],
+  tasses: ["cup", "mug"],
+  gobelet: ["cup", "tumbler"],
+  bouteille: ["bottle", "flask"],
+  gourde: ["bottle", "flask"],
+  micro: ["microphone", "mic"],
+  microphone: ["mic"],
+  lunettes: ["glasses", "sunglasses"],
+  // Les couleurs : les options sont souvent en français (« Noir ») et les
+  // noms en anglais (« Black Edition ») — ou l'inverse. Le client, lui, écrit
+  // dans la langue qui lui vient.
+  noir: ["black"], noire: ["black", "noir"], noirs: ["black", "noir"],
+  blanc: ["white"], blanche: ["white", "blanc"],
+  rouge: ["red"], bleu: ["blue"], bleue: ["blue", "bleu"],
+  vert: ["green"], verte: ["green", "vert"],
+  jaune: ["yellow"], rose: ["pink"], violet: ["purple"], violette: ["purple", "violet"],
+  gris: ["grey", "gray"], grise: ["grey", "gray", "gris"],
+  marron: ["brown"], beige: ["beige"], orange: ["orange"],
+  dore: ["gold", "golden"], doree: ["gold", "golden", "dore"],
+  argent: ["silver"], argente: ["silver", "argent"],
 };
+
+/**
+ * Le pont dans l'AUTRE sens : un client qui écrit « black » doit trouver une
+ * option « Noir ». Construit une fois à partir de PONTS, pour qu'une
+ * correspondance ajoutée là-haut serve dans les deux langues.
+ */
+const PONTS_INVERSES: Record<string, string[]> = (() => {
+  const inv: Record<string, Set<string>> = {};
+  for (const [fr, ens] of Object.entries(PONTS)) {
+    for (const en of ens) (inv[en] ||= new Set()).add(fr);
+  }
+  return Object.fromEntries(Object.entries(inv).map(([k, v]) => [k, [...v]]));
+})();
 
 /**
  * « montre-moi » (le verbe) ou « une montre » (l'objet) ?
@@ -130,14 +165,18 @@ const DEMANDE =
  * article au lieu des quatre montres du catalogue.
  */
 export function chercher<T extends ProduitCherchable>(prods: T[], demande: string): T[] {
-  const bruts = sansAccent(demande).split(/\s+/).filter((w) => w.length >= 3);
+  // Découpage sur tout ce qui n'est pas lettre ou chiffre : « noir? » doit
+  // donner « noir ». Couper sur les seuls espaces gardait la ponctuation, et
+  // « t'as un article noir? » ne trouvait rien.
+  const bruts = sansAccent(demande).split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
   // Chaque mot amène ses équivalents : « montre » cherche aussi « watch ».
-  const mots = [...new Set(bruts.flatMap((w) => [w, ...(PONTS[w] || [])]))];
+  const mots = [...new Set(bruts.flatMap((w) => [w, ...(PONTS[w] || []), ...(PONTS_INVERSES[w] || [])]))];
   if (!mots.length) return [];
 
   const notes = prods.map((p) => {
     const jetons = new Set(
-      sansAccent(`${p.name} ${p.category || ""}`).split(/[^a-z0-9]+/).filter(Boolean)
+      sansAccent(`${p.name} ${p.category || ""} ${(p.options || []).join(" ")}`)
+        .split(/[^a-z0-9]+/).filter(Boolean)
     );
     const n = mots.filter(
       (w) => jetons.has(w) || [...jetons].some((j) => j.length > 3 && j.startsWith(w))

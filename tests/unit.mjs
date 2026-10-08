@@ -144,6 +144,23 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("« freepods » reste une recherche", !estUneQuestion("freepods"));
   chk("« montre oraimo ? » reste une recherche", !estUneQuestion("montre oraimo ?"));
   chk("« bonjour » n'est pas une question", !estUneQuestion("bonjour"));
+
+  // ── Couleurs et langues ──────────────────────────────────────────────────
+  // Message réel : « t'as un article noir? » → « nous n'avons pas d'information
+  // sur la couleur », alors que la tasse existait en noir.
+  groupe("recherche — couleurs, variations, français / anglais");
+  const VAR = [
+    { name: "High Appearance Drawstring Stainless Steel Coffee Cup", options: ["Vert", "Rouge", "Violet", "Noir"] },
+    { name: "Oraimo Watch 6 - Premium" },
+    { name: "Wireless Collar-clip Microphone" },
+  ];
+  const noms = (r) => r.map((p) => p.name.split(" ")[0]);
+  eq("« t'as un article noir? » → la tasse (option Noir)", noms(chercher(VAR, "t'as un article noir?")), ["High"]);
+  eq("« black » → l'option « Noir »", noms(chercher(VAR, "do you have black")), ["High"]);
+  eq("« une tasse rouge » → cup", noms(chercher(VAR, "une tasse rouge")), ["High"]);
+  eq("« un micro » → microphone", noms(chercher(VAR, "vous avez un micro")), ["Wireless"]);
+  eq("« une montre » marche toujours", noms(chercher(VAR, "une montre")), ["Oraimo"]);
+  eq("couleur absente → rien d'inventé", chercher(VAR, "jaune fluo").length, 0);
 }
 
 // ═══ lib/whatsapp/comprendre — la barrière entre le modèle et le client ═════
