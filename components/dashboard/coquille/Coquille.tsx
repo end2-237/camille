@@ -197,7 +197,9 @@ export function Coquille({ children }: { children: React.ReactNode }) {
         .coq-menu { background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(10px); transition: padding .45s cubic-bezier(.22,1,.36,1); }
 
         /* ── L'en-tête : fixe en haut, se replie en barre flottante au défilement ── */
-        .coq-entete { height: var(--coq-entete); pointer-events: none; }
+        .coq-entete { height: var(--coq-entete); pointer-events: none; display: flow-root; }
+        /* flow-root : sans lui, la marge haute de la barre « traverse » l'en-tête
+           (fusion des marges) et l'en-tête, collé à top: 0, la recolle au bord. */
         /* Repliée, la barre flotte : un voile de la couleur de la page passe
            sous elle, pour que le contenu s'efface avant de la toucher au lieu
            d'avoir l'air collé dessous. */
