@@ -42,15 +42,15 @@ const ATOUTS = [
 
 export default function LoginPage() {
   const router  = useRouter();
-  const { login, register: registerUser, isLoggedIn } = useAuth();
+  const { login, register: registerUser, isLoggedIn, user } = useAuth();
   const [loading, setLoading]   = useState(false);
   const [mode, setMode]         = useState<"login" | "register">("login");
   const [voir, setVoir]         = useState(false);
   const [retenir, setRetenir]   = useState(true);
 
   useEffect(() => {
-    if (isLoggedIn) router.replace("/dashboard");
-  }, [isLoggedIn, router]);
+    if (isLoggedIn) router.replace(user?.email_verified === false ? "/verifier-email?suite=/dashboard" : "/dashboard");
+  }, [isLoggedIn, user, router]);
 
   const loginForm    = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
   const registerForm = useForm<RegisterForm>({ resolver: zodResolver(registerSchema) });
@@ -61,7 +61,7 @@ export default function LoginPage() {
       const user = await login(email, password);
       retenirConnexion(retenir);
       toast.success(`Bienvenue, ${user.full_name ?? user.email} !`);
-      router.push("/dashboard");
+      router.push(user.email_verified === false ? "/verifier-email?suite=/dashboard" : "/dashboard");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erreur de connexion");
     } finally {
@@ -74,8 +74,8 @@ export default function LoginPage() {
     try {
       const user = await registerUser(email, password, full_name);
       retenirConnexion(true);
-      toast.success(`Compte créé ! Bienvenue, ${user.full_name ?? user.email} !`);
-      router.push("/dashboard");
+      toast.success(`Compte créé ! Un code de vérification vient de partir à ${user.email}.`);
+      router.push(user.email_verified === false ? "/verifier-email?suite=/dashboard" : "/dashboard");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erreur d'inscription");
     } finally {

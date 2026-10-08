@@ -42,7 +42,7 @@ async function patch(corps: Record<string, unknown>) {
   // Le navigateur garde une copie du compte : on la remet à jour.
   const jeton = getStoredToken();
   if (d.user && jeton) storeAuth(d.user as AuthUser, jeton);
-  return d as { user: AuthUser; sessions_fermees: number };
+  return d as { user: AuthUser; sessions_fermees: number; code_envoye?: boolean };
 }
 
 function Section({ icone: Icone, titre, sous, rang, children }: {
@@ -112,8 +112,14 @@ export default function ProfilPage() {
   async function enregistrerIdentite() {
     setOccupeId(true);
     try {
-      await patch({ full_name: nom, ...(emailChange ? { email, current_password: mdpEmail } : {}) });
+      const d = await patch({ full_name: nom, ...(emailChange ? { email, current_password: mdpEmail } : {}) });
       setMdpEmail("");
+      // Nouvelle adresse : elle se confirme par le code qui vient d'y partir.
+      if (d.user?.email_verified === false) {
+        toast.success("Adresse changée — saisissez le code reçu");
+        window.location.href = "/verifier-email?suite=/dashboard/profil";
+        return;
+      }
       toast.success("Profil enregistré");
       // useAuth relit le navigateur au prochain affichage ; on recharge pour
       // que l'en-tête montre tout de suite le nouveau nom.

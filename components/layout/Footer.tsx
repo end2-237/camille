@@ -34,7 +34,7 @@ const LINKS = {
 export function Footer() {
   const pathname = usePathname();
   // Masqué sur le dashboard et sur la landing (elle embarque son propre footer)
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/livraison") || pathname === "/" || pathname === "/login" || pathname === "/mot-de-passe-oublie" || pathname === "/reinitialiser") return null;
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/livraison") || pathname === "/" || pathname === "/login" || pathname === "/mot-de-passe-oublie" || pathname === "/reinitialiser" || pathname === "/verifier-email") return null;
 
   return (
     <footer

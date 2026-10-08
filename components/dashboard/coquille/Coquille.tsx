@@ -11,12 +11,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeftRight, Check, X } from "lucide-react";
+import { ArrowLeftRight, Check, MailWarning, X } from "lucide-react";
 import type { Agent } from "@/types/agent";
 import { FournisseurAgent, useAgentCourant } from "./AgentCourant";
 import { Entete, RESSORT } from "./Entete";
 import { useMontee } from "./montee";
 import { FAMILLES, pageDe } from "./pages";
+import { getStoredUser } from "@/lib/auth-client";
 
 function IconeWhatsapp({ className }: { className?: string }) {
   return (
@@ -170,6 +171,29 @@ function BasculeAgent() {
   );
 }
 
+// ── Rappel : adresse e-mail à confirmer ─────────────────────────────────────
+// Tant que le code n'est pas saisi, créer un agent et payer sont fermés ; le
+// rappel le dit avant que le commerçant ne tombe sur un refus.
+
+function RappelVerification() {
+  const [afficher, setAfficher] = useState(false);
+  useEffect(() => { setAfficher(getStoredUser()?.email_verified === false); }, []);
+  return (
+    <AnimatePresence>
+      {afficher && (
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} transition={RESSORT}
+          className="fixed bottom-5 left-4 z-[70] flex max-w-[calc(100vw-96px)] items-center gap-3 rounded-full bg-white py-2 pl-3 pr-2 shadow-[0_12px_32px_rgba(25,23,27,0.16)] sm:left-8">
+          <MailWarning className="h-[18px] w-[18px] flex-shrink-0" style={{ color: "#D9822B" }} />
+          <span className="truncate text-[13px]" style={{ color: "var(--cl-ink)" }}>Confirmez votre adresse e-mail</span>
+          <Link href="/verifier-email?suite=/dashboard" className="flex-shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-medium text-white" style={{ background: "var(--cl-accent-deep)" }}>
+            Saisir le code
+          </Link>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // ── L'ensemble ──────────────────────────────────────────────────────────────
 
 export function Coquille({ children }: { children: React.ReactNode }) {
@@ -180,6 +204,7 @@ export function Coquille({ children }: { children: React.ReactNode }) {
         <Entete />
         {accueil ? children : <Feuille>{children}</Feuille>}
         {!accueil && <BasculeAgent />}
+        <RappelVerification />
       </div>
       <style jsx global>{`
         .coq {

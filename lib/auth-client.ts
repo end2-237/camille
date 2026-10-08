@@ -36,6 +36,8 @@ export interface AuthUser {
   plan: string;
   /** Accès à la console d'exploitation. */
   is_admin?: boolean;
+  /** Adresse confirmée (absent = ancien objet stocké : on la considère vérifiée). */
+  email_verified?: boolean;
 }
 
 export function getStoredToken(): string | null {

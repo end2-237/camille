@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db";
-import { verifyPassword, generateToken, tokenExpiresAt } from "@/lib/auth-server";
+import { verifyPassword, generateToken, tokenExpiresAt, SQL_EMAIL_VERIFIE } from "@/lib/auth-server";
+import { tenter, oublier, ipDe } from "@/lib/limite";
 
 const schema = z.object({
   email: z.string().email(),
@@ -19,14 +20,31 @@ export async function POST(req: NextRequest) {
 
     const { email, password } = parsed.data;
 
+    // 10 essais par quart d'heure pour une même adresse depuis une même IP,
+    // 50 par IP toutes adresses confondues : assez pour une faute de frappe,
+    // trop peu pour deviner un mot de passe.
+    const ip = ipDe(req);
+    const cle = `login:${ip}:${email.toLowerCase()}`;
+    const parAdresse = tenter(cle, 10, 15 * 60_000);
+    const parIp = tenter(`login-ip:${ip}`, 50, 15 * 60_000);
+    if (!parAdresse.ok || !parIp.ok) {
+      const attente = Math.max(parAdresse.attente, parIp.attente);
+      return NextResponse.json(
+        { error: `Trop de tentatives. Réessayez dans ${Math.ceil(attente / 60)} min.` },
+        { status: 429, headers: { "Retry-After": String(attente) } }
+      );
+    }
+
     // is_admin est lu ici parce que c'est cet objet-là qui finit dans le
     // navigateur et qui décide de l'affichage de la console d'exploitation.
     // to_jsonb plutôt que u.is_admin : sur une base où migration_admin.sql
     // n'est pas passée, demander la colonne ferait échouer TOUTE connexion.
     const result = await query(
       `SELECT id, email, full_name, plan, password_hash,
-              COALESCE((to_jsonb(users)->>'is_admin')::boolean, FALSE) AS is_admin
-         FROM camille.users WHERE email = $1`,
+              COALESCE((to_jsonb(u)->>'is_admin')::boolean, FALSE) AS is_admin,
+              ${SQL_EMAIL_VERIFIE} AS email_verified
+         FROM camille.users u WHERE LOWER(email) = LOWER($1)
+        ORDER BY (email = $1) DESC LIMIT 1`,
       [email]
     );
 
@@ -47,6 +65,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    oublier(cle);
     const token = generateToken(user.id);
 
     await query(

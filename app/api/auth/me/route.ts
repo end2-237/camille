@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest, hashPassword, verifyPassword } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { envoyerCode } from "@/lib/verification-email";
 
 export async function GET(req: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest) {
     };
 
     const nom = typeof b.full_name === "string" ? b.full_name.trim().slice(0, 120) : undefined;
-    const email = typeof b.email === "string" ? b.email.trim() : undefined;
+    const email = typeof b.email === "string" ? b.email.trim().toLowerCase() : undefined;
     const changeEmail = email !== undefined && email !== user.email;
     const changeMdp = typeof b.new_password === "string" && b.new_password.length > 0;
 
@@ -48,7 +49,7 @@ export async function PATCH(req: NextRequest) {
       if (!ok) return NextResponse.json({ error: "Mot de passe actuel incorrect" }, { status: 403 });
     }
     if (changeEmail) {
-      const pris = await query("SELECT 1 FROM camille.users WHERE email = $1 AND id <> $2", [email, user.id]);
+      const pris = await query("SELECT 1 FROM camille.users WHERE LOWER(email) = $1 AND id <> $2", [email, user.id]);
       if (pris.rows.length) return NextResponse.json({ error: "Cette adresse est déjà utilisée par un autre compte" }, { status: 409 });
     }
 
@@ -61,6 +62,16 @@ export async function PATCH(req: NextRequest) {
       await query(`UPDATE camille.users SET ${champs.join(", ")} WHERE id = $1`, valeurs);
     }
 
+    // Une nouvelle adresse se vérifie comme la première : code envoyé à
+    // l'adresse NOUVELLE, accès aux actions sensibles suspendu d'ici là.
+    let codeEnvoye = false;
+    if (changeEmail) {
+      try {
+        await query("UPDATE camille.users SET email_verified_at = NULL WHERE id = $1", [user.id]);
+        codeEnvoye = (await envoyerCode(user.id, email!, nom ?? user.full_name)).ok;
+      } catch { /* migration_email_verification.sql absente : rien à vérifier */ }
+    }
+
     // Les autres appareils : fermés à la demande, et toujours après un
     // changement de mot de passe. La session en cours reste ouverte.
     let fermees = 0;
@@ -70,7 +81,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const frais = await getUserFromRequest(req);
-    return NextResponse.json({ user: frais, sessions_fermees: fermees });
+    return NextResponse.json({ user: frais, sessions_fermees: fermees, code_envoye: codeEnvoye });
   } catch (err) {
     console.error("[PATCH /api/auth/me]", err);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

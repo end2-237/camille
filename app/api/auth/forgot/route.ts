@@ -11,6 +11,7 @@ import { createHash, randomBytes } from "crypto";
 import { z } from "zod";
 import { query } from "@/lib/db";
 import { envoyerEmail } from "@/lib/email";
+import { tenter, ipDe } from "@/lib/limite";
 
 const schema = z.object({ email: z.string().trim().email() });
 const DUREE_MIN = 30;
@@ -24,6 +25,10 @@ const REPONSE = {
 export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Adresse e-mail invalide" }, { status: 400 });
+
+  // 10 demandes par heure et par IP, en plus des 3 par compte : la page ne
+  // doit pas servir à arroser des boîtes de liens.
+  if (!tenter(`forgot:${ipDe(req)}`, 10, 60 * 60_000).ok) return NextResponse.json(REPONSE);
 
   try {
     const { rows } = await query(

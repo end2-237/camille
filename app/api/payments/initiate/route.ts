@@ -13,6 +13,12 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
+  if (!user.email_verified) {
+    return NextResponse.json(
+      { error: "Confirmez d'abord votre adresse e-mail avec le code reçu.", code: "email_non_verifie" },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = await req.json();

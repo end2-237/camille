@@ -172,12 +172,17 @@ function StepLancer({ watch }: { watch: any }) {
 
 export default function ConfigurePage() {
   const router         = useRouter();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
   const [step, setStep]     = useState(1);
   const [dir, setDir]       = useState(1);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { if (!isLoggedIn) router.replace("/login"); }, [isLoggedIn, router]);
+  // Créer un agent demande une adresse confirmée : on passe par le code
+  // AVANT le formulaire, pour ne rien faire retaper.
+  useEffect(() => {
+    if (user?.email_verified === false) router.replace("/verifier-email?suite=/configure");
+  }, [user, router]);
 
   const { register, handleSubmit, trigger, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),

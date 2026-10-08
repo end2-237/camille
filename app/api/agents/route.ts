@@ -100,6 +100,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
     }
 
+    if (!user.email_verified) {
+      return NextResponse.json(
+        { error: "Confirmez d'abord votre adresse e-mail avec le code reçu.", code: "email_non_verifie" },
+        { status: 403 }
+      );
+    }
+
     // Un seul agent gratuit en service par compte (MAX_AGENTS_GRATUITS pour
     // ajuster) : chaque agent porte son propre forfait, et un nouvel agent
     // gratuit était un nouveau quota gratuit. Les agents payants, eux, ne sont

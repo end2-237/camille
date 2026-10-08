@@ -33,7 +33,17 @@ export type AuthUser = {
   plan: string;
   /** Accès à la console d'exploitation. Faux tant que la migration n'est pas passée. */
   is_admin: boolean;
+  /** Adresse confirmée par le code envoyé. Vrai tant que la migration n'est pas passée. */
+  email_verified: boolean;
 };
+
+/**
+ * « L'adresse est-elle vérifiée ? » en SQL, pour l'alias `u` de camille.users.
+ * Sans la colonne (migration_email_verification.sql pas encore passée), tout le
+ * monde l'est : un déploiement ne doit bloquer personne.
+ */
+export const SQL_EMAIL_VERIFIE = `CASE WHEN to_jsonb(u) ? 'email_verified_at'
+  THEN (to_jsonb(u)->>'email_verified_at') IS NOT NULL ELSE TRUE END`;
 
 export async function getUserFromRequest(
   req: NextRequest
@@ -51,7 +61,8 @@ export async function getUserFromRequest(
   // lequel on applique les migrations.
   const result = await query(
     `SELECT u.id, u.email, u.full_name, u.plan, u.created_at,
-            COALESCE((to_jsonb(u)->>'is_admin')::boolean, FALSE) AS is_admin
+            COALESCE((to_jsonb(u)->>'is_admin')::boolean, FALSE) AS is_admin,
+            ${SQL_EMAIL_VERIFIE} AS email_verified
      FROM camille.sessions s
      JOIN camille.users u ON u.id = s.user_id
      WHERE s.token = $1 AND s.expires_at > NOW()`,
