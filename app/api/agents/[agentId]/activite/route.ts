@@ -24,8 +24,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const r = await query(
       `SELECT c.role, c.content, c.created_at, c.contact_phone
          FROM camille.agent_conversations c
-         JOIN camille.whatsapp_sessions ws ON ws.session_name = c.session_name
-        WHERE ws.agent_id = $1
+        WHERE (c.session_name IN (SELECT session_name FROM camille.whatsapp_sessions WHERE agent_id = $1)
+               OR c.session_name = 'meta:' || $1::text)
           AND c.role IN ('user', 'assistant')
           AND c.content NOT LIKE '[%'
         ORDER BY c.created_at DESC

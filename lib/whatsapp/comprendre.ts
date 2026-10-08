@@ -464,7 +464,9 @@ export async function comprendre(
   resto: boolean,
   historique: { role: string; content: string }[] = [],
   /** Ce qu'on sait de ce client : le résumé pour le modèle, et ses ancres. */
-  memoire: { resume: string; ancres: string[] } = { resume: "", ancres: [] }
+  memoire: { resume: string; ancres: string[] } = { resume: "", ancres: [] },
+  /** Reçoit la consommation de chaque appel abouti, pour la compter. */
+  surUsage?: (u: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }) => void
 ): Promise<Comprehension | null> {
   if (!CLE || !message.trim()) return null;
 
@@ -518,6 +520,8 @@ export async function comprendre(
       }
 
       const d = await r.json();
+      // Payé même si la réponse est rejetée ensuite : on compte tout appel abouti.
+      if (d?.usage) { try { surUsage?.(d.usage); } catch { /* le compteur ne bloque rien */ } }
       const brut = d?.choices?.[0]?.message?.content;
       if (!brut) continue;
       const c = valider(JSON.parse(brut), prods, faits, message, memoire.ancres);

@@ -194,11 +194,14 @@ export async function GET(req: NextRequest) {
          COUNT(*) FILTER (WHERE role = 'user')     AS user_messages,
          COUNT(*) FILTER (WHERE role = 'assistant') AS bot_messages
        FROM camille.agent_conversations
-       WHERE session_name IN (
+       WHERE (session_name IN (
          SELECT session_name
          FROM camille.whatsapp_sessions
          WHERE agent_id = ANY($1::uuid[])
        )
+         -- Le WhatsApp officiel (Meta) trace sous « meta:<agent> » : sans
+         -- cette ligne, ses conversations n'étaient jamais comptées.
+         OR session_name = ANY(SELECT 'meta:' || x::text FROM unnest($1::uuid[]) AS x))
          AND created_at >= $2::date
          AND created_at <= ($3::date + INTERVAL '1 day')`,
       [agentIds, from, to]
@@ -210,11 +213,14 @@ export async function GET(req: NextRequest) {
          EXTRACT(HOUR FROM created_at)::INT AS hour,
          COUNT(*)                           AS count
        FROM camille.agent_conversations
-       WHERE session_name IN (
+       WHERE (session_name IN (
          SELECT session_name
          FROM camille.whatsapp_sessions
          WHERE agent_id = ANY($1::uuid[])
        )
+         -- Le WhatsApp officiel (Meta) trace sous « meta:<agent> » : sans
+         -- cette ligne, ses conversations n'étaient jamais comptées.
+         OR session_name = ANY(SELECT 'meta:' || x::text FROM unnest($1::uuid[]) AS x))
          AND role = 'user'
          AND created_at >= $2::date
          AND created_at <= ($3::date + INTERVAL '1 day')
@@ -237,11 +243,14 @@ export async function GET(req: NextRequest) {
          EXTRACT(DOW FROM created_at)::INT AS dow,
          COUNT(*)                          AS count
        FROM camille.agent_conversations
-       WHERE session_name IN (
+       WHERE (session_name IN (
          SELECT session_name
          FROM camille.whatsapp_sessions
          WHERE agent_id = ANY($1::uuid[])
        )
+         -- Le WhatsApp officiel (Meta) trace sous « meta:<agent> » : sans
+         -- cette ligne, ses conversations n'étaient jamais comptées.
+         OR session_name = ANY(SELECT 'meta:' || x::text FROM unnest($1::uuid[]) AS x))
          AND role = 'user'
          AND created_at >= $2::date
          AND created_at <= ($3::date + INTERVAL '1 day')
@@ -264,11 +273,14 @@ export async function GET(req: NextRequest) {
          contact_phone,
          COUNT(*) FILTER (WHERE role = 'user') AS user_msgs
        FROM camille.agent_conversations
-       WHERE session_name IN (
+       WHERE (session_name IN (
          SELECT session_name
          FROM camille.whatsapp_sessions
          WHERE agent_id = ANY($1::uuid[])
        )
+         -- Le WhatsApp officiel (Meta) trace sous « meta:<agent> » : sans
+         -- cette ligne, ses conversations n'étaient jamais comptées.
+         OR session_name = ANY(SELECT 'meta:' || x::text FROM unnest($1::uuid[]) AS x))
          AND created_at >= $2::date
          AND created_at <= ($3::date + INTERVAL '1 day')
        GROUP BY contact_phone`,
@@ -279,6 +291,35 @@ export async function GET(req: NextRequest) {
       ? Math.round(convLengths.reduce((s, v) => s + v, 0) / convLengths.length)
       : 0;
     const maxConvLength = convLengths.length ? Math.max(...convLengths) : 0;
+
+    // ── 9 bis. Ce que les conversations et les demandes disent, jour par jour ─
+    // agent_analytics n'est alimentée que par n8n (camille-core). Un agent sur
+    // le WhatsApp officiel y restait à zéro alors qu'il répondait toute la
+    // journée. Les messages des clients et les passages à l'humain sont aussi
+    // dans les conversations et les demandes au commerçant : on prend, chaque
+    // jour, la plus grande des deux mesures.
+    const convJourRes = await safe(
+      `SELECT created_at::date AS date, COUNT(*) FILTER (WHERE role = 'user') AS messages
+         FROM camille.agent_conversations
+        WHERE (session_name IN (SELECT session_name FROM camille.whatsapp_sessions WHERE agent_id = ANY($1::uuid[]))
+               OR session_name = ANY(SELECT 'meta:' || x::text FROM unnest($1::uuid[]) AS x))
+          AND created_at >= $2::date AND created_at < ($3::date + INTERVAL '1 day')
+        GROUP BY 1`,
+      [agentIds, from, to]
+    );
+    const tachesJourRes = await safe(
+      `SELECT created_at::date AS date, COUNT(*) AS n
+         FROM camille.owner_tasks
+        WHERE agent_id = ANY($1::uuid[]) AND type = 'complaint'
+          AND created_at >= $2::date AND created_at < ($3::date + INTERVAL '1 day')
+        GROUP BY 1`,
+      [agentIds, from, to]
+    );
+    const cleJour = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
+    const convJour: Record<string, number> = {};
+    convJourRes.rows.forEach((r) => { convJour[cleJour(r.date)] = Number(r.messages); });
+    const tachesJour: Record<string, number> = {};
+    tachesJourRes.rows.forEach((r) => { tachesJour[cleJour(r.date)] = Number(r.n); });
 
     // ── 10. Fill missing days in daily series ─────────────────────────────────
     const dailyMap: Record<string, typeof analyticsRes.rows[number]> = {};
@@ -302,9 +343,9 @@ export async function GET(req: NextRequest) {
       const row = dailyMap[key];
       dailySeries.push({
         date:            key,
-        messages:        row ? Number(row.messages)   : 0,
+        messages:        Math.max(row ? Number(row.messages) : 0, convJour[key] ?? 0),
         leads:           row ? Number(row.leads)      : 0,
-        escalations:     row ? Number(row.escalations): 0,
+        escalations:     Math.max(row ? Number(row.escalations) : 0, tachesJour[key] ?? 0),
         avg_response_ms: row ? Number(row.avg_response_ms) : null,
         tokens:          row ? Number(row.tokens)     : 0,
       });
@@ -419,13 +460,15 @@ export async function GET(req: NextRequest) {
       `SELECT
          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'livree'), 0)                         AS ca_livre,
          COUNT(*)              FILTER (WHERE o.status = 'livree')                             AS n_livre,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status IN ('nouvelle','en_traitement','traitee')), 0) AS ca_en_cours,
-         COUNT(*)              FILTER (WHERE o.status IN ('nouvelle','en_traitement','traitee'))     AS n_en_cours,
+         COALESCE(SUM(o.total) FILTER (WHERE COALESCE(o.status, 'nouvelle') NOT IN ('livree','annulee')), 0) AS ca_en_cours,
+         COUNT(*)              FILTER (WHERE COALESCE(o.status, 'nouvelle') NOT IN ('livree','annulee'))     AS n_en_cours,
          COUNT(*)                                                                             AS n_total,
          MAX(o.currency)                                                                      AS currency
        FROM camille.orders o
        WHERE o.agent_id = ANY($1::uuid[])
-         AND o.created_at >= $2 AND o.created_at <= $3`,
+         -- « au plus tard $3 » comparait à minuit : les commandes du jour
+         -- n'étaient jamais comptées.
+         AND o.created_at >= $2::date AND o.created_at < ($3::date + INTERVAL '1 day')`,
       [agentIds, from, to]
     );
     const rev = revRes.rows[0] ?? {};

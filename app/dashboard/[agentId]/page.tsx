@@ -1966,10 +1966,12 @@ export default function AgentConfigPage() {
   }
 
   return (
-    <div className="flex flex-col" style={{ height: "100dvh" }}>
+    // Dans la coquille du tableau de bord : le nom et le statut sont déjà dans
+    // le titre de la feuille, la barre du haut de la page n'est plus utile.
+    <div className="flex flex-col" style={{ height: "max(560px, calc(100dvh - 210px))" }}>
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-6 h-[52px] flex-shrink-0"
+      <div className="hidden items-center gap-3 px-6 h-[52px] flex-shrink-0"
         style={{ borderBottom: "1px solid var(--border-subtle)" }}>
         <button onClick={() => router.push("/dashboard")}
           className="flex items-center gap-1.5 text-xs transition-colors duration-150 flex-shrink-0"

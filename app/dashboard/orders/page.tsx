@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 "use client";
 
+import { useAgentCourantOptionnel } from "@/components/dashboard/coquille/AgentCourant";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { authHeaders } from "@/lib/auth-client";
 import dynamic from "next/dynamic";
@@ -83,6 +84,17 @@ export default function OrdersPage() {
   }, [agentId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Le bouton flottant de la coquille : « cette page, pour cet agent ».
+  const coquille = useAgentCourantOptionnel();
+  useEffect(() => { if (coquille?.bascule) setAgentId(coquille.bascule.id); }, [coquille?.bascule]);
+  // À l'arrivée, la page montre l'agent annoncé dans le titre ; le sélecteur
+  // de la page permet toujours de revenir à « tous les agents ».
+  const agentCoquille = coquille?.agent?.id;
+  const [suitCoquille, setSuitCoquille] = useState(true);
+  useEffect(() => {
+    if (suitCoquille && agentCoquille) { setAgentId(agentCoquille); setSuitCoquille(false); }
+  }, [agentCoquille, suitCoquille]);
 
   useEffect(() => {
     fetch("/api/agents", { headers: { ...authHeaders() } })

@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 "use client";
 
+import { useAgentCourantOptionnel } from "@/components/dashboard/coquille/AgentCourant";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter }                from "next/navigation";
 import { motion, AnimatePresence }  from "framer-motion";
@@ -762,6 +763,17 @@ export default function StatsPage() {
   const [data,        setData]        = useState<StatsData | null>(null);
   const [loading,     setLoading]     = useState(false);
   const [agentDropOpen, setAgentDropOpen] = useState(false);
+
+  // Le bouton flottant de la coquille : « cette page, pour cet agent ».
+  const coquille = useAgentCourantOptionnel();
+  useEffect(() => { if (coquille?.bascule) setAgentId(coquille.bascule.id); }, [coquille?.bascule]);
+  // À l'arrivée, la page montre l'agent annoncé dans le titre ; le sélecteur
+  // de la page permet toujours de revenir à « tous les agents ».
+  const agentCoquille = coquille?.agent?.id;
+  const [suitCoquille, setSuitCoquille] = useState(true);
+  useEffect(() => {
+    if (suitCoquille && agentCoquille) { setAgentId(agentCoquille); setSuitCoquille(false); }
+  }, [agentCoquille, suitCoquille]);
 
   // Chart metric selectors
   const [activityMetric, setActivityMetric] = useState<"messages" | "leads" | "tokens">("messages");

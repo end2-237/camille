@@ -52,6 +52,7 @@
 // l'argot, une faute de frappe — et le code continuera de vérifier. CVA ne
 // change pas ; sa surface se réduit.
 // ─────────────────────────────────────────────────────────────────────────────
+import { compterTokens } from "./usage";
 import { query } from "@/lib/db";
 import { sectorProfile } from "@/lib/sectorProfiles";
 import { createOrder } from "@/lib/orders";
@@ -1492,7 +1493,8 @@ export async function repondreBoutique(
       {
         resume: [resumeMemoire(souvenir), ligneCommande].filter(Boolean).join(" | "),
         ancres: [...faitsDesAchats(souvenir), ...(ligneCommande ? [ligneCommande] : [])],
-      }
+      },
+      (u) => { void compterTokens(agent.id, u); }
     );
     if (c && c.certitude >= 0.55) {
       await tracer(

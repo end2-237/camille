@@ -12,18 +12,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  LayoutGrid, Receipt, BarChart3, Users, Package, Settings, Bell, Plus, RefreshCw,
-  ArrowUpRight, Wallet, MessagesSquare, LifeBuoy, ShoppingBag, Activity, Pause, Play,
-  Trash2, LogOut, Check, MessageCircle, ChevronDown,
+  BarChart3, Plus, RefreshCw, ArrowUpRight, Wallet, MessagesSquare, LifeBuoy, ShoppingBag,
+  Activity, Pause, Play, Trash2, Check, MessageCircle, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
-import { useAuth } from "@/hooks/useAuth";
-import { useAgents } from "@/hooks/useAgents";
 import type { Agent } from "@/types/agent";
 import { Eventail } from "./Eventail";
+import { useAgentCourant } from "./coquille/AgentCourant";
+import { useMontee } from "./coquille/montee";
 
 // ── Données ─────────────────────────────────────────────────────────────────
 
@@ -64,83 +63,6 @@ const court = (n: number) =>
 const pct = (x: number) => `${(Math.round(x * 100) / 100).toFixed(2).replace(".", ",")}%`;
 const heure = (d: string) => new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-// ── Le menu du haut ─────────────────────────────────────────────────────────
-
-type Lien = { href: string; label: string };
-
-function MenuHaut({ agentId, admin }: { agentId?: string; admin?: boolean }) {
-  const [ouvert, setOuvert] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const fermer = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOuvert(null); };
-    document.addEventListener("mousedown", fermer);
-    return () => document.removeEventListener("mousedown", fermer);
-  }, []);
-
-  const a = agentId ? `/dashboard/${agentId}` : "";
-  const groupes: { cle: string; icone: React.ElementType; titre: string; liens: Lien[] }[] = [
-    { cle: "accueil", icone: LayoutGrid, titre: "Accueil", liens: [] },
-    { cle: "ventes", icone: Receipt, titre: "Ventes", liens: [
-      { href: "/dashboard/orders", label: "Commandes" },
-      ...(a ? [{ href: `${a}/suivi`, label: "Suivi des livraisons" }] : []),
-      { href: "/dashboard/complaints", label: "Réclamations" },
-      { href: "/dashboard/templates", label: "Modèles de message" },
-    ] },
-    { cle: "stats", icone: BarChart3, titre: "Chiffres", liens: [
-      { href: "/dashboard/stats", label: "Statistiques" },
-      ...(a ? [{ href: `${a}/entreprises`, label: "Comptes entreprise" }] : []),
-      { href: "/dashboard/billing", label: "Facturation" },
-    ] },
-    { cle: "clients", icone: Users, titre: "Clients", liens: [
-      ...(a ? [{ href: `${a}/clientele`, label: "Clientèle" }, { href: `${a}/livreurs`, label: "Livreurs" }] : []),
-      { href: "/livraison", label: "Espace livreur" },
-    ] },
-    { cle: "catalogue", icone: Package, titre: "Catalogue", liens: a ? [
-      { href: `${a}/catalog`, label: "Catalogue" },
-      { href: `${a}/catalog-sync`, label: "Catalogue WhatsApp" },
-      { href: `${a}/whatsapp`, label: "WhatsApp officiel" },
-      { href: `${a}/medias`, label: "Médias" },
-    ] : [] },
-    { cle: "reglages", icone: Settings, titre: "Réglages", liens: [
-      ...(a ? [{ href: `${a}/settings`, label: "Configuration de l'agent" }, { href: `${a}/integrations`, label: "Intégrations" }] : []),
-      { href: "/dashboard/notifications", label: "Notifications" },
-      ...(admin ? [{ href: "/dashboard/admin", label: "Exploitation" }, { href: "/dashboard/insights", label: "Qualité de l'agent" }] : []),
-    ] },
-  ];
-
-  return (
-    <div ref={ref} className="acc-menu flex items-center gap-1.5 rounded-full p-1.5">
-      {groupes.map(({ cle, icone: Icone, titre, liens }) => {
-        const actif = cle === "accueil";
-        return (
-          <div key={cle} className="relative">
-            <button
-              onClick={() => (liens.length ? setOuvert(ouvert === cle ? null : cle) : setOuvert(null))}
-              title={titre} aria-label={titre}
-              className="flex h-10 w-10 items-center justify-center rounded-full transition"
-              style={{ background: actif ? "#fff" : ouvert === cle ? "rgba(255,255,255,0.55)" : "transparent",
-                color: actif ? "var(--cl-ink)" : "#fff", boxShadow: actif ? "0 4px 14px rgba(70,40,190,0.18)" : "none" }}>
-              <Icone className="h-[18px] w-[18px]" strokeWidth={2} />
-            </button>
-            {ouvert === cle && liens.length > 0 && (
-              <div className="acc-deroulant absolute left-1/2 top-12 z-50 w-56 -translate-x-1/2 rounded-2xl p-1.5">
-                <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--cl-ink-faint)" }}>{titre}</p>
-                {liens.map((l) => (
-                  <Link key={l.href} href={l.href} onClick={() => setOuvert(null)}
-                    className="block rounded-xl px-3 py-2 text-[14px] transition hover:bg-[var(--cl-accent-soft)]"
-                    style={{ color: "var(--cl-ink)" }}>
-                    {l.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Les cartes d'indicateurs ────────────────────────────────────────────────
 
 /** Une rangée de barres fines : la part colorée dit la proportion, comme une jauge. */
@@ -169,7 +91,7 @@ function Carte({ icone: Icone, titre, sous, valeur, point, ratio, couleur, gauch
   ratio: number; couleur: string; gauche: [string, string]; droite: [string, string]; href: string;
 }) {
   return (
-    <div className="acc-carte flex min-h-0 flex-col rounded-[26px] bg-white">
+    <div className="acc-carte flex flex-col rounded-[26px] bg-white">
       <div className="flex items-start justify-between">
         <div>
           <p className="flex items-center gap-2 text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>
@@ -269,20 +191,14 @@ function Doodle({ nom, className }: { nom: "laying" | "selfie" | "unboxing" | "s
 
 export function Accueil() {
   const router = useRouter();
-  const { user, logout } = useAuth();
-  const { agents, loading, remove, toggleStatus } = useAgents();
-  const [choisi, setChoisi] = useState<string | null>(null);
+  const { visibles, agent, choisir: setChoisi, loading, remove, toggleStatus } = useAgentCourant();
+  const feuille = useRef<HTMLDivElement>(null);
+  useMontee(feuille);
   const [stats, setStats] = useState<Stats | null>(null);
   const [meta, setMeta] = useState<EtatMeta | null>(null);
   const [fil, setFil] = useState<Message[]>([]);
-  const [compte, setCompte] = useState(false);
   const [tour, setTour] = useState(0);
-  // L'utilisateur vient du navigateur : rien de lui au rendu serveur.
-  const [monte, setMonte] = useState(false);
-  useEffect(() => setMonte(true), []);
 
-  const visibles = useMemo(() => agents.filter((a) => a.status !== "archived"), [agents]);
-  const agent = visibles.find((a) => a.id === choisi) || visibles.find((a) => a.status === "active") || visibles[0];
 
   const charger = useCallback(async (id: string) => {
     const [s, m, f] = await Promise.all([
@@ -300,60 +216,17 @@ export function Accueil() {
   const cur = r?.currency || "XAF";
   const livrees = r?.orders_count ? r.delivered_count / r.orders_count : 0;
   const repondus = o?.messages_from_user ? Math.min(1, o.messages_sent / o.messages_from_user) : 0;
-  const escalade = (o?.escalation_rate || 0) / 100;
+  // Part des clients passés à un humain : plus parlant qu'une part des messages.
+  const escalade = o?.unique_contacts ? Math.min(1, o.total_escalations / o.unique_contacts) : 0;
   const usage = stats?.usage;
   const tauxUsage = usage && !usage.unlimited && usage.tokens_limit > 0 ? usage.tokens_used / usage.tokens_limit : 0;
   const serie = (stats?.daily_series || []).slice(-30).map((d) => d.messages);
   const maxSerie = Math.max(1, ...serie);
-  const initiale = monte ? (user?.full_name || user?.email || "?").trim()[0]?.toUpperCase() : "";
 
   return (
     <div className="acc">
       {/* ═══ Le haut : tout tient dans l'écran ═════════════════════════════ */}
       <section className="acc-haut flex flex-col">
-        <header className="flex items-center justify-between gap-3 px-5 pt-4 lg:px-10">
-          <Link href="/dashboard" className="flex items-center gap-2.5 text-white">
-            <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden="true">
-              <g fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round">
-                <circle cx="11" cy="11" r="5.5" /><circle cx="21" cy="11" r="5.5" /><circle cx="11" cy="21" r="5.5" /><circle cx="21" cy="21" r="5.5" />
-              </g>
-            </svg>
-            <span className="text-[19px] font-medium tracking-[-0.01em]">Camille</span>
-          </Link>
-          <div className="hidden md:block"><MenuHaut agentId={agent?.id} admin={user?.is_admin} /></div>
-          <div className="flex items-center gap-2.5">
-            <Link href="/dashboard/notifications" aria-label="Notifications" className="acc-contour hidden h-11 w-11 items-center justify-center rounded-full sm:flex">
-              <Bell className="h-[18px] w-[18px]" />
-            </Link>
-            <Link href={agent ? `/dashboard/${agent.id}/settings` : "/dashboard"} aria-label="Réglages" className="acc-contour hidden h-11 w-11 items-center justify-center rounded-full sm:flex">
-              <Settings className="h-[18px] w-[18px]" />
-            </Link>
-            <button onClick={() => router.push("/configure")} className="acc-puce hidden items-center gap-2 rounded-full py-2 pl-2.5 pr-4 text-[14px] lg:flex">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
-                <Plus className="h-4 w-4" />
-              </span>
-              Nouvel agent
-            </button>
-            <div className="relative">
-              <button onClick={() => setCompte((v) => !v)} aria-label="Mon compte"
-                className="flex h-11 w-11 items-center justify-center rounded-full text-[16px] font-semibold"
-                style={{ background: "#fff", color: "var(--cl-accent-deep)", border: "3px solid rgba(255,255,255,0.6)" }}>
-                {initiale}
-              </button>
-              {compte && (
-                <div className="acc-deroulant absolute right-0 top-13 z-50 mt-2 w-60 rounded-2xl p-1.5">
-                  <p className="truncate px-3 py-2 text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>{user?.email}</p>
-                  <Link href="/dashboard/billing" className="block rounded-xl px-3 py-2 text-[14px] hover:bg-[var(--cl-accent-soft)]">Abonnement</Link>
-                  <button onClick={logout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "#A63D28" }}>
-                    <LogOut className="h-4 w-4" /> Se déconnecter
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-        <div className="mt-3 flex justify-center px-5 md:hidden"><MenuHaut agentId={agent?.id} admin={user?.is_admin} /></div>
-
         {/* Titre, éventail, et l'appel WhatsApp */}
         <div className="acc-tete relative grid items-start gap-4 px-5 lg:grid-cols-[1fr_auto_1fr] lg:px-10">
           <div>
@@ -413,7 +286,7 @@ export function Accueil() {
 
         {/* La feuille blanche : premiers indicateurs et conversations */}
         {!loading && visibles.length === 0 ? (
-          <div className="acc-feuille flex min-h-0 flex-1 flex-col items-center justify-center gap-4 rounded-t-[36px] bg-white p-8 text-center">
+          <div ref={feuille} className="acc-feuille flex flex-1 flex-col items-center justify-center gap-4 rounded-t-[36px] bg-white p-8 text-center">
             <Doodle nom="sitting-reading" className="acc-doodle-vide min-h-0 w-auto" />
             <p className="text-[22px] font-medium tracking-[-0.02em]">Votre premier agent vous attend</p>
             <p className="max-w-md text-[14px]" style={{ color: "var(--cl-ink-faint)" }}>
@@ -424,8 +297,8 @@ export function Accueil() {
             </button>
           </div>
         ) : (
-        <div className="acc-feuille grid min-h-0 flex-1 gap-4 rounded-t-[36px] bg-white p-4 lg:grid-cols-[2fr_1fr] lg:p-6">
-          <div className="grid min-h-0 gap-4 sm:grid-cols-3">
+        <div ref={feuille} className="acc-feuille grid flex-1 gap-4 rounded-t-[36px] bg-white p-4 lg:grid-cols-[2fr_1fr] lg:p-6">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Carte icone={ShoppingBag} titre="Commandes" sous={r ? `${r.orders_count} sur 30 jours` : "30 derniers jours"}
               valeur={pct(livrees * 100)} point="#1DAB55" ratio={livrees} couleur="#1DAB55"
               gauche={["Livrées", String(r?.delivered_count ?? 0)]} droite={["En cours", String(r?.pending_count ?? 0)]}
@@ -441,7 +314,7 @@ export function Accueil() {
           </div>
 
           {/* Conversations du moment */}
-          <div className="acc-fil flex min-h-0 flex-col rounded-[26px] border p-5" style={{ borderColor: "var(--cl-line-soft)" }}>
+          <div className="acc-fil flex flex-col rounded-[26px] border p-5" style={{ borderColor: "var(--cl-line-soft)" }}>
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-2 text-[16px] font-medium" style={{ color: "var(--cl-ink)" }}>
                 <MessageCircle className="h-4 w-4" /> Conversations en direct
@@ -590,37 +463,39 @@ export function Accueil() {
       </section>
 
       <style jsx>{`
-        .acc { min-height: 100dvh; background: #fff; color: var(--cl-ink); font-family: "Inter Variable", "Inter", system-ui, sans-serif; }
-        .acc-haut {
-          background:
-            radial-gradient(70% 60% at 50% 30%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 60%),
-            linear-gradient(180deg, #A792F4 0%, #BFAFF8 42%, #D6CCFB 100%);
-        }
-        /* Sur ordinateur, tout le haut tient dans l'écran. */
-        @media (min-width: 1024px) { .acc-haut { height: 100dvh; } }
+        .acc { color: var(--cl-ink); font-family: "Inter Variable", "Inter", system-ui, sans-serif; }
+        /* Sur ordinateur, tout le haut tient dans l'écran (sous l'en-tête de la
+           coquille). Sur un écran bas, il grandit plutôt que de tasser les
+           cartes : mieux vaut défiler un peu que lire des chiffres qui débordent. */
+        @media (min-width: 1024px) { .acc-haut { min-height: calc(100dvh - var(--coq-entete)); } }
+        .acc-tete, .acc-carrousel { animation: acc-apparait .5s cubic-bezier(.22,1,.36,1) both; }
+        .acc-carrousel { animation-delay: .08s; }
+        @keyframes acc-apparait { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+        @media (prefers-reduced-motion: reduce) { .acc-tete, .acc-carrousel { animation: none; } }
         .acc-titre { font-size: clamp(34px, 6.4vh, 64px); line-height: 1.02; margin-top: 6px; }
-        .acc-tete { margin-top: clamp(14px, 3.4vh, 40px); }
+        .acc-tete { margin-top: clamp(6px, 2.4vh, 32px); }
         :global(.acc-eventail) { width: clamp(240px, 30vh, 330px); margin-top: -6px; margin-bottom: clamp(-60px, -6vh, -20px); }
         .acc-carrousel { margin-top: clamp(10px, 2vh, 24px); scrollbar-width: none; }
         .acc-carrousel::-webkit-scrollbar { display: none; }
         :global(.acc-agent) { background: rgba(255,255,255,0.28); border: 1px solid rgba(255,255,255,0.45); backdrop-filter: blur(10px); margin-bottom: 10px; min-width: 230px; }
         :global(.acc-agent-choisi) { background: #fff; min-width: 300px; box-shadow: 0 -10px 30px rgba(70,40,190,0.10); position: relative; z-index: 2; margin-bottom: -1px; }
         .acc-feuille { position: relative; z-index: 1; }
-        :global(.acc-carte) { padding: clamp(14px, 2.2vh, 22px); border: 1px solid var(--cl-line-soft); }
-        :global(.acc-valeur) { font-size: clamp(28px, 4.6vh, 42px); margin-top: clamp(8px, 2vh, 22px); }
-        :global(.acc-menu) { background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(10px); }
-        :global(.acc-deroulant) { background: #fff; box-shadow: 0 18px 50px rgba(40,20,110,0.18); border: 1px solid var(--cl-line-soft); }
+        :global(.acc-carte) { padding: clamp(14px, 2.2vh, 22px); border: 1px solid var(--cl-line-soft); min-height: 212px; }
+        .acc-fil { min-height: 240px; }
+        :global(.acc-valeur) { font-size: clamp(28px, min(4.6vh, 2.6vw), 42px); margin-top: clamp(8px, 2vh, 22px); white-space: nowrap; }
+                :global(.acc-deroulant) { background: #fff; box-shadow: 0 18px 50px rgba(40,20,110,0.18); border: 1px solid var(--cl-line-soft); }
         :global(.acc-puce) { background: #fff; color: var(--cl-ink); box-shadow: 0 4px 18px rgba(70,40,190,0.10); }
         :global(.acc-appel) { background: rgba(255,255,255,0.92); box-shadow: 0 10px 30px rgba(70,40,190,0.18); border: 1px solid rgba(255,255,255,0.8); }
-        :global(.acc-contour) { border: 1px solid rgba(255,255,255,0.6); color: #fff; }
         :global(.acc-rond) { border: 1px solid var(--cl-line); color: var(--cl-ink); }
         :global(.acc-bloc) { border: 1px solid var(--cl-line-soft); }
-        :global(.top-13) { top: 3.25rem; }
         /* Le fil se lit par le bas : ce qui déborde en haut s'efface au lieu d'être coupé net. */
         :global(.acc-fil-messages) { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px); mask-image: linear-gradient(to bottom, transparent 0, #000 28px); padding-top: 12px; }
         :global(.acc-doodle-fil) { height: clamp(70px, 13vh, 150px); }
         :global(.acc-doodle-vide) { height: clamp(120px, 24vh, 260px); }
         :global(.acc-doodle-appel) { height: clamp(90px, 15vh, 160px); margin: -4px 26px -6px 0; }
+        /* Écran bas : l'illustration cède sa place, l'éventail se fait petit. */
+        @media (max-height: 820px) { :global(.acc-doodle-appel) { display: none !important; } }
+        @media (max-height: 720px) { :global(.acc-eventail) { width: 220px !important; } }
       `}</style>
     </div>
   );
