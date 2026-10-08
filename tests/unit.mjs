@@ -669,6 +669,20 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("pointure 42", varianteDemandee(tailles, "tu as du 42 ?").map((v) => v.retailerId), ["t_42"]);
 }
 
+// ═══ images supplémentaires — toutes les photos partent chez Meta ═════════
+{
+  groupe("images supplémentaires — additional_image_link");
+  const { imagesSupplementaires } = await import(`${DIST}/whatsapp/variantes.js`);
+  const A = "https://st.x/a.jpg", B = "https://st.x/b.jpg", C = "https://st.x/c.jpg";
+  eq("l'image principale n'est pas répétée", imagesSupplementaires(A, [A, B, C]), [B, C]);
+  eq("doublons retirés", imagesSupplementaires(A, [B, B, " " + B + " "]), [B]);
+  eq("variante avec sa photo : la photo générale passe en supplémentaire", imagesSupplementaires(C, [A, B]), [A, B]);
+  eq("vides, null et liens non http ignorés", imagesSupplementaires(A, [null, "", "data:image/png;base64,xx", "/media/x.jpg", B]), [B]);
+  eq("pas de tableau → rien", imagesSupplementaires(A, null), []);
+  const trente = Array.from({ length: 30 }, (_, i) => `https://st.x/${i}.jpg`);
+  eq("20 au plus (limite Meta)", imagesSupplementaires(A, trente).length, 20);
+}
+
 // ═══ voix — un vocal devient un message écrit ══════════════════════════════
 {
   groupe("voix — transcription des vocaux");

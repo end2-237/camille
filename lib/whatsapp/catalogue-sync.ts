@@ -62,6 +62,8 @@ type Ligne = {
   meta_retailer_id: string | null;
   /** Les axes de variation, tels que Camille les déclare. */
   variants: AxeVariante[] | null;
+  /** Les photos en plus de l'image principale. */
+  images: string[] | null;
 };
 
 /** La colonne de liaison est-elle là ? Tout le sens Meta → Camille en dépend. */
@@ -81,6 +83,7 @@ async function produitsCamille(agentId: string): Promise<Ligne[]> {
     `SELECT id, name, description, price, COALESCE(currency,'XAF') AS currency,
             image_url, stock, category, COALESCE(active, true) AS active,
             COALESCE(variants, '[]'::jsonb) AS variants,
+            COALESCE(to_jsonb(p)->'images', '[]'::jsonb) AS images,
             to_jsonb(p)->>'meta_retailer_id' AS meta_retailer_id
        FROM camille.products p
       WHERE agent_id = $1
@@ -102,6 +105,7 @@ async function produitsCamille(agentId: string): Promise<Ligne[]> {
     // La colonne est un JSONB : sur une base ancienne elle peut contenir
     // autre chose qu'un tableau, et la traduction doit l'ignorer sans broncher.
     variants: Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null,
+    images: Array.isArray(x.images) ? (x.images as string[]) : null,
   }));
 }
 
@@ -280,7 +284,8 @@ export async function pousserUn(
   agentId: string,
   p: { id: string; name: string; description?: string | null; price?: number | null;
        currency?: string | null; image_url?: string | null; stock?: number | null;
-       category?: string | null; active?: boolean | null; variants?: AxeVariante[] | null },
+       category?: string | null; active?: boolean | null; variants?: AxeVariante[] | null;
+       images?: string[] | null },
   options: { lien?: string; marque?: string } = {}
 ): Promise<void> {
   if (!meta.metaConfigured().ok) return;
@@ -295,6 +300,7 @@ export async function pousserUn(
       // Sans les axes, un produit décliné partait comme UN seul article :
       // le client ne voyait aucune variation dans WhatsApp.
       variants: Array.isArray(p.variants) ? p.variants : null,
+      images: Array.isArray(p.images) ? p.images : null,
     }],
     options
   );

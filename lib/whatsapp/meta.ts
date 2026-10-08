@@ -14,7 +14,7 @@
 //   WHATSAPP_VERIFY_TOKEN · WHATSAPP_APP_SECRET
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { articlesPour, type AxeVariante } from "./variantes";
+import { articlesPour, imagesSupplementaires, type AxeVariante } from "./variantes";
 
 const GRAPH = (process.env.GRAPH_VERSION || "v26.0").replace(/^\/?/, "");
 const TOKEN = process.env.WHATSAPP_TOKEN || "";
@@ -767,6 +767,8 @@ export type ProduitASyncer = {
   active?: boolean;
   /** Les axes de variation de Camille, tels quels. */
   variants?: AxeVariante[] | null;
+  /** Les photos en plus de l'image principale (colonne `images`). */
+  images?: string[] | null;
 };
 
 /**
@@ -853,6 +855,12 @@ export async function syncCatalogue(
         ...(a.itemGroupId ? { item_group_id: a.itemGroupId } : {}),
         ...(a.champ && a.valeur ? { [a.champ]: a.valeur } : {}),
         image_link: a.image || p.image_url,
+        // Les autres photos du produit : le client les fait défiler dans la
+        // fiche WhatsApp. Sans ce champ, seule la première partait.
+        ...(() => {
+          const extra = imagesSupplementaires(a.image || p.image_url, [p.image_url, ...(p.images || [])]);
+          return extra.length ? { additional_image_link: extra } : {};
+        })(),
         ...resteDuProduit(p, options),
       },
     }));

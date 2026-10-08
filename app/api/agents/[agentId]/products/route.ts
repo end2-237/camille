@@ -110,6 +110,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     category: cree.category as string | null,
     active: cree.active as boolean | null,
     variants: Array.isArray(cree.variants) ? (cree.variants as AxeVariante[]) : null,
+    images: Array.isArray(cree.images) ? (cree.images as string[]) : null,
   }, { marque: (owner as { business_name?: string })?.business_name }).catch(() => {});
 
   return NextResponse.json({ product: cree }, { status: 201 });

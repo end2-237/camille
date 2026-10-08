@@ -311,3 +311,30 @@ export function varianteDemandee(variantes: VarianteAffichable[], texte: string)
   return variantes.filter((v) => designe(v.option));
 }
 
+// ── Les photos supplémentaires ─────────────────────────────────────────────
+
+/** Meta accepte jusqu'à 20 images en plus de l'image principale. */
+export const MAX_IMAGES_SUPPLEMENTAIRES = 20;
+
+/**
+ * Les images à envoyer en `additional_image_link` : celles du produit, sans
+ * l'image principale de l'article, sans doublon, en http(s) seulement, 20 au
+ * plus. Pour une variante qui a sa propre photo, la photo générale du produit
+ * passe en supplémentaire : on la voit toujours en faisant défiler.
+ */
+export function imagesSupplementaires(
+  principale: string | null | undefined,
+  images: (string | null | undefined)[] | null | undefined
+): string[] {
+  const vues = new Set<string>(principale ? [principale.trim()] : []);
+  const sortie: string[] = [];
+  for (const brut of Array.isArray(images) ? images : []) {
+    const u = typeof brut === "string" ? brut.trim() : "";
+    if (!/^https?:\/\//i.test(u) || vues.has(u)) continue;
+    vues.add(u);
+    sortie.push(u);
+    if (sortie.length >= MAX_IMAGES_SUPPLEMENTAIRES) break;
+  }
+  return sortie;
+}
+

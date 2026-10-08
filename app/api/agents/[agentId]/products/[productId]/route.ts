@@ -85,6 +85,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     category: maj.category as string | null,
     active: maj.active as boolean | null,
     variants: Array.isArray(maj.variants) ? (maj.variants as AxeVariante[]) : null,
+    images: Array.isArray(maj.images) ? (maj.images as string[]) : null,
   }).catch(() => {});
 
   return NextResponse.json({ product: maj });
