@@ -2,7 +2,7 @@
 // Les exports gardent les mêmes noms pour ne pas casser les routes existantes.
 
 const CORE_URL     = process.env.CAMILLE_CORE_URL     ?? "https://camille-core.vps.buyticle.com";
-const CORE_API_KEY = process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
+const CORE_API_KEY = process.env.CAMILLE_CORE_API_KEY ?? "";
 
 function coreHeaders() {
   return { "Content-Type": "application/json", "X-Api-Key": CORE_API_KEY };

@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { accesSession, appelInterne, refusInterne } from "@/lib/interne";
 
 /* ─── GET ─────────────────────────────────────────────────────────────────── */
 export async function GET(req: NextRequest) {
@@ -15,6 +16,8 @@ export async function GET(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Paramètre session manquant" }, { status: 400 });
   }
+  const refus = await accesSession(req, session);
+  if (refus) return refus;
 
   try {
     const params: unknown[] = [session, limit];
@@ -62,6 +65,9 @@ export async function GET(req: NextRequest) {
 //   ]
 // }
 export async function POST(req: NextRequest) {
+  // Écrire dans l'historique, c'est souffler au bot ce qui « a été dit » :
+  // réservé aux automatismes de la plateforme.
+  if (!appelInterne(req)) return refusInterne();
   try {
     const body = await req.json();
     const { session, phone, messages } = body as {

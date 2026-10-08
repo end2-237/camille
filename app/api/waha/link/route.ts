@@ -26,16 +26,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 
-  await query(
+  // Une session déjà liée au compte d'un AUTRE utilisateur ne se reprend pas :
+  // le nom de session se déduit de l'identifiant d'agent (public), et la
+  // réécrire détournait les messages des clients de ce commerçant.
+  const lien = await query(
     `INSERT INTO camille.whatsapp_sessions (session_name, agent_id, user_id, status)
      VALUES ($1, $2, $3, 'CONNECTED')
      ON CONFLICT (session_name) DO UPDATE
        SET agent_id   = $2,
            user_id    = $3,
            status     = 'CONNECTED',
-           updated_at = NOW()`,
+           updated_at = NOW()
+     WHERE camille.whatsapp_sessions.user_id = $3
+     RETURNING session_name`,
     [sessionName, agentId, user.id]
   );
+  if (!lien.rows.length) {
+    return NextResponse.json({ error: "Cette session appartient à un autre compte" }, { status: 409 });
+  }
 
   // Lier une session à la main, c'est déclarer l'agent en service. Le laisser
   // en brouillon ferait échouer n8n sur « Aucun agent actif pour cette

@@ -4,11 +4,13 @@
 // DELETE /api/agents/[agentId]/owner-session?phone=xxx   → { success: bool } — révoque 1 session (/exit)
 // DELETE /api/agents/[agentId]/owner-session?all=true    → { success: bool } — révoque TOUTES les sessions actives
 //
-// Appelé par n8n (pas de JWT) et par le dashboard (JWT optionnel en admin mode)
+// Appelé par n8n (en-tête X-Camille-Key) et par le dashboard (JWT du propriétaire de l'agent).
 
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { query } from "@/lib/db";
+import { accesAgent } from "@/lib/interne";
+import { tenter, oublier } from "@/lib/limite";
 
 const SESSION_DURATION_HOURS = 8;
 
@@ -17,6 +19,8 @@ type RouteContext = { params: Promise<{ agentId: string }> };
 /* ─── GET — Vérifier / lister les sessions propriétaire ─────────────────── */
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
+  const { refus } = await accesAgent(req, agentId);
+  if (refus) return refus;
   const phone = req.nextUrl.searchParams.get("phone");
 
   // Sans phone → mode admin dashboard : liste toutes les sessions actives
@@ -80,6 +84,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 /* ─── POST — Vérifier mot de passe + créer session ──────────────────────── */
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
+  const { refus } = await accesAgent(req, agentId);
+  if (refus) return refus;
 
   let phone: string;
   let password: string;
@@ -91,6 +97,19 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   if (!phone || !password) {
     return NextResponse.json({ error: "phone et password requis" }, { status: 400 });
+  }
+
+  // 5 essais par quart d'heure et par numéro : le mot de passe propriétaire
+  // ne doit pas se deviner à force d'essais depuis WhatsApp.
+  const cle = `owner:${agentId}:${phone}`;
+  const essai = tenter(cle, 5, 15 * 60_000);
+  if (!essai.ok) {
+    return NextResponse.json({
+      success: false,
+      reason: "too_many_attempts",
+      retry_after: essai.attente,
+      message: `🔒 Trop d'essais. Réessayez dans ${Math.ceil(essai.attente / 60)} min.`,
+    });
   }
 
   try {
@@ -114,6 +133,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     if (!valid) {
       return NextResponse.json({ success: false, reason: "invalid_password" });
     }
+
+    oublier(cle);
 
     // Invalider les sessions précédentes de ce numéro
     await query(
@@ -146,6 +167,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 /* ─── DELETE — Révoquer une ou toutes les sessions ──────────────────────── */
 export async function DELETE(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
+  const { refus } = await accesAgent(req, agentId);
+  if (refus) return refus;
   const phone  = req.nextUrl.searchParams.get("phone");
   const allStr = req.nextUrl.searchParams.get("all");
 

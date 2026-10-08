@@ -11,17 +11,52 @@
 // ou nous qui les créons à la main pour chacun.
 //
 // L'accès est réservé au propriétaire connecté : un modèle engage le nom de son
-// commerce auprès de ses clients.
+// commerce auprès de ses clients. Chacun travaille sur SON compte WhatsApp
+// (connecté par l'Embedded Signup) ; le compte de la plateforme, partagé, n'est
+// ouvert qu'aux administrateurs — un commerçant pouvait y supprimer les modèles
+// dont dépendent tous les autres.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/auth-server";
+import { getUserFromRequest, type AuthUser } from "@/lib/auth-server";
+import { query } from "@/lib/db";
 import * as meta from "@/lib/whatsapp/meta";
+import { avecIdentifiants, identifiantsEnv } from "@/lib/whatsapp/contexte-meta";
+import { identifiantsAgent } from "@/lib/whatsapp/identifiants";
+
+const SANS_COMPTE =
+  "Connectez le WhatsApp officiel d'un de vos agents pour gérer vos propres modèles de message.";
+
+/**
+ * Exécute `fn` sur le compte WhatsApp du commerçant : celui de l'agent demandé
+ * (?agentId=), sinon le premier de ses agents connecté avec ses propres
+ * identifiants. Les administrateurs sans compte propre travaillent sur celui
+ * de la plateforme. null : aucun compte accessible.
+ */
+async function surSonCompte<T>(req: NextRequest, user: AuthUser, fn: () => Promise<T>): Promise<T | null> {
+  const demande = req.nextUrl.searchParams.get("agentId");
+  const r = await query(
+    `SELECT id FROM camille.agents
+      WHERE user_id = $1 AND status <> 'archived'
+        AND to_jsonb(agents)->>'meta_token_enc' IS NOT NULL
+        AND ($2::uuid IS NULL OR id = $2::uuid)
+      ORDER BY created_at
+      LIMIT 1`,
+    [user.id, demande && /^[0-9a-f-]{36}$/i.test(demande) ? demande : null]
+  );
+  if (r.rows[0]) {
+    const ids = await identifiantsAgent(r.rows[0].id);
+    if (ids.source === "agent" && ids.wabaId) return avecIdentifiants(ids, fn);
+  }
+  if (user.is_admin) return avecIdentifiants(identifiantsEnv(), fn);
+  return null;
+}
 
 export async function GET(req: NextRequest) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const r = await meta.listTemplates();
+  const r = await surSonCompte(req, user, () => meta.listTemplates());
+  if (!r) return NextResponse.json({ templates: [], error: SANS_COMPTE, sans_compte: true });
   if (!r.ok) return NextResponse.json({ templates: [], error: r.error }, { status: 200 });
 
   // Trié par statut : ce qui demande une action du commerçant remonte.
@@ -63,14 +98,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const r = await meta.createTemplate({
+  const r = await surSonCompte(req, user, () => meta.createTemplate({
     name,
     category: category as "UTILITY" | "MARKETING" | "AUTHENTICATION",
     language: String(b.language || "fr"),
     body,
     examples,
     footer: b.footer ? String(b.footer) : undefined,
-  });
+  }));
+  if (!r) return NextResponse.json({ error: SANS_COMPTE }, { status: 403 });
 
   if (!r.ok) {
     // On rend la raison telle que Meta l'a écrite : c'est elle qui permet de
@@ -91,7 +127,8 @@ export async function DELETE(req: NextRequest) {
   const name = (req.nextUrl.searchParams.get("name") || "").trim();
   if (!name) return NextResponse.json({ error: "name requis" }, { status: 400 });
 
-  const r = await meta.deleteTemplate(name);
+  const r = await surSonCompte(req, user, () => meta.deleteTemplate(name));
+  if (!r) return NextResponse.json({ error: SANS_COMPTE }, { status: 403 });
   if (!r.ok) return NextResponse.json({ error: r.error || "Suppression refusée" }, { status: 400 });
 
   // On le répète dans la réponse : le nom ne sera pas réutilisable de sitôt.

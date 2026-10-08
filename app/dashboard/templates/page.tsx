@@ -79,12 +79,14 @@ export default function TemplatesPage() {
   const [msg, setMsg] = useState("");
   const [aSupprimer, setASupprimer] = useState<string>("");
   const [note, setNote] = useState("");
+  const [sansCompte, setSansCompte] = useState(false);
 
   const load = useCallback(async () => {
     setErr("");
     try {
       const r = await fetch("/api/whatsapp/templates", { headers: { ...authHeaders() } });
       const d = await r.json();
+      setSansCompte(!!d.sans_compte);
       if (d.error) setErr(d.error);
       setTemplates(Array.isArray(d.templates) ? d.templates : []);
     } catch (e) {
@@ -168,19 +170,19 @@ export default function TemplatesPage() {
             </p>
             <div className="flex items-center gap-2">
               <BoutonRond icone={RefreshCw} label="Actualiser" onClick={load} />
-              {!form && <Bouton variante="encre" icone={Plus} onClick={() => setForm(true)}>Créer un modèle</Bouton>}
+              {!form && !sansCompte && <Bouton variante="encre" icone={Plus} onClick={() => setForm(true)}>Créer un modèle</Bouton>}
             </div>
           </div>
 
           <div className="mt-4 space-y-3">
-            {err && <Bandeau ton="rouge">{err}</Bandeau>}
+            {err && <Bandeau ton={sansCompte ? "violet" : "rouge"}>{err}</Bandeau>}
             {note && <Bandeau ton={note.includes("supprimé") ? "vert" : "rouge"}>{note}</Bandeau>}
           </div>
 
           <div className="mt-4">
             {templates === null ? (
               <Squelettes n={3} hauteur={76} />
-            ) : templates.length === 0 ? (
+            ) : sansCompte ? null : templates.length === 0 ? (
               <Vide doodle="reading" titre="Aucun modèle pour le moment." texte="Partez d'un des trois modèles courants : la création ne prend qu'une minute."
                 action={!form ? <Bouton variante="encre" icone={Plus} onClick={() => setForm(true)}>Créer un modèle</Bouton> : undefined} />
             ) : (

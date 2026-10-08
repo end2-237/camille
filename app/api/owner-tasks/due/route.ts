@@ -5,8 +5,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { appelInterne, refusInterne } from "@/lib/interne";
 
 export async function GET(req: NextRequest) {
+  // Toutes les tâches de tous les commerçants : réservé au cron n8n.
+  if (!appelInterne(req)) return refusInterne();
   const before = req.nextUrl.searchParams.get("before") ?? new Date().toISOString();
 
   // Jamais de tâches de plus de 24h dans le passé (évite le flood en cas de bug)

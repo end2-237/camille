@@ -48,7 +48,14 @@ export async function POST(req: NextRequest) {
       [user.id, hash, String(DUREE_MIN)]
     );
 
-    const base = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, "");
+    // L'adresse du lien vient de la configuration, jamais de l'en-tête Host de
+    // la requête : sinon un tiers ferait envoyer un lien vers SON domaine.
+    const base = (process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.NODE_ENV === "production" ? "" : req.nextUrl.origin)).replace(/\/$/, "");
+    if (!base) {
+      console.error("[auth/forgot] NEXT_PUBLIC_APP_URL absent : lien non envoyé");
+      return NextResponse.json(REPONSE);
+    }
     const lien = `${base}/reinitialiser?jeton=${jeton}`;
     const nom = user.full_name || "";
     await envoyerEmail({

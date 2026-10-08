@@ -1,9 +1,10 @@
 // GET /api/agents/by-session?session=NOM_SESSION
-// Route publique utilisée par n8n pour récupérer toute la config d'un agent
+// Route interne (en-tête X-Camille-Key) utilisée par n8n pour récupérer toute la config d'un agent
 // à partir du nom de session Waha.
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { appelInterne, refusInterne } from "@/lib/interne";
 import { resolveWelcome, sectorProfile } from "@/lib/sectorProfiles";
 
 const AGENT_COLS = `
@@ -45,6 +46,7 @@ const AGENT_COLS = `
 `;
 
 export async function GET(req: NextRequest) {
+  if (!appelInterne(req)) return refusInterne();
   const sessionName = req.nextUrl.searchParams.get("session");
   const fallbackId  = req.nextUrl.searchParams.get("fallback");
 

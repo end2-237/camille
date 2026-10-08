@@ -14,6 +14,7 @@
 // point d'arrivée, c'était une promesse que le système ne tenait pas.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
+import { appelInterne, refusInterne } from "@/lib/interne";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { notifyUser } from "@/lib/fcm";
@@ -43,6 +44,8 @@ const KINDS: Record<string, string> = {
 // ── Création, depuis le workflow ─────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // Création réservée au workflow (clé interne).
+  if (!appelInterne(req)) return refusInterne();
   const b = await req.json().catch(() => ({} as Record<string, unknown>));
 
   const agentId = String(b.agentId || b.agent_id || "").trim();

@@ -15,12 +15,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { egalConstant } from "@/lib/interne";
 import { notifyUser } from "@/lib/fcm";
 
-const CORE_KEY = () => process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
+const CORE_KEY = () => process.env.CAMILLE_CORE_API_KEY ?? "";
 
 export async function POST(req: NextRequest) {
-  if ((req.headers.get("x-api-key") ?? "") !== CORE_KEY()) {
+  if (!CORE_KEY() || !egalConstant(req.headers.get("x-api-key") ?? "", CORE_KEY())) {
     return NextResponse.json({ error: "Clé invalide" }, { status: 401 });
   }
 

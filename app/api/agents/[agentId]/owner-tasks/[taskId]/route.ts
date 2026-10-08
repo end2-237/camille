@@ -5,11 +5,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { accesAgent } from "@/lib/interne";
 
 type RouteContext = { params: Promise<{ agentId: string; taskId: string }> };
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const { agentId, taskId } = await params;
+  const { refus } = await accesAgent(req, agentId);
+  if (refus) return refus;
 
   try {
     const { status } = await req.json() as { status: string };
@@ -37,8 +40,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: RouteContext) {
+export async function DELETE(req: NextRequest, { params }: RouteContext) {
   const { agentId, taskId } = await params;
+  const { refus } = await accesAgent(req, agentId);
+  if (refus) return refus;
 
   try {
     await query(

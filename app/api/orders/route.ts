@@ -9,10 +9,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { createOrder } from "@/lib/orders";
+import { appelInterne, refusInterne } from "@/lib/interne";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export async function POST(req: NextRequest) {
+  // Commande créée par le workflow : clé interne obligatoire (elle touche au stock).
+  if (!appelInterne(req)) return refusInterne();
   try {
     const b = await req.json();
 

@@ -6,13 +6,16 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { accesAgent } from "@/lib/interne";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-export async function GET(_req: NextRequest, { params }: RouteContext) {
+export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const phone  = _req.nextUrl.searchParams.get("phone");
-  const status = _req.nextUrl.searchParams.get("status") ?? "active";
+  const { refus } = await accesAgent(req, agentId);
+  if (refus) return refus;
+  const phone  = req.nextUrl.searchParams.get("phone");
+  const status = req.nextUrl.searchParams.get("status") ?? "active";
 
   try {
     const result = await query(
@@ -34,6 +37,8 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
+  const { refus } = await accesAgent(req, agentId);
+  if (refus) return refus;
 
   try {
     const body = await req.json() as {

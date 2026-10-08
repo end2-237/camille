@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
       `INSERT INTO camille.whatsapp_sessions (session_name, agent_id, user_id, status)
        VALUES ($1, $2, $3, 'STARTING')
        ON CONFLICT (session_name) DO UPDATE
-         SET agent_id = $2, user_id = $3, status = 'STARTING', updated_at = NOW()`,
+         SET agent_id = $2, user_id = $3, status = 'STARTING', updated_at = NOW()
+       WHERE camille.whatsapp_sessions.user_id = $3`,
       [sessionName, agentId, user.id]
     );
 

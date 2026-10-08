@@ -13,10 +13,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { egalConstant } from "@/lib/interne";
 import { notifyUser } from "@/lib/fcm";
 import { activerAgentSiBrouillon } from "@/lib/agent-activation";
 
-const CORE_KEY = () => process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
+const CORE_KEY = () => process.env.CAMILLE_CORE_API_KEY ?? "";
 
 // Etats pour lesquels l'agent ne repond plus et ne se retablira pas seul.
 // STOPPED en est volontairement absent : c'est une coupure demandee par le
@@ -33,7 +34,8 @@ function storedStatus(coreStatus: string): string {
 
 export async function POST(req: NextRequest) {
   const key = req.headers.get("x-api-key") ?? "";
-  if (key !== CORE_KEY()) {
+  // Pas de clé configurée = aucun appel accepté (plus de valeur par défaut).
+  if (!CORE_KEY() || !egalConstant(key, CORE_KEY())) {
     return NextResponse.json({ error: "Clé invalide" }, { status: 401 });
   }
 

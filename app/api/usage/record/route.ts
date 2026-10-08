@@ -1,15 +1,17 @@
 // POST /api/usage/record
 // Appelée par n8n après chaque réponse Groq pour enregistrer les tokens consommés.
-// Route publique — appelée depuis le serveur n8n.
+// Route interne (en-tête X-Camille-Key) — appelée depuis le serveur n8n.
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { appelInterne, refusInterne } from "@/lib/interne";
 import { currentPeriod } from "@/lib/plans";
 import { getPlanLimitDB } from "@/lib/plans-db";
 import { subscriptionState } from "@/lib/subscription";
 import { alerterQuota, alerterEcheance } from "@/lib/usage-alerts";
 
 export async function POST(req: NextRequest) {
+  if (!appelInterne(req)) return refusInterne();
   try {
     const body = await req.json();
     const { session, agentId: agentIdInput, prompt_tokens, completion_tokens, total_tokens } = body as {
@@ -57,9 +59,11 @@ export async function POST(req: NextRequest) {
     } catch { /* les compteurs priment sur les alertes */ }
 
     const period  = currentPeriod();
-    const pt = Number(prompt_tokens)     || 0;
-    const ct = Number(completion_tokens) || 0;
-    const tt = Number(total_tokens)      || 0;
+    // Jamais de valeur négative : elle effacerait la consommation du mois.
+    const borne = (v: unknown) => Math.max(0, Math.min(Math.round(Number(v) || 0), 10_000_000));
+    const pt = borne(prompt_tokens);
+    const ct = borne(completion_tokens);
+    const tt = borne(total_tokens);
 
     // Les deux écritures sont indépendantes. Elles étaient enchaînées : quand
     // l'upsert des tokens échouait (contrainte d'unicité absente sur

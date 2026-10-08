@@ -8,12 +8,13 @@
 // souvent pas sous les yeux — alors que son numéro de téléphone suffit à
 // retrouver sa commande.
 //
-// Route appelée par le workflow n8n, comme /api/agents/by-session : pas
-// d'authentification utilisateur, et rien d'exposé au-delà de ce que le client
+// Route appelée par le workflow n8n, comme /api/agents/by-session : clé
+// interne (X-Camille-Key) obligatoire, et rien d'exposé au-delà de ce que le client
 // connaît déjà de sa propre commande.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { appelInterne, refusInterne } from "@/lib/interne";
 
 /** Ce que le client comprend, par opposition au statut technique. */
 const ETAT: Record<string, string> = {
@@ -25,6 +26,8 @@ const ETAT: Record<string, string> = {
 };
 
 export async function GET(req: NextRequest) {
+  // Réservé au workflow : agentId + téléphone ne suffisent pas à prouver qui demande.
+  if (!appelInterne(req)) return refusInterne();
   const p = req.nextUrl.searchParams;
   const agentId = (p.get("agentId") || "").trim();
   const phone = (p.get("phone") || "").replace(/[^0-9]/g, "");

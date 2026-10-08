@@ -1,11 +1,14 @@
 // GET /api/integrations/google-calendar/token?agentId=xxx
-// Called by n8n (no user auth) to get a fresh Google access token for a given agent.
+// Called by n8n (X-Camille-Key, always required — even in « souple » mode) to get
+// a fresh Google access token for a given agent.
 // The refresh_token itself is never exposed — only a short-lived access_token is returned.
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { appelInterne, refusInterne } from "@/lib/interne";
 
 export async function GET(req: NextRequest) {
+  if (!appelInterne(req, { strict: true })) return refusInterne();
   const agentId = req.nextUrl.searchParams.get("agentId");
   if (!agentId) {
     return NextResponse.json({ error: "agentId manquant" }, { status: 400 });

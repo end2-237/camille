@@ -1,14 +1,16 @@
 // GET /api/usage/check?session=NAME
 // Appelée par n8n avant chaque réponse pour vérifier si l'agent peut encore répondre.
-// Route publique — pas d'auth requise (n8n appelle depuis le serveur).
+// Route interne (en-tête X-Camille-Key) — n8n appelle depuis le serveur.
 
 import { NextRequest, NextResponse } from "next/server";
+import { appelInterne, refusInterne } from "@/lib/interne";
 import { query }           from "@/lib/db";
 import { currentPeriod }   from "@/lib/plans";
 import { getPlanLimitDB, isUnlimitedTokens } from "@/lib/plans-db";
 import { subscriptionState } from "@/lib/subscription";
 
 export async function GET(req: NextRequest) {
+  if (!appelInterne(req)) return refusInterne();
   const sessionName = req.nextUrl.searchParams.get("session");
 
   if (!sessionName) {

@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { fichierDeLAgent } from "@/lib/fichiers";
 // Un fichier de route Next n'exporte que ses verbes HTTP : la liste vit à côté.
 import { MEDIA_KINDS } from "@/lib/mediaKinds";
 
@@ -23,7 +24,7 @@ type RouteContext = { params: Promise<{ agentId: string }> };
 type MediaItem = { id: string; kind: string; url: string; caption: string };
 
 const coreUrl = () => (process.env.CAMILLE_CORE_URL ?? "https://camille-core.vps.buyticle.com").replace(/\/$/, "");
-const coreKey = () => process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
+const coreKey = () => process.env.CAMILLE_CORE_API_KEY ?? "";
 
 /** Un identifiant stable même pour les entrées créées avant ce champ. */
 const idFor = (url: string) => crypto.createHash("sha1").update(url).digest("hex").slice(0, 12);
@@ -203,7 +204,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
   // Le fichier part aussi : garder des images orphelines sur le disque de core
   // finit par le remplir. Best-effort — l'entrée est déjà retirée.
-  const filename = target.url.split("/media/").pop();
+  const filename = fichierDeLAgent(target.url, agentId);
   if (filename) {
     fetch(`${coreUrl()}/api/media/${encodeURIComponent(filename)}`, {
       method: "DELETE",

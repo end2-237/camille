@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { fichierDeLAgent } from "@/lib/fichiers";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ function coreUrl(): string {
 }
 
 function coreKey(): string {
-  return process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
+  return process.env.CAMILLE_CORE_API_KEY ?? "";
 }
 
 function coreHeaders(extra: Record<string, string> = {}): Record<string, string> {
@@ -170,7 +171,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // Effacer l'ancienne version du fichier sur Core si elle existe
     const oldUrl = caps[`welcome_${type}_url`] as string | undefined;
     if (oldUrl) {
-      const oldFilename = oldUrl.split("/media/").pop();
+      const oldFilename = fichierDeLAgent(oldUrl, agentId);
       if (oldFilename) {
         await fetch(`${coreUrl()}/api/media/${encodeURIComponent(oldFilename)}`, {
           method:  "DELETE",
@@ -218,7 +219,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     const currentUrl = caps[`welcome_${type}_url`] as string | undefined;
 
     if (currentUrl) {
-      const filename = currentUrl.split("/media/").pop();
+      const filename = fichierDeLAgent(currentUrl, agentId);
       if (filename) {
         await fetch(`${coreUrl()}/api/media/${encodeURIComponent(filename)}`, {
           method:  "DELETE",

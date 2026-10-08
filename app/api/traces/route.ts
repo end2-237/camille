@@ -6,8 +6,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { appelInterne, refusInterne } from "@/lib/interne";
 
 export async function POST(req: NextRequest) {
+  // Réservé au workflow (clé interne).
+  if (!appelInterne(req)) return refusInterne();
   try {
     const b = await req.json();
 

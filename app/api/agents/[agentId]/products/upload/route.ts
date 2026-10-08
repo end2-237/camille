@@ -12,7 +12,7 @@ import { query } from "@/lib/db";
 type RouteContext = { params: Promise<{ agentId: string }> };
 
 const coreUrl = () => (process.env.CAMILLE_CORE_URL ?? "https://camille-core.vps.buyticle.com").replace(/\/$/, "");
-const coreKey = () => process.env.CAMILLE_CORE_API_KEY ?? "camille-core-secret";
+const coreKey = () => process.env.CAMILLE_CORE_API_KEY ?? "";
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const user = await getUserFromRequest(req);
