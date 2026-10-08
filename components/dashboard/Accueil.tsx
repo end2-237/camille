@@ -127,7 +127,7 @@ function Carte({ icone: Icone, titre, sous, valeur, point, ratio, couleur, gauch
   ratio: number; couleur: string; gauche: [string, string]; droite: [string, string]; href: string;
 }) {
   return (
-    <div className="acc-carte flex flex-col rounded-[26px] bg-white">
+    <div className="acc-carte flex w-[82%] flex-shrink-0 snap-start flex-col rounded-[26px] bg-white sm:w-auto">
       <div className="flex items-start justify-between">
         <div>
           <p className="flex items-center gap-2 text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>
@@ -170,16 +170,16 @@ function AppelWhatsapp({ agent, meta }: { agent?: Agent; meta: EtatMeta | null }
   return (
     <div className="flex flex-col items-start gap-2.5 lg:items-end">
       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-        <Link href={page} aria-label="WhatsApp officiel" className="acc-puce flex h-11 w-11 items-center justify-center rounded-full" style={{ color: "#1DAB55" }}>
+        <Link href={page} aria-label="WhatsApp officiel" className="acc-puce flex h-9 w-9 items-center sm:h-11 sm:w-11 justify-center rounded-full" style={{ color: "#1DAB55" }}>
           <IconeWhatsapp className="h-5 w-5" />
         </Link>
-        <span className="acc-puce rounded-full px-4 py-2.5 text-[14px]">
+        <span className="acc-puce rounded-full px-3 py-2 text-[13px] sm:px-4 sm:py-2.5 sm:text-[14px]">
           <span style={{ color: "var(--cl-ink-faint)" }}>Agent : </span>
           <span style={{ color: "var(--cl-ink)" }}>{agent.identity.name}</span>
         </span>
-        <span className="acc-puce rounded-full px-4 py-2.5 text-[14px]">
+        <span className="acc-puce rounded-full px-3 py-2 text-[13px] sm:px-4 sm:py-2.5 sm:text-[14px]">
           <span style={{ color: "var(--cl-ink-faint)" }}>Statut : </span>
-          <span className="rounded-full px-2.5 py-0.5 text-[13px]"
+          <span className="rounded-full px-2 py-0.5 text-[12px] sm:px-2.5 sm:text-[13px]"
             style={{ background: actif ? "#D9F5DF" : "#FDEFD3", color: actif ? "#1E7A3A" : "#9A6510" }}>
             {actif ? "En ligne" : agent.status === "paused" ? "En pause" : "Brouillon"}
           </span>
@@ -204,7 +204,7 @@ function AppelWhatsapp({ agent, meta }: { agent?: Agent; meta: EtatMeta | null }
           </span>
           <span className="text-left leading-tight">
             <span className="block text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Connectez votre WhatsApp officiel</span>
-            <span className="block text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Votre numéro, votre nom vérifié, en 2 minutes</span>
+            <span className="hidden text-[12px] sm:block" style={{ color: "var(--cl-ink-faint)" }}>Votre numéro, votre nom vérifié, en 2 minutes</span>
           </span>
           <span className="ml-1 flex h-9 items-center rounded-full px-4 text-[13px] font-semibold text-white transition group-hover:brightness-110"
             style={{ background: "var(--cl-ink)" }}>
@@ -342,7 +342,7 @@ export function Accueil() {
           </div>
         ) : (
         <div ref={feuille} data-chargement={chargement ? "1" : undefined} className="acc-feuille grid flex-1 content-start gap-4 rounded-t-[36px] bg-white p-4 lg:grid-cols-[2fr_1fr] lg:p-6">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="acc-indicateurs -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0">
             <Carte icone={ShoppingBag} titre="Commandes" sous={r ? `${r.orders_count} sur 30 jours` : "30 derniers jours"}
               valeur={livrees * 100} point="#1DAB55" ratio={livrees} couleur="#1DAB55"
               gauche={["Livrées", String(r?.delivered_count ?? 0)]} droite={["En cours", String(r?.pending_count ?? 0)]}
@@ -520,11 +520,19 @@ export function Accueil() {
         .acc-carrousel { animation-delay: .08s; }
         @keyframes acc-apparait { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: reduce) { .acc-tete, .acc-carrousel { animation: none; } }
-        .acc-titre { font-size: clamp(34px, 6.4vh, 64px); line-height: 1.02; margin-top: 6px; }
+        .acc-titre { font-size: clamp(30px, min(6.4vh, 10vw), 64px); line-height: 1.02; margin-top: 6px; }
         .acc-tete { margin-top: clamp(6px, 2.4vh, 32px); }
         :global(.acc-eventail) { width: clamp(240px, 30vh, 330px); margin-top: -6px; margin-bottom: clamp(-60px, -6vh, -20px); }
         .acc-carrousel { margin-top: clamp(10px, 2vh, 24px); scrollbar-width: none; }
-        .acc-carrousel::-webkit-scrollbar { display: none; }
+        .acc-carrousel::-webkit-scrollbar, .acc-indicateurs::-webkit-scrollbar { display: none; }
+        .acc-indicateurs { scrollbar-width: none; scroll-padding-left: 16px; }
+        /* Téléphone : cartes d'agent plus étroites, indicateurs moins hauts. */
+        @media (max-width: 639px) {
+          :global(.acc-agent-choisi) { min-width: 248px !important; }
+          :global(.acc-agent) { min-width: 190px !important; }
+          :global(.acc-carte) { min-height: 186px !important; }
+          .acc-fil { min-height: 230px; }
+        }
         :global(.acc-agent) { background: rgba(255,255,255,0.28); border: 1px solid rgba(255,255,255,0.45); backdrop-filter: blur(10px); margin-bottom: 10px; min-width: 230px; }
         :global(.acc-agent-choisi) { background: #fff; min-width: 300px; box-shadow: 0 -10px 30px rgba(70,40,190,0.10); position: relative; z-index: 2; margin-bottom: -1px; }
         .acc-feuille { position: relative; z-index: 1; }

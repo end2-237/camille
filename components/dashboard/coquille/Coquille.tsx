@@ -31,7 +31,7 @@ export const libelleStatut = (s?: string) => (s === "active" ? "En ligne" : s ==
 function PuceStatut({ statut }: { statut?: string }) {
   const actif = statut === "active";
   return (
-    <span className="rounded-full px-2.5 py-0.5 text-[13px]"
+    <span className="rounded-full px-2 py-0.5 text-[12px] sm:px-2.5 sm:text-[13px]"
       style={{ background: actif ? "#D9F5DF" : "#FDEFD3", color: actif ? "#1E7A3A" : "#9A6510" }}>
       {libelleStatut(statut)}
     </span>
@@ -68,14 +68,14 @@ function Feuille({ children }: { children: React.ReactNode }) {
         {page?.parAgent && agent && (
           <div className="flex flex-wrap items-center gap-2">
             <Link href={`/dashboard/${agent.id}/whatsapp`} aria-label="WhatsApp officiel"
-              className="coq-puce-claire flex h-11 w-11 items-center justify-center rounded-full" style={{ color: "#1DAB55" }}>
+              className="coq-puce-claire flex h-9 w-9 items-center sm:h-11 sm:w-11 justify-center rounded-full" style={{ color: "#1DAB55" }}>
               <IconeWhatsapp className="h-5 w-5" />
             </Link>
-            <span className="coq-puce-claire rounded-full px-4 py-2.5 text-[14px]">
+            <span className="coq-puce-claire rounded-full px-3 py-2 text-[13px] sm:px-4 sm:py-2.5 sm:text-[14px]">
               <span style={{ color: "var(--cl-ink-faint)" }}>Agent : </span>
               <span style={{ color: "var(--cl-ink)" }}>{agent.identity.name}</span>
             </span>
-            <span className="coq-puce-claire rounded-full px-4 py-2.5 text-[14px]">
+            <span className="coq-puce-claire rounded-full px-3 py-2 text-[13px] sm:px-4 sm:py-2.5 sm:text-[14px]">
               <span style={{ color: "var(--cl-ink-faint)" }}>Statut : </span>
               <PuceStatut statut={agent.status} />
             </span>
