@@ -57,8 +57,8 @@ import { sectorProfile } from "@/lib/sectorProfiles";
 import { createOrder } from "@/lib/orders";
 import * as meta from "./meta";
 import { tracer, sessionMeta, type Contexte } from "./handle";
-import { lireIdSuivi, recapCommande, etapesCommande, type ActionSuivi } from "./suivi";
-import { chargerCommande, envoyerAnimation } from "./suivi-envoi";
+import { contexteCommande, lireIdSuivi, recapCommande, etapesCommande, type ActionSuivi } from "./suivi";
+import { chargerCommande, commandeEnCours, envoyerAnimation } from "./suivi-envoi";
 import { notify } from "@/lib/webhooks";
 import { sansAccent, chercher, veutToutVoir, estUneQuestion } from "./recherche";
 import { lirePrix } from "./prix";
@@ -727,9 +727,9 @@ async function finaliserPanier(
   const { texte } = recapPanier(panier.items, cur);
   const lieu = livraison
     ? opts.lat != null && opts.lng != null
-      ? "📍 Position reçue"
-      : opts.adresse ? `📍 ${opts.adresse}` : ""
-    : "🏪 Retrait en boutique";
+      ? "Livraison : position reçue"
+      : opts.adresse ? `Livraison : ${opts.adresse}` : ""
+    : "Retrait en boutique";
 
   await meta.sendText(
     phone,
@@ -737,7 +737,7 @@ async function finaliserPanier(
       (c.deliveryFee ? `Sous-total : ${money(Number(c.subtotal) || 0, cur)}\nLivraison : ${money(c.deliveryFee, cur)}\n` : "") +
       `Total : *${money(Number(c.total) || 0, cur)}*` +
       (lieu ? `\n${lieu}` : "") +
-      (livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part 🛵" : "\n\nOn te prépare ça 🙌")
+      (livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part." : "\n\nOn te prépare ça, tu es prévenu dès que c'est prêt.")
   );
   await tracer(agent.id, phone, "assistant", `[commande] ${c.ref || ""} ${opts.mode} ${money(Number(c.total) || 0, cur)}`);
 
@@ -1232,9 +1232,13 @@ export async function repondreBoutique(
   // déterministe un peu sèche vaut mieux qu'une réponse confiante à côté.
   // ─────────────────────────────────────────────────────────────────────────
   if (msg.text.trim() && comprehensionDisponible()) {
-    const [prods, nouveau, souvenir] = await Promise.all([
+    const [prods, nouveau, souvenir, enCours] = await Promise.all([
       catalogue(agent.id), estNouveau(agent.id, phone), lireMemoire(agent.id, phone),
+      commandeEnCours(agent.id, phone),
     ]);
+    // La commande en cours fait partie de ce que le modèle doit savoir — et
+    // ses chiffres (référence, total) deviennent des faits qu'il peut citer.
+    const ligneCommande = enCours ? contexteCommande(enCours) : "";
     const c = await comprendre(
       msg.text,
       prods.map((p) => ({
@@ -1245,7 +1249,10 @@ export async function repondreBoutique(
       faitsDe(agent),
       resto,
       await derniersTours(agent.id, phone),
-      { resume: resumeMemoire(souvenir), ancres: faitsDesAchats(souvenir) }
+      {
+        resume: [resumeMemoire(souvenir), ligneCommande].filter(Boolean).join(" | "),
+        ancres: [...faitsDesAchats(souvenir), ...(ligneCommande ? [ligneCommande] : [])],
+      }
     );
     if (c && c.certitude >= 0.55) {
       await tracer(
@@ -1477,7 +1484,7 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
   const { agent, phone } = ctx;
   const o = await chargerCommande({ agentId: agent.id, ref, phone });
   if (!o) {
-    await meta.sendText(phone, "Je ne retrouve pas cette commande 🤔 Dis-moi *conseiller* et quelqu'un vérifie pour toi.");
+    await meta.sendText(phone, "Je ne retrouve pas cette commande. Dis-moi *conseiller* et quelqu'un vérifie pour toi.");
     return;
   }
   await tracer(agent.id, phone, "user", `[suivi] ${action} ${ref}`);
@@ -1487,7 +1494,7 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
       await meta.sendText(phone, recapCommande(o));
       // Le bon de commande, s'il existe : c'est lui qui fait foi.
       if (o.doc_url) {
-        await meta.sendDocument(phone, o.doc_url, `${o.doc_number || `BC-${o.ref}`}.pdf`, "📄 Ton bon de commande");
+        await meta.sendDocument(phone, o.doc_url, `${o.doc_number || `BC-${o.ref}`}.pdf`, "Ton bon de commande");
       }
       return;
     }
@@ -1498,7 +1505,7 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
 
     case "livreur": {
       if (!o.courier_name && !o.courier_phone) {
-        await meta.sendText(phone, `${etapesCommande(o)}\n\nLe livreur n'est pas encore désigné, je te préviens dès qu'il part 🛵`);
+        await meta.sendText(phone, `${etapesCommande(o)}\n\nLe livreur n'est pas encore désigné, je te préviens dès qu'il part.`);
         return;
       }
       // Sa position, seulement si elle est fraîche : une position d'il y a une
@@ -1507,9 +1514,9 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
       const recente = o.courier_lat != null && o.courier_lng != null && vu < 15 * 60_000;
       await meta.sendText(
         phone,
-        `🛵 Ton livreur : *${o.courier_name || "notre livreur"}*` +
-          (o.courier_phone ? `\n📞 ${o.courier_phone}` : "") +
-          (recente ? "\n\nSa position il y a quelques minutes 👇" : "")
+        `Ton livreur : *${o.courier_name || "notre livreur"}*` +
+          (o.courier_phone ? `\nTél. : ${o.courier_phone}` : "") +
+          (recente ? "\n\nSa position il y a quelques minutes :" : "")
       );
       if (recente) {
         await meta.sendLocation(phone, Number(o.courier_lat), Number(o.courier_lng), "Ton livreur", `Commande ${o.ref}`);
@@ -1520,7 +1527,7 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
     case "aide":
       await meta.sendButtons(
         phone,
-        `Pose ta question sur la commande *${o.ref}* ici, je te réponds tout de suite 🙂`,
+        `Pose ta question sur la commande *${o.ref}* ici, je te réponds tout de suite.`,
         [{ id: B.conseiller, title: "Parler à quelqu'un" }]
       );
       return;
@@ -1528,7 +1535,7 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
     case "parfait":
       await meta.sendText(
         phone,
-        "Ça fait vraiment plaisir 😊🙏\n\nSi tu as un moment, parle de nous autour de toi — c'est ce qui nous aide le plus. À très vite !"
+        "Ça fait vraiment plaisir 🙏 Si tu as un moment, parle de nous autour de toi, c'est ce qui nous aide le plus. À très vite !"
       );
       notify(agent.id, "order.feedback", { ref: o.ref, avis: "positif", customer_phone: phone }).catch(() => {});
       return;
@@ -1539,7 +1546,7 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
         titre: `Souci sur la commande ${o.ref} — ${phone}`,
         contenu: { kind: "order_issue", ref: o.ref, contact: phone, status: o.status },
         message:
-          `Désolé pour ça 😔 L'équipe est prévenue pour la commande *${o.ref}* et te répond ici.\n\n` +
+          `Désolé pour ça. L'équipe est prévenue pour la commande *${o.ref}* et te répond ici.\n\n` +
           "Dis-moi ce qui ne va pas — une photo aide beaucoup si c'est un article abîmé ou différent.",
       });
 
@@ -1557,7 +1564,7 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
           "Ce que tu avais pris n'est plus dispo 😕 Voilà ce qu'on a en ce moment 🛍️", true
         );
       }
-      return montrerVitrine(ctx, repris, "", "Voilà ta dernière commande, ajoute-la au panier 👇");
+      return montrerVitrine(ctx, repris, "", "Voilà ta dernière commande, ajoute-la au panier.");
     }
 
     case "boutique": {

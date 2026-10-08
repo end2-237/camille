@@ -117,3 +117,29 @@ export async function annoncerStatut(orderId: string): Promise<EnvoiResult> {
   } catch { /* la trace ne doit jamais faire échouer l'envoi */ }
   return { ok: true, transport };
 }
+
+/** La dernière commande non terminée de ce client (14 jours au plus), ou null. */
+export async function commandeEnCours(agentId: string, phone: string): Promise<CommandeSuivie | null> {
+  try {
+    const r = await query(
+      `SELECT ref, status, fulfillment, items, delivery_fee, total, currency, address,
+              to_jsonb(o)->>'place_label' AS place_label
+         FROM camille.orders o
+        WHERE agent_id = $1
+          AND regexp_replace(COALESCE(contact_phone, ''), '[^0-9]', '', 'g') = $2
+          AND status NOT IN ('livree', 'annulee')
+          AND created_at > now() - interval '14 days'
+        ORDER BY created_at DESC LIMIT 1`,
+      [agentId, chiffres(phone)]
+    );
+    const row = r.rows[0];
+    if (!row) return null;
+    const items = Array.isArray(row.items)
+      ? row.items
+      : (() => { try { return JSON.parse(String(row.items || "[]")); } catch { return []; } })();
+    return { ...row, items } as CommandeSuivie;
+  } catch {
+    return null;
+  }
+}
+

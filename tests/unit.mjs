@@ -723,6 +723,17 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("bouton inconnu → null", lireIdSuivi("cmd:pirater:K7Q2"), null);
   eq("identifiant de catalogue → null", lireIdSuivi("cup_noir"), null);
 
+  // Le cas réel : « ça vient dans combien de temps » sur un RETRAIT → frais de livraison.
+  const { contexteCommande } = await import(`${DIST}/whatsapp/suivi.js`);
+  const retraitPrep = contexteCommande({ ...base, ref: "XDLGC8", fulfillment: "retrait", status: "en_traitement", total: 6000 });
+  chk("contexte : retrait annoncé, sans livraison ni frais", /RETRAIT en boutique \(pas de livraison, pas de frais de livraison\)/.test(retraitPrep));
+  chk("contexte : l'étape et la référence", /COMMANDE EN COURS XDLGC8/.test(retraitPrep) && /étape : en préparation/.test(retraitPrep));
+  chk("contexte : retrait « en route » se dit « prête, à récupérer »",
+    /prête, à récupérer/.test(contexteCommande({ ...base, fulfillment: "retrait", status: "en_livraison" })));
+  chk("contexte : livraison avec l'adresse", /livraison à Bonamoussadi/.test(contexteCommande({ ...base, status: "en_livraison" })));
+  chk("aucun bouton ne porte d'émoji (trop chargé)", ["en_traitement", "en_livraison", "livree", "annulee"].every((s) =>
+    titres(annonce({ ...base, status: s }, { avecLivreur: true })).every((t) => !/\p{Extended_Pictographic}/u.test(t))));
+
   const { urlAnimation } = await import(`${DIST}/whatsapp/suivi.js`);
   const app = { NEXT_PUBLIC_APP_URL: "https://camille.vps.buyticle.com/" };
   eq("animation par défaut : celle livrée avec Camille", urlAnimation("livree", app), "https://camille.vps.buyticle.com/stickers/livree.webp");

@@ -79,30 +79,30 @@ export function annonce(
   const ref = o.ref;
   const prenom = String(o.customer_name || "").trim().split(/\s+/)[0] || "";
   const shop = opts.boutique || "Nous";
-  const recap = { id: idSuivi("recap", ref), title: "🧾 Récapitulatif" };
-  const aide = { id: idSuivi("aide", ref), title: "💬 Une question" };
+  const recap = { id: idSuivi("recap", ref), title: "Récapitulatif" };
+  const aide = { id: idSuivi("aide", ref), title: "Une question" };
 
   switch (o.status) {
     case "en_traitement":
     case "traitee":
       return {
-        texte: `👨‍🍳 Ta commande *${ref}* est en préparation.\n\nTouche un bouton si tu veux le détail 👇`,
-        boutons: [recap, { id: idSuivi("etapes", ref), title: "📍 Où en est-elle ?" }, aide],
+        texte: `Ta commande *${ref}* est en préparation 👨‍🍳`,
+        boutons: [recap, { id: idSuivi("etapes", ref), title: "Où en est-elle ?" }, aide],
       };
 
     case "en_livraison":
       if (retrait(o)) {
         return {
-          texte: `✅ Ta commande *${ref}* est prête ! Tu peux passer la récupérer quand tu veux 🏪`,
-          boutons: [{ id: idSuivi("adresse", ref), title: "📍 L'adresse" }, recap, aide],
+          texte: `Ta commande *${ref}* est prête ✅ Tu peux passer la récupérer quand tu veux.`,
+          boutons: [{ id: idSuivi("adresse", ref), title: "L'adresse" }, recap, aide],
         };
       }
       return {
-        texte: `🛵 Ta commande *${ref}* est en route !\n\nGarde ton téléphone à portée de main, le livreur peut t'appeler.`,
+        texte: `Ta commande *${ref}* est en route 🛵 Garde ton téléphone à portée de main, le livreur peut t'appeler.`,
         boutons: [
           opts.avecLivreur
-            ? { id: idSuivi("livreur", ref), title: "🛵 Mon livreur" }
-            : { id: idSuivi("etapes", ref), title: "📍 Où en est-elle ?" },
+            ? { id: idSuivi("livreur", ref), title: "Mon livreur" }
+            : { id: idSuivi("etapes", ref), title: "Où en est-elle ?" },
           recap,
           aide,
         ],
@@ -111,13 +111,13 @@ export function annonce(
     case "livree":
       return {
         texte:
-          `Merci ${prenom} 🙏\n\n` +
+          `Merci${prenom ? ` ${prenom}` : ""} 🙏\n\n` +
           `Ta commande *${ref}* est ${retrait(o) ? "récupérée" : "livrée"}. ${shop} te remercie pour ta confiance.\n\n` +
           `Tout s'est bien passé ?`,
         boutons: [
-          { id: idSuivi("parfait", ref), title: "😊 Tout est parfait" },
-          { id: idSuivi("souci", ref), title: "⚠️ Un souci" },
-          { id: idSuivi("encore", ref), title: "🛍️ Recommander" },
+          { id: idSuivi("parfait", ref), title: "Tout est parfait" },
+          { id: idSuivi("souci", ref), title: "J'ai un souci" },
+          { id: idSuivi("encore", ref), title: "Recommander" },
         ],
       };
 
@@ -125,8 +125,8 @@ export function annonce(
       return {
         texte:
           `Ta commande *${ref}* a été annulée.\n\n` +
-          `Si c'est une erreur, ou si tu veux autre chose, je suis là 🙂`,
-        boutons: [{ id: idSuivi("boutique", ref), title: "🛍️ Voir la boutique" }, aide],
+          `Si c'est une erreur, ou si tu veux autre chose, je suis là.`,
+        boutons: [{ id: idSuivi("boutique", ref), title: "Voir la boutique" }, aide],
       };
 
     default:
@@ -143,9 +143,9 @@ export function recapCommande(o: CommandeSuivie): string {
     return `• ${qte}× ${nom}${it.price ? ` : ${montant(qte * Number(it.price), cur)}` : ""}`;
   });
   const frais = Number(o.delivery_fee) || 0;
-  const lieu = retrait(o) ? "🏪 Retrait en boutique" : o.place_label || o.address ? `📍 ${o.place_label || o.address}` : "";
+  const lieu = retrait(o) ? "Retrait en boutique" : o.place_label || o.address ? `Livraison : ${o.place_label || o.address}` : "";
   return [
-    `🧾 Commande *${o.ref}*`,
+    `Commande *${o.ref}*`,
     "",
     ...lignes,
     "",
@@ -157,7 +157,7 @@ export function recapCommande(o: CommandeSuivie): string {
 
 /** Les étapes franchies, avec leur heure : la réponse à « elle en est où ? ». */
 export function etapesCommande(o: CommandeSuivie): string {
-  if (o.status === "annulee") return `❌ La commande *${o.ref}* a été annulée.`;
+  if (o.status === "annulee") return `La commande *${o.ref}* a été annulée.`;
   const fait = (rang: number) => {
     const r = { nouvelle: 0, en_traitement: 1, traitee: 1, en_livraison: 2, livree: 3 }[o.status] ?? 0;
     return r >= rang;
@@ -165,7 +165,7 @@ export function etapesCommande(o: CommandeSuivie): string {
   const ligne = (ok: boolean, titre: string, quand?: string | Date | null) =>
     `${ok ? "✅" : "⏳"} ${titre}${ok && heure(quand) ? ` — ${heure(quand)}` : ""}`;
   return [
-    `📍 Commande *${o.ref}*`,
+    `Commande *${o.ref}*`,
     "",
     ligne(true, "Commande reçue", o.created_at),
     ligne(fait(1), "En préparation", o.processing_at),
@@ -185,3 +185,34 @@ export function urlAnimation(
   // WhatsApp télécharge le sticker lui-même : il lui faut une adresse publique en https.
   return /^https:\/\//.test(base) ? `${base}/stickers/${moment}.webp` : null;
 }
+
+const ETAPES: Record<string, string> = {
+  nouvelle: "reçue, pas encore en préparation",
+  en_traitement: "en préparation",
+  traitee: "en préparation",
+  en_livraison: "en route",
+  livree: "livrée",
+  annulee: "annulée",
+};
+
+/**
+ * La commande en cours, en une ligne, pour le modèle.
+ *
+ * Sans elle, « ça vient dans combien de temps ? » sur une commande à
+ * RETIRER recevait « la livraison coûte 1 000 XAF, l'équipe confirme le
+ * délai » : le modèle ne savait même pas qu'une commande existait.
+ */
+export function contexteCommande(o: CommandeSuivie): string {
+  const etape = retrait(o) && o.status === "en_livraison" ? "prête, à récupérer en boutique" : ETAPES[o.status] || o.status;
+  const articles = (Array.isArray(o.items) ? o.items : [])
+    .map((it) => `${Number(it.qty) || 1}× ${it.name || "article"}${it.variant ? ` — ${it.variant}` : ""}`)
+    .join(", ");
+  return [
+    `COMMANDE EN COURS ${o.ref}`,
+    `étape : ${etape}`,
+    retrait(o) ? "RETRAIT en boutique (pas de livraison, pas de frais de livraison)" : `livraison${o.place_label || o.address ? ` à ${o.place_label || o.address}` : ""}`,
+    articles,
+    o.total != null ? `total ${Math.round(Number(o.total))} ${o.currency || "XAF"}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
