@@ -18,13 +18,14 @@ import { query } from "@/lib/db";
 import { sectorProfile, sertDesRepas } from "@/lib/sectorProfiles";
 import * as meta from "./meta";
 import { repondreBoutique } from "./boutique";
+import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
 
 export type IncomingMessage = {
   messageId: string;
   from: string;
   phoneNumberId: string;
   contactName?: string;
-  type: "text" | "interactive" | "order" | "location" | "image" | "unsupported";
+  type: "text" | "interactive" | "order" | "location" | "image" | "audio" | "unsupported";
   text: string;
   /** Identifiant du bouton ou de la ligne de liste choisie. */
   choiceId?: string;
@@ -36,6 +37,10 @@ export type IncomingMessage = {
   };
   location?: { lat: number; lng: number };
   mediaId?: string;
+  /** Format du média reçu (vocal : audio/ogg; codecs=opus). */
+  mime?: string;
+  /** Le message était un vocal : `text` est sa transcription. */
+  vocal?: boolean;
   rawType?: string;
   timestamp?: number;
 };
@@ -245,6 +250,18 @@ export async function dejaTraite(wamid: string): Promise<boolean> {
   }
 }
 
+/** Le texte d'un vocal, ou `null` s'il n'a pas pu être récupéré ou compris. */
+async function ecouter(msg: IncomingMessage, agent: Agent): Promise<string | null> {
+  if (!msg.mediaId) return null;
+  const media = await meta.telechargerMedia(msg.mediaId, VOCAL_MAX_OCTETS);
+  if (!media) return null;
+  // Le nom du commerce oriente Whisper vers la bonne orthographe.
+  const indice = agent.business_name ? `${agent.business_name}, boutique sur WhatsApp.` : "";
+  const texte = await transcrire(media.octets, msg.mime || media.mime, indice);
+  console.log(`[meta] vocal ${msg.messageId} →`, texte ? `« ${texte.slice(0, 80)} »` : "rien d'exploitable");
+  return texte;
+}
+
 export async function handleIncoming(msg: IncomingMessage): Promise<void> {
   const phone = meta.normalizePhone(msg.from);
   if (!phone) return;
@@ -277,7 +294,22 @@ export async function handleIncoming(msg: IncomingMessage): Promise<void> {
   // conversations. Idempotent, et sans effet sur les sessions camille-core.
   await lierSession(agent.id);
 
-  await tracer(agent.id, phone, "user", msg.text || `(${msg.rawType || msg.type})`);
+  // Un vocal devient un message écrit : tout ce qui suit — catalogue, couleurs,
+  // panier, adresse — le traite comme si le client l'avait tapé.
+  if (msg.type === "audio") {
+    const texte = await ecouter(msg, agent);
+    if (!texte) {
+      await tracer(agent.id, phone, "user", "(vocal non compris)");
+      await meta.sendText(
+        phone,
+        "Je n'ai pas réussi à écouter ton vocal 🙏 Tu peux me l'écrire ? / I couldn't play your voice note, could you type it?"
+      );
+      return;
+    }
+    msg = { ...msg, type: "text", text: texte, vocal: true };
+  }
+
+  await tracer(agent.id, phone, "user", msg.vocal ? `🎤 ${msg.text}` : msg.text || `(${msg.rawType || msg.type})`);
 
   const ctx: Contexte = { agent, msg, phone };
   const mode = modeDeVente(agent);

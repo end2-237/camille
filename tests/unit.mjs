@@ -643,6 +643,22 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("8h30 s'écrit « 8h30 »", closedNotice("8h30 - 18h", 1, a(1)).includes("8h30"));
 }
 
+// ═══ voix — un vocal devient un message écrit ══════════════════════════════
+{
+  groupe("voix — transcription des vocaux");
+  const { nettoyerTranscription, extensionAudio } = await import(`${DIST}/whatsapp/voix.js`);
+  eq("un vocal ordinaire passe tel quel", nettoyerTranscription("  T'as la tasse en noir ?  "), "T'as la tasse en noir ?");
+  eq("en anglais aussi", nettoyerTranscription("Do you have the black cup?"), "Do you have the black cup?");
+  eq("vocal vide → rien", nettoyerTranscription(""), null);
+  eq("silence « sous-titré » par Whisper → rien", nettoyerTranscription("Sous-titrage ST' 501"), null);
+  eq("générique Amara → rien", nettoyerTranscription("Sous-titres réalisés par la communauté d'Amara.org"), null);
+  eq("« Merci. » seul → rien", nettoyerTranscription("Merci."), null);
+  eq("« merci » dans une vraie phrase → gardé", nettoyerTranscription("Merci, je prends la rouge"), "Merci, je prends la rouge");
+  eq("ponctuation seule → rien", nettoyerTranscription("..."), null);
+  eq("vocal WhatsApp (opus) → .ogg", extensionAudio("audio/ogg; codecs=opus"), "ogg");
+  eq("iPhone (m4a) → .m4a", extensionAudio("audio/mp4"), "m4a");
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log(`\n${"═".repeat(66)}`);
 if (echecs.length) {

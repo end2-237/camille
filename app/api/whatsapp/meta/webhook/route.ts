@@ -147,8 +147,24 @@ function extraire(body: Record<string, unknown>): IncomingMessage[] {
             timestamp: Number(m.timestamp || 0),
           });
           continue;
+        } else if (type === "audio") {
+          // Un vocal (ou un fichier audio) : transcrit plus loin, puis traité
+          // comme un message écrit.
+          const au = (m.audio || {}) as { id?: string; mime_type?: string };
+          out.push({
+            messageId: String(m.id || ""),
+            from: String(m.from || ""),
+            phoneNumberId: meta.phone_number_id || "",
+            contactName: nom,
+            type: "audio",
+            text: "",
+            mediaId: au.id || "",
+            mime: au.mime_type || "audio/ogg",
+            timestamp: Number(m.timestamp || 0),
+          });
+          continue;
         } else {
-          // audio, vidéo, document, contact… non traités pour l'instant, mais
+          // vidéo, document, contact… non traités pour l'instant, mais
           // on les fait remonter pour qu'un « je n'ai pas compris » reste poli
           // plutôt qu'un silence.
           out.push({

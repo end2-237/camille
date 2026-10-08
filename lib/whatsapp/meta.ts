@@ -196,6 +196,46 @@ export async function mediaId(url: string, type = "video/mp4"): Promise<string |
 }
 
 /**
+ * Récupère un média REÇU (vocal, image…) à partir de son identifiant.
+ *
+ * Deux temps chez Meta : l'identifiant donne une adresse temporaire (valable
+ * cinq minutes), puis cette adresse donne les octets — avec le jeton, sans quoi
+ * Meta renvoie une page HTML et non le fichier. `null` si quoi que ce soit
+ * échoue : l'appelant dit alors poliment qu'il n'a pas pu écouter.
+ */
+export async function telechargerMedia(
+  id: string,
+  maxOctets = 16 * 1024 * 1024
+): Promise<{ octets: ArrayBuffer; mime: string } | null> {
+  if (!TOKEN || !id) return null;
+  try {
+    const info = await fetch(`https://graph.facebook.com/${GRAPH}/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    const j = (await info.json().catch(() => ({}))) as { url?: string; mime_type?: string; file_size?: number };
+    if (!info.ok || !j.url) {
+      console.error("[meta] média reçu introuvable :", info.status, JSON.stringify(j).slice(0, 200));
+      return null;
+    }
+    if (j.file_size && j.file_size > maxOctets) {
+      console.warn(`[meta] média reçu trop lourd (${Math.round(j.file_size / 1048576)} Mo) — ignoré`);
+      return null;
+    }
+    const fichier = await fetch(j.url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    if (!fichier.ok) {
+      console.error("[meta] téléchargement du média refusé :", fichier.status);
+      return null;
+    }
+    const octets = await fichier.arrayBuffer();
+    if (octets.byteLength > maxOctets) return null;
+    return { octets, mime: j.mime_type || fichier.headers.get("content-type") || "audio/ogg" };
+  } catch (e) {
+    console.error("[meta] téléchargement du média impossible :", (e as Error).message);
+    return null;
+  }
+}
+
+/**
  * Une vidéo, par identifiant si possible — donc instantanée et dans l'ordre.
  *
  * Le repli par `link` reste : mieux vaut une vidéo qui arrive en retard que
