@@ -58,7 +58,8 @@ import { createOrder } from "@/lib/orders";
 import * as meta from "./meta";
 import { tracer, sessionMeta, type Contexte } from "./handle";
 import { contexteCommande, lireIdSuivi, recapCommande, etapesCommande, type ActionSuivi } from "./suivi";
-import { chargerCommande, commandeEnCours, envoyerAnimation } from "./suivi-envoi";
+import { chargerCommande, commandeEnCours, envoyerAnimation, reglerAnimations } from "./suivi-envoi";
+import { sendOrderDocument } from "@/lib/facturation";
 import { notify } from "@/lib/webhooks";
 import { sansAccent, chercher, veutToutVoir, estUneQuestion } from "./recherche";
 import { lirePrix } from "./prix";
@@ -720,9 +721,9 @@ async function finaliserPanier(
     return;
   }
   await oublierPanier(agent.id, phone);
-  await envoyerAnimation(phone, "commande");
+  await envoyerAnimation(phone, "commande", agent.id);
 
-  const c = res as { ref?: string; subtotal?: number; deliveryFee?: number; total?: number; currency?: string };
+  const c = res as { id?: string | null; ref?: string; subtotal?: number; deliveryFee?: number; total?: number; currency?: string };
   const cur = c.currency || panier.items[0]?.currency || "XAF";
   const { texte } = recapPanier(panier.items, cur);
   const lieu = livraison
@@ -731,14 +732,32 @@ async function finaliserPanier(
       : opts.adresse ? `Livraison : ${opts.adresse}` : ""
     : "Retrait en boutique";
 
-  await meta.sendText(
-    phone,
+  const confirmation =
     `✅ C'est noté${c.ref ? ` — commande *${c.ref}*` : ""}\n\n${texte}\n\n` +
-      (c.deliveryFee ? `Sous-total : ${money(Number(c.subtotal) || 0, cur)}\nLivraison : ${money(c.deliveryFee, cur)}\n` : "") +
-      `Total : *${money(Number(c.total) || 0, cur)}*` +
-      (lieu ? `\n${lieu}` : "") +
-      (livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part." : "\n\nOn te prépare ça, tu es prévenu dès que c'est prêt.")
-  );
+    (c.deliveryFee ? `Sous-total : ${money(Number(c.subtotal) || 0, cur)}\nLivraison : ${money(c.deliveryFee, cur)}\n` : "") +
+    `Total : *${money(Number(c.total) || 0, cur)}*` +
+    (lieu ? `\n${lieu}` : "") +
+    (livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part." : "\n\nOn te prépare ça, tu es prévenu dès que c'est prêt.");
+
+  // Le bon de commande part TOUT DE SUITE, la confirmation en légende : un seul
+  // message, et le client a sa preuve dès qu'il commande. Le passage « en
+  // préparation » ne le renverra pas (doc_url est alors connu).
+  // 12 s au plus : au-delà, le client a sa confirmation en texte, sans PDF.
+  let documentParti = false;
+  if (c.id && confirmation.length <= 1024) {
+    const doc = await Promise.race([
+      sendOrderDocument(String(c.id), { send: false }),
+      new Promise<null>((r) => setTimeout(() => r(null), 12_000)),
+    ]).catch(() => null);
+    if (doc?.ok && doc.pdfUrl) {
+      const r = await meta.sendDocument(phone, doc.pdfUrl, `${doc.number || `BC-${c.ref}`}.pdf`, confirmation);
+      documentParti = r.ok;
+      if (!r.ok) console.error("[boutique] bon de commande non envoyé :", r.error);
+    } else if (doc && !doc.ok) {
+      console.error("[boutique] bon de commande non généré :", doc.reason);
+    }
+  }
+  if (!documentParti) await meta.sendText(phone, confirmation);
   await tracer(agent.id, phone, "assistant", `[commande] ${c.ref || ""} ${opts.mode} ${money(Number(c.total) || 0, cur)}`);
 
   if (!livraison) await montrerOuNousSommes(ctx);
@@ -903,6 +922,22 @@ async function executer(
     faits.add(a.faire);
 
     switch (a.faire) {
+      case "animations": {
+        const garde = await reglerAnimations(agent.id, phone, a.activer);
+        // Le modèle confirme d'habitude lui-même ; sinon, on le fait.
+        if (!actions.some((x) => x.faire === "repondre")) {
+          await meta.sendText(
+            phone,
+            !garde
+              ? "C'est noté, je fais passer le message."
+              : a.activer
+                ? "C'est noté, les animations reviennent."
+                : "C'est noté, plus d'animations."
+          );
+        }
+        break;
+      }
+
       case "repondre":
         await meta.sendText(phone, a.texte);
         await tracer(agent.id, phone, "assistant", a.texte);

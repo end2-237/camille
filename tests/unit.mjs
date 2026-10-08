@@ -198,6 +198,13 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
 
   // valider() : la frontière. Rien d'inconnu ne franchit cette ligne.
   const v = (o) => valider(o, PRODS, FAITS, "j'en veux 3");
+  // « trop de gifs, je n'en veux plus » : la préférence franchit la frontière.
+  eq("animations coupées → activer:false",
+    valider({ actions: [{ faire: "animations", activer: false }], certitude: 0.9 }, PRODS, FAITS, "trop de gifs")?.actions,
+    [{ faire: "animations", activer: false }]);
+  eq("animations : tout sauf true vaut « couper »",
+    valider({ actions: [{ faire: "animations", activer: "oui" }], certitude: 0.9 }, PRODS, FAITS, "x")?.actions,
+    [{ faire: "animations", activer: false }]);
   eq("un produit inventé est jeté",
     v({ actions: [{ faire: "montrer", produits: ["p9"] }], certitude: 0.9 }), null);
   eq("les ids connus sont gardés",

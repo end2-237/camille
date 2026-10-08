@@ -28,9 +28,12 @@ export type CommandeComplete = CommandeSuivie & {
  * d'autres : STICKER_COMMANDE_URL / STICKER_LIVREE_URL. Pour n'en envoyer
  * aucun : la variable à « off ». Best-effort : un refus ne bloque rien.
  */
-export async function envoyerAnimation(phone: string, moment: "commande" | "livree"): Promise<void> {
+export async function envoyerAnimation(
+  phone: string, moment: "commande" | "livree", agentId?: string
+): Promise<void> {
   const url = urlAnimation(moment);
   if (!url) return;
+  if (agentId && (await animationsRefusees(agentId, phone))) return;
   const r = await meta.sendSticker(phone, url);
   if (!r.ok) console.warn(`[suivi] animation « ${moment} » refusée :`, r.error);
 }
@@ -94,7 +97,7 @@ export async function annoncerStatut(orderId: string): Promise<EnvoiResult> {
 
   // Une petite animation de réussite à la livraison, si le commerçant en a
   // fourni une. Best-effort : sans elle, le message part quand même.
-  if (o.status === "livree") await envoyerAnimation(phone, "livree");
+  if (o.status === "livree") await envoyerAnimation(phone, "livree", String(o.agent_id));
 
   const r = await meta.sendButtons(phone, a.texte, a.boutons);
   if (!r.ok) {
@@ -140,6 +143,36 @@ export async function commandeEnCours(agentId: string, phone: string): Promise<C
     return { ...row, items } as CommandeSuivie;
   } catch {
     return null;
+  }
+}
+
+/** Le client a-t-il demandé à ne plus recevoir d'animations ? Faux si on ne sait pas. */
+export async function animationsRefusees(agentId: string, phone: string): Promise<boolean> {
+  try {
+    const r = await query(
+      `SELECT to_jsonb(c)->>'sans_animation' AS non FROM camille.contacts c
+        WHERE agent_id = $1 AND phone = $2 LIMIT 1`,
+      [agentId, chiffres(phone)]
+    );
+    return r.rows[0]?.non === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** Garde son choix. false si la préférence n'a pas pu être enregistrée. */
+export async function reglerAnimations(agentId: string, phone: string, activer: boolean): Promise<boolean> {
+  try {
+    await query(
+      `INSERT INTO camille.contacts (agent_id, phone, sans_animation, created_at, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (agent_id, phone) DO UPDATE SET sans_animation = $3, updated_at = NOW()`,
+      [agentId, chiffres(phone), !activer]
+    );
+    return true;
+  } catch (e) {
+    console.error("[suivi] préférence d'animation non gardée (migration_contacts_animations.sql ?) :", (e as Error).message);
+    return false;
   }
 }
 

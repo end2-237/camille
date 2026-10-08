@@ -38,7 +38,8 @@ export type Action =
   | { faire: "alerter"; sujet: string }
   | { faire: "position" }
   | { faire: "retrait" }
-  | { faire: "accueil" };
+  | { faire: "accueil" }
+  | { faire: "animations"; activer: boolean };
 
 export type Comprehension = {
   actions: Action[];
@@ -197,6 +198,10 @@ export function valider(
       case "retrait":
       case "accueil":
         actions.push({ faire: x.faire } as Action);
+        break;
+
+      case "animations":
+        actions.push({ faire: "animations", activer: x.activer === true });
         break;
 
       case "alerter": {
@@ -397,6 +402,7 @@ Tu as une boîte à outils. Chaque outil PRODUIT quelque chose chez le client �
 {"faire":"humain"} → passe la main à l'équipe, et tu te tais COMPLÈTEMENT après : ce client ne reçoit plus aucune réponse de toi, même s'il demande autre chose. N'utilise cet outil que si le client a vraiment besoin d'une personne.
 {"faire":"alerter","sujet":"..."} → prévient le commerçant, et TU CONTINUES à parler. C'est l'outil des engagements : tu promets que l'équipe confirmera quelque chose, et quelqu'un est réellement averti. Préfère-le à humain partout où tu peux encore être utile.
 {"faire":"accueil"} → une salutation, rien de plus à faire.
+{"faire":"animations","activer":false} → il ne veut plus des autocollants animés (« trop de gifs », « arrête les stickers »). "activer":true s'il les redemande. Confirme-lui avec repondre.
 
 COMBINER est normal, et souvent meilleur : un prix se répond ET se montre (repondre + montrer), « des écouteurs, et vous livrez ? » c'est montrer + repondre. Mets les outils dans l'ordre utile.
 
