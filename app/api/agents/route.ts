@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { agentsAccessibles, sqlAgentAccessible } from "@/lib/equipe";
+import { demarrerEssai, terminerEssaisEchus } from "@/lib/essai";
 import { subscriptionState } from "@/lib/subscription";
 import type {
   Agent, AgentFormData, SystemPromptConfig,
@@ -66,6 +67,8 @@ function rowToAgent(row: Record<string, any>): Agent {
     // moteur ne doivent jamais dire deux choses differentes.
     plan_expires_at: row.plan_expires_at ?? null,
     plan_expired: subscriptionState(row.plan, row.plan_expires_at).expired,
+    // Essai gratuit en cours (retombe sur le gratuit à l'échéance).
+    trial: row.trial === true,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -76,6 +79,8 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   try {
+    await terminerEssaisEchus({ userId: user.id });
+
     // Les agents du compte, puis ceux qu'un autre compte a partagés avec
     // l'utilisateur (équipe) — chacun avec le rôle qu'il y tient.
     const result = await query(
@@ -121,7 +126,8 @@ export async function POST(req: NextRequest) {
     if (!user.is_admin) {
       const gratuits = await query(
         `SELECT COUNT(*)::int AS n FROM camille.agents
-          WHERE user_id = $1 AND status <> 'archived' AND COALESCE(plan, 'free') = 'free'`,
+          WHERE user_id = $1 AND status <> 'archived'
+            AND (COALESCE(plan, 'free') = 'free' OR COALESCE((to_jsonb(agents)->>'trial')::boolean, FALSE))`,
         [user.id]
       );
       if (gratuits.rows[0].n >= maxGratuits) {
@@ -182,7 +188,13 @@ export async function POST(req: NextRequest) {
       ]
     );
 
-    return NextResponse.json({ agent: rowToAgent(result.rows[0]) }, { status: 201 });
+    // Le premier agent du compte démarre en essai (lib/essai.ts).
+    let row = result.rows[0];
+    if (await demarrerEssai(user.id, row.id)) {
+      row = (await query("SELECT * FROM camille.agents WHERE id = $1", [row.id])).rows[0] ?? row;
+    }
+
+    return NextResponse.json({ agent: rowToAgent(row) }, { status: 201 });
   } catch (err) {
     // « Erreur serveur » seul n'apprend rien à l'appelant : une colonne
     // obligatoire manquante et une base injoignable donnaient le même message,

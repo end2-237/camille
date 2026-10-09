@@ -319,6 +319,8 @@ export interface Agent {
    */
   plan_expires_at?: ISODateString | null;
   plan_expired?: boolean;
+  /** Essai gratuit en cours : retombe sur le gratuit à l'échéance. */
+  trial?: boolean;
 
   /** Google Calendar OAuth — email shown in dashboard when connected */
   google_calendar_email?: string | null;

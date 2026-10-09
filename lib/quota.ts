@@ -17,6 +17,20 @@ import { query } from "@/lib/db";
 import { currentPeriod } from "@/lib/plans";
 import { getPlanLimitDB, isUnlimitedTokens } from "@/lib/plans-db";
 import { subscriptionState } from "@/lib/subscription";
+import { terminerEssaisEchus } from "@/lib/essai";
+
+/** L'agent était-il en essai (et vient-il de retomber sur le gratuit) ? */
+async function essaiTermine(agentId: string): Promise<boolean> {
+  try {
+    const r = await query(`SELECT COALESCE((to_jsonb(a)->>'trial')::boolean, FALSE) AS trial FROM camille.agents a WHERE id = $1`, [agentId]);
+    if (!r.rows[0]?.trial) return false;
+    // Vrai seulement si la bascule a eu lieu : sinon on ne recompte pas (pas
+    // de boucle si l'écriture échoue).
+    return (await terminerEssaisEchus({ agentId })) > 0;
+  } catch {
+    return false;
+  }
+}
 
 export type EtatQuota = {
   allowed: boolean;
@@ -65,6 +79,10 @@ export async function etatQuota(agentId: string): Promise<EtatQuota> {
     const plan = a.plan || "free";
 
     const sub = subscriptionState(plan, a.plan_expires_at);
+    if (sub.expired && (await essaiTermine(agentId))) {
+      // Un essai échu retombe sur le gratuit : on recompte comme tel.
+      return etatQuota(agentId);
+    }
     if (sub.expired) {
       return { allowed: false, reason: "subscription_expired", plan, expired_at: sub.expiresAt, message: MSG_EXPIRE };
     }

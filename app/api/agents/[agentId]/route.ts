@@ -181,7 +181,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
                 FROM camille.agents WHERE id = $1 AND user_id = $2) AS gratuit_archive,
              (SELECT COUNT(*)::int FROM camille.agents
                WHERE user_id = $2 AND id <> $1 AND status <> 'archived'
-                 AND COALESCE(plan, 'free') = 'free') AS autres`,
+                 AND (COALESCE(plan, 'free') = 'free'
+                      OR COALESCE((to_jsonb(agents)->>'trial')::boolean, FALSE))) AS autres`,
           [agentId, proprio]
         );
         const maxGratuits = Math.max(0, Number(process.env.MAX_AGENTS_GRATUITS ?? 1));

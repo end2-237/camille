@@ -35,6 +35,7 @@ interface Payment {
   status:         "pending" | "success" | "failed" | "cancelled";
   transaction_id: string | null;
   created_at:     string;
+  receipt_number?: string | null;
 }
 
 // ── Icon map capacités (icon name en DB → composant lucide) ──────────────────
@@ -518,6 +519,31 @@ function BillingContent() {
   useEffect(() => { fetchUsage(); }, [fetchUsage]);
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
+  // ── Reçus ──────────────────────────────────────────────────────────────────
+  // Le reçu demande le jeton de session : on le charge, puis on l'ouvre dans
+  // un nouvel onglet, prêt à imprimer ou à enregistrer en PDF.
+  const ouvrirRecu = useCallback(async (ref: string) => {
+    const onglet = window.open("", "_blank");
+    try {
+      const res = await fetch(`/api/payments/${encodeURIComponent(ref)}/receipt`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Reçu introuvable");
+      const url = URL.createObjectURL(new Blob([await res.text()], { type: "text/html" }));
+      if (onglet) onglet.location.href = url; else window.location.href = url;
+    } catch (e) {
+      onglet?.close();
+      toast.error(e instanceof Error ? e.message : "Reçu indisponible");
+    }
+  }, [token]);
+
+  // Lien « votre reçu » de l'e-mail : /dashboard/billing?recu=<ref>
+  useEffect(() => {
+    const ref = searchParams.get("recu");
+    if (ref) ouvrirRecu(ref);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Gestion retour Monetbil ────────────────────────────────────────────────
   useEffect(() => {
     const paymentStatus = searchParams.get("payment");
@@ -634,6 +660,35 @@ function BillingContent() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Essai et échéances : renouveler en un clic ─────────────────────── */}
+        {/* Le Mobile Money ne permet pas le prélèvement automatique : on
+            prévient avant l'échéance et on rend le renouvellement immédiat. */}
+        {agents.filter((a) => !a.role || a.role === "proprietaire").map((a) => {
+          if (!a.plan || a.plan === "free" || a.plan === "enterprise" || !a.plan_expires_at) return null;
+          const jours = Math.ceil((new Date(a.plan_expires_at).getTime() - Date.now()) / 86_400_000);
+          if (!a.trial && jours > 7) return null;
+          const planRow = plansData.plans.find((p) => p.id === a.plan) ?? proPlan;
+          const fin = new Date(a.plan_expires_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+          const texte = a.trial
+            ? `Essai ${getPlanLabel(a.plan)} de ${a.identity.name} : ${jours > 0 ? `${jours} jour${jours > 1 ? "s" : ""} restant${jours > 1 ? "s" : ""}` : "terminé"}. Ensuite, il passe au forfait gratuit.`
+            : jours > 0
+              ? `L'abonnement de ${a.identity.name} se termine le ${fin}.`
+              : `L'abonnement de ${a.identity.name} est terminé : il ne répond plus.`;
+          return (
+            <div key={`ech-${a.id}`} className="flex flex-wrap items-center gap-3 rounded-xl px-4 py-3"
+              style={{ background: "rgba(124,90,248,0.06)", border: "1px solid rgba(124,90,248,0.18)" }}>
+              <Clock className="w-4 h-4 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
+              <p className="flex-1 min-w-[200px] text-sm" style={{ color: "var(--text-primary)" }}>{texte}</p>
+              {planRow && (
+                <button onClick={() => setModal({ agent: a, planRow })}
+                  className="rounded-lg px-3 py-2 text-xs font-semibold text-white" style={{ background: "var(--color-gold)" }}>
+                  {a.trial ? `Garder ${planRow.label}` : "Renouveler 1 mois"}
+                </button>
+              )}
+            </div>
+          );
+        })}
 
         {/* Alertes limite tokens */}
         {agentsNearLimit.length > 0 && (
@@ -792,6 +847,12 @@ function BillingContent() {
                       >
                         {s.label}
                       </span>
+                      {p.status === "success" && (
+                        <button onClick={() => ouvrirRecu(p.id)} className="ml-2 text-2xs font-medium underline"
+                          style={{ color: "var(--color-gold)" }}>
+                          Reçu{p.receipt_number ? ` ${p.receipt_number}` : ""}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

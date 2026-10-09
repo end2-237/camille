@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
          transaction_id,
          phone,
          created_at,
-         updated_at
+         updated_at,
+         to_jsonb(payments)->>'receipt_number' AS receipt_number
        FROM camille.payments
        WHERE user_id = $1
        ORDER BY created_at DESC

@@ -48,11 +48,12 @@ export async function POST(req: NextRequest) {
     // Propriétaire et forfait : nécessaires aux alertes de fin de forfait, qui
     // valent surtout AVANT la coupure. On les lit une fois, sans bloquer
     // l'enregistrement si la lecture échoue.
-    let owner: { user_id: string; plan: string; name: string; plan_expires_at: string | null } | null = null;
+    let owner: { user_id: string; plan: string; name: string; plan_expires_at: string | null; trial: boolean } | null = null;
     try {
       const r = await query(
         `SELECT user_id, plan, plan_expires_at,
-                COALESCE(NULLIF(name, ''), 'Ton agent') AS name
+                COALESCE(NULLIF(name, ''), 'Ton agent') AS name,
+                COALESCE((to_jsonb(agents)->>'trial')::boolean, FALSE) AS trial
            FROM camille.agents WHERE id = $1`,
         [agentId]
       );
@@ -130,6 +131,7 @@ export async function POST(req: NextRequest) {
           userId: owner.user_id,
           agentName: owner.name,
           daysLeft: sub.daysLeft,
+          essai: owner.trial,
         });
       } catch (e) {
         console.error("[usage/record alertes]", e);

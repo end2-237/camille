@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { query } from "@/lib/db";
 import { notifyUser } from "@/lib/fcm";
+import { envoyerEmail } from "@/lib/email";
 
 /** Seuils de consommation, du plus haut au plus bas (on ne notifie que le plus haut atteint). */
 const SEUILS = [100, 80] as const;
@@ -85,8 +86,10 @@ export async function alerterEcheance(opts: {
   userId: string;
   agentName: string;
   daysLeft: number | null;
+  /** Essai gratuit : à l'échéance l'agent passe au gratuit, il ne s'arrête pas. */
+  essai?: boolean;
 }): Promise<void> {
-  const { agentId, userId, agentName, daysLeft } = opts;
+  const { agentId, userId, agentName, daysLeft, essai } = opts;
   if (!userId || daysLeft === null) return; // forfait sans terme : rien à annoncer
 
   // 7 jours puis 1 jour avant, et 0 le jour de l'arrêt.
@@ -99,14 +102,34 @@ export async function alerterEcheance(opts: {
   if (!(await reserverAlerte(agentId, period, "abonnement", seuil))) return;
 
   const arrete = seuil === 0;
-  await notifyUser(userId, arrete ? "alerte" : "systeme", {
-    title: arrete
-      ? `${agentName} est à l'arrêt`
-      : `L'abonnement de ${agentName} se termine ${seuil === 1 ? "demain" : "dans une semaine"}`,
-    body: arrete
+  const quand = seuil === 1 ? "demain" : "dans une semaine";
+  const title = essai
+    ? arrete ? `L'essai de ${agentName} est terminé` : `L'essai de ${agentName} se termine ${quand}`
+    : arrete ? `${agentName} est à l'arrêt` : `L'abonnement de ${agentName} se termine ${quand}`;
+  const body = essai
+    ? arrete
+      ? "Il est passé au forfait gratuit, avec moins de messages par mois. Choisis un forfait pour retrouver tout ce que tu avais."
+      : "Ensuite il passera au forfait gratuit, avec moins de messages par mois. Choisis un forfait pour garder le rythme."
+    : arrete
       ? "L'abonnement est terminé : plus aucune réponse n'est envoyée à tes clients. Réabonne-toi pour le remettre en service."
-      : "Passé cette date, il cessera de répondre à tes clients. Réabonne-toi pour éviter la coupure.",
+      : "Passé cette date, il cessera de répondre à tes clients. Réabonne-toi pour éviter la coupure.";
+  await notifyUser(userId, arrete && !essai ? "alerte" : "systeme", {
+    title,
+    body,
     channel: "alertes",
     data: { type: "subscription", agentId, daysLeft: String(daysLeft) },
   });
+
+  // Et par e-mail : une notification se rate, une échéance non.
+  try {
+    const u = await query("SELECT email, full_name FROM camille.users WHERE id = $1", [userId]);
+    const base = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+    if (u.rows[0]?.email) {
+      await envoyerEmail({
+        to: u.rows[0].email,
+        subject: title,
+        text: `Bonjour ${u.rows[0].full_name || ""},\n\n${body}\n\n${base ? `Renouveler en un clic : ${base}/dashboard/billing\n\n` : ""}— Camille`,
+      });
+    }
+  } catch { /* la notification est partie : l'e-mail est un plus */ }
 }

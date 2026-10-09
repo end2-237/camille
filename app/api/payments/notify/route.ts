@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { query } from "@/lib/db";
 import { egalConstant } from "@/lib/interne";
+import { sortirDeLEssai } from "@/lib/essai";
+import { envoyerRecu } from "@/lib/recu";
 
 const MONETBIL_SERVICE_SECRET = process.env.MONETBIL_SERVICE_SECRET!;
 
@@ -168,6 +170,10 @@ export async function POST(req: NextRequest) {
          WHERE id = $2`,
         [payment.plan_id, payment.agent_id]
       );
+
+      // Payer termine l'essai ; le reçu part au propriétaire.
+      await sortirDeLEssai(payment.agent_id);
+      await envoyerRecu(paymentRef);
 
       console.info(
         "[notify] Payment SUCCESS ref=%s plan=%s agent=%s",
