@@ -179,6 +179,16 @@
   background-position: 0 0, 11px 17px;
 }
 
+/* ── Le téléphone incliné du carrousel ─────────────────────────────────────── */
+.cl-incline {
+  transform: rotateY(-16deg) rotateX(8deg) rotateZ(5deg);
+  transform-style: preserve-3d;
+  filter: drop-shadow(-30px 40px 50px rgba(50, 25, 140, 0.32));
+  transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cl-incline:hover { transform: rotateY(-8deg) rotateX(4deg) rotateZ(2deg); }
+@media (max-width: 639px) { .cl-incline { transform: rotateZ(4deg) scale(0.86); } }
+
 /* ── Le dégradé du logo, sur un mot ────────────────────────────────────────── */
 .cl-degrade {
   background: linear-gradient(120deg, #9C84F6 0%, #6442E8 100%);

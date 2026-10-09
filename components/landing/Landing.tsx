@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { Doodle, type NomDoodle } from "@/components/dashboard/Doodle";
 import { MarqueCamille, TuileCamille } from "@/components/brand/LogoCamille";
-import { TelephoneWhatsApp } from "./TelephoneWhatsApp";
+import { TelephoneWhatsApp, TelephoneCarrousel } from "./TelephoneWhatsApp";
 import "./landing.css";
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -413,6 +413,53 @@ function StepsSection() {
             </div>
           </Etape>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   3 bis · Le carrousel — un second téléphone, incliné
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function CarrouselSection() {
+  return (
+    <section className="relative overflow-hidden py-16 md:py-24">
+      <div className="cl-container grid items-center gap-14 lg:grid-cols-[0.95fr_1.05fr]">
+        <Reveal>
+          <p className="cl-kicker">Le catalogue dans la conversation</p>
+          <h2 className="cl-h2 mt-3 max-w-[15ch]">Votre vitrine, à portée de pouce.</h2>
+          <p className="cl-sub mt-5 max-w-[46ch]">
+            « Vous avez quoi comme nouveautés ? » Camille répond avec un
+            carrousel : vos photos, vos prix, et le bouton pour ajouter au
+            panier. Le client fait défiler, choisit, commande — sans quitter
+            WhatsApp.
+          </p>
+          <ul className="mt-7 space-y-3">
+            {[
+              "Une fiche quand il demande un article précis",
+              "Un carrousel jusqu'à 10 articles, une liste par catégorie au-delà",
+              "Seulement ce qui est en stock, au bon prix",
+            ].map((t) => (
+              <li key={t} className="flex items-center gap-3 text-[14.5px]" style={{ color: "var(--cl-ink)" }}>
+                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-accent-deep)" }}>
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                {t}
+              </li>
+            ))}
+          </ul>
+        </Reveal>
+
+        <Reveal delay={0.1}>
+          <div className="relative flex justify-center py-6" style={{ perspective: "1800px" }}>
+            <div className="absolute inset-x-6 bottom-0 top-10 rounded-[48px]" style={{ background: "linear-gradient(160deg,#A792F4 0%,#D6CCFB 100%)" }} aria-hidden="true" />
+            <Doodle nom="unboxing" className="cl-flotte pointer-events-none absolute -left-4 bottom-2 z-10 hidden h-[120px] w-auto md:block" />
+            <div className="cl-incline relative origin-center scale-[0.86] sm:scale-100">
+              <TelephoneCarrousel />
+            </div>
+          </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -1007,6 +1054,7 @@ export function Landing() {
       <MetaBand />
       <CommercesStrip />
       <StepsSection />
+      <CarrouselSection />
       <ParcoursBand />
       <AfriqueSection />
       <FeaturesSection />
