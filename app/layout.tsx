@@ -78,6 +78,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // Application installée : la page occupe tout l'écran et chaque page se
+  // décale elle-même de la zone sûre (barre d'état, pastille noire, barre
+  // d'accueil) au lieu de passer dessous.
+  viewportFit: "cover",
 };
 
 // ── Layout ────────────────────────────────────────────────────────────────────

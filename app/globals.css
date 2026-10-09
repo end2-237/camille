@@ -461,3 +461,10 @@ body {
   0%, 100% { box-shadow: 0 0 6px rgba(124,90,248,0.25); }
   50%       { box-shadow: 0 0 20px rgba(124,90,248,0.55); }
 }
+
+/* Application installée sur l'écran d'accueil : hors du tableau de bord (qui
+   gère sa propre zone sûre), le contenu commence sous la barre d'état et la
+   pastille noire de l'iPhone au lieu de passer dessous. */
+@media (display-mode: standalone) {
+  body:not(:has(.coq)) { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+}

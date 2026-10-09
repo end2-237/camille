@@ -11,13 +11,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeftRight, Check, MailWarning, X } from "lucide-react";
+import { ArrowLeftRight, Bell, Check, MailWarning, X } from "lucide-react";
 import type { Agent } from "@/types/agent";
 import { FournisseurAgent, useAgentCourant } from "./AgentCourant";
 import { Entete, RESSORT } from "./Entete";
 import { useMontee } from "./montee";
 import { FAMILLES, pageDe } from "./pages";
 import { getStoredUser } from "@/lib/auth-client";
+import { FournisseurNotifs, useNotifsCoquille } from "./Notifs";
 
 function IconeWhatsapp({ className }: { className?: string }) {
   return (
@@ -91,13 +92,20 @@ function Feuille({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Le bouton flottant : la même page, pour un autre agent ──────────────────
+// ── Le bouton flottant : la même page pour un autre agent, et les notifications ──
+// Sur ordinateur, il ne sert qu'à changer d'agent (la cloche est dans
+// l'en-tête). Sur téléphone, l'en-tête n'a pas la place pour la cloche : le
+// bouton porte le nombre de notifications non lues, et son menu les ouvre en
+// tête de liste, au-dessus des agents. Avec un seul agent, c'est directement
+// une cloche.
 
-function BasculeAgent() {
+function BoutonsFlottants() {
   const chemin = usePathname();
   const router = useRouter();
   const page = pageDe(chemin);
+  const accueil = chemin === "/dashboard";
   const { visibles, agent, agentUrl, basculer } = useAgentCourant();
+  const unread = useNotifsCoquille()?.unread ?? 0;
   const [ouvert, setOuvert] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -108,27 +116,67 @@ function BasculeAgent() {
     return () => document.removeEventListener("mousedown", fermer);
   }, []);
 
-  if (!page?.parAgent || visibles.length < 2 || !agent) return null;
+  if (chemin === "/dashboard/notifications") return null;
+  const peutBasculer = (accueil || !!page?.parAgent) && visibles.length >= 2 && !!agent;
+  const surOrdinateur = peutBasculer && !accueil; // comme avant : pas sur l'accueil, qui a son carrousel
 
   const aller = (id: string) => {
     setOuvert(false);
-    if (id === agent.id) return;
+    if (!agent || id === agent.id) return;
     basculer(id);
     if (agentUrl) router.push(chemin.replace(agentUrl, id));
   };
 
+  const Pastille = () =>
+    unread > 0 ? (
+      <span className="absolute -right-1 -top-1 flex h-[20px] min-w-[20px] items-center justify-center rounded-full px-1 text-[11px] font-bold sm:hidden"
+        style={{ background: "#FF4D4F", color: "#fff", boxShadow: "0 0 0 2px #fff" }}>
+        {unread > 99 ? "99+" : unread}
+      </span>
+    ) : null;
+
+  // Téléphone, un seul agent : la cloche, tout simplement.
+  if (!peutBasculer) {
+    return (
+      <Link href="/dashboard/notifications" aria-label={`Notifications${unread ? ` (${unread} non lues)` : ""}`}
+        className="coq-fab coq-flottant fixed z-50 flex h-14 w-14 items-center justify-center rounded-full text-white sm:hidden">
+        <Bell className="h-[22px] w-[22px]" />
+        <Pastille />
+      </Link>
+    );
+  }
+
   return (
-    <div ref={ref} className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3 sm:bottom-7 sm:right-7">
+    <div ref={ref} className={"coq-flottant fixed z-50 flex flex-col items-end gap-3 " + (surOrdinateur ? "" : "sm:hidden")}>
       <AnimatePresence>
-        {ouvert && (
+        {ouvert && agent && (
           <motion.div
             initial={{ opacity: 0, y: 14, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.94 }} transition={RESSORT} style={{ transformOrigin: "bottom right" }}
             className="coq-deroulant w-[min(300px,calc(100vw-40px))] rounded-[26px] p-2">
+            {/* Les notifications d'abord, sur téléphone. */}
+            <Link href="/dashboard/notifications"
+              className="mb-1 flex items-center gap-3 rounded-[18px] px-2.5 py-2.5 transition-colors hover:bg-[var(--cl-accent-soft)] sm:hidden"
+              style={{ background: unread ? "var(--cl-accent-soft)" : "#F7F6FA" }}>
+              <span className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "#fff", color: "var(--cl-accent-deep)" }}>
+                <Bell className="h-[18px] w-[18px]" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>Notifications</span>
+                <span className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+                  {unread ? `${unread} non lue${unread > 1 ? "s" : ""}` : "Tout est lu"}
+                </span>
+              </span>
+              {unread > 0 && (
+                <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[12px] font-bold text-white" style={{ background: "#FF4D4F" }}>
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
+            </Link>
             <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--cl-ink-faint)" }}>
-              {page.titre} pour…
+              {accueil ? "Changer d'agent" : `${page?.titre ?? "Page"} pour…`}
             </p>
-            <div className="max-h-[50vh] overflow-y-auto">
+            <div className="max-h-[45vh] overflow-y-auto">
               {visibles.map((a, i) => {
                 const courant = a.id === agent.id;
                 return (
@@ -154,19 +202,22 @@ function BasculeAgent() {
         )}
       </AnimatePresence>
 
-      <motion.button onClick={() => setOuvert((v) => !v)} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.94 }} transition={RESSORT}
-        aria-label="Passer à un autre agent" aria-expanded={ouvert}
-        className="coq-fab flex items-center gap-2.5 rounded-full py-2 pl-2 pr-4">
-        <Avatar a={agent} taille={40} />
-        <span className="hidden text-left leading-tight sm:block">
-          <span className="block text-[11px]" style={{ color: "rgba(255,255,255,0.7)" }}>Agent</span>
-          <span className="block max-w-[140px] truncate text-[14px] font-semibold text-white">{agent.identity.name}</span>
-        </span>
-        <motion.span animate={{ rotate: ouvert ? 90 : 0 }} transition={RESSORT}
-          className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(255,255,255,0.16)", color: "#fff" }}>
-          {ouvert ? <X className="h-4 w-4" /> : <ArrowLeftRight className="h-4 w-4" />}
-        </motion.span>
-      </motion.button>
+      {agent && (
+        <motion.button onClick={() => setOuvert((v) => !v)} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.94 }} transition={RESSORT}
+          aria-label={`Changer d'agent et notifications${unread ? ` (${unread} non lues)` : ""}`} aria-expanded={ouvert}
+          className="coq-fab relative flex items-center gap-2.5 rounded-full py-2 pl-2 pr-4">
+          <Avatar a={agent} taille={40} />
+          <span className="hidden text-left leading-tight sm:block">
+            <span className="block text-[11px]" style={{ color: "rgba(255,255,255,0.7)" }}>Agent</span>
+            <span className="block max-w-[140px] truncate text-[14px] font-semibold text-white">{agent.identity.name}</span>
+          </span>
+          <motion.span animate={{ rotate: ouvert ? 90 : 0 }} transition={RESSORT}
+            className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(255,255,255,0.16)", color: "#fff" }}>
+            {ouvert ? <X className="h-4 w-4" /> : <ArrowLeftRight className="h-4 w-4" />}
+          </motion.span>
+          <Pastille />
+        </motion.button>
+      )}
     </div>
   );
 }
@@ -182,7 +233,8 @@ function RappelVerification() {
     <AnimatePresence>
       {afficher && (
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} transition={RESSORT}
-          className="fixed bottom-5 left-4 z-[70] flex max-w-[calc(100vw-96px)] items-center gap-3 rounded-full bg-white py-2 pl-3 pr-2 shadow-[0_12px_32px_rgba(25,23,27,0.16)] sm:left-8">
+          style={{ bottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
+          className="fixed left-4 z-[70] flex max-w-[calc(100vw-96px)] items-center gap-3 rounded-full bg-white py-2 pl-3 pr-2 shadow-[0_12px_32px_rgba(25,23,27,0.16)] sm:left-8">
           <MailWarning className="h-[18px] w-[18px] flex-shrink-0" style={{ color: "#D9822B" }} />
           <span className="truncate text-[13px]" style={{ color: "var(--cl-ink)" }}>Confirmez votre adresse e-mail</span>
           <Link href="/verifier-email?suite=/dashboard" className="flex-shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-medium text-white" style={{ background: "var(--cl-accent-deep)" }}>
@@ -200,12 +252,14 @@ export function Coquille({ children }: { children: React.ReactNode }) {
   const accueil = usePathname() === "/dashboard";
   return (
     <FournisseurAgent>
+      <FournisseurNotifs>
       <div className="coq">
         <Entete />
         {accueil ? children : <Feuille>{children}</Feuille>}
-        {!accueil && <BasculeAgent />}
+        <BoutonsFlottants />
         <RappelVerification />
       </div>
+      </FournisseurNotifs>
       <style jsx global>{`
         .coq {
           --coq-entete: 128px;
@@ -222,7 +276,11 @@ export function Coquille({ children }: { children: React.ReactNode }) {
         .coq-menu { background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(10px); transition: padding .45s cubic-bezier(.22,1,.36,1); }
 
         /* ── L'en-tête : fixe en haut, se replie en barre flottante au défilement ── */
-        .coq-entete { height: var(--coq-entete); pointer-events: none; display: flow-root; }
+        /* Application installée sur l'écran d'accueil (iPhone surtout) : la page
+           passe sous la barre d'état et la pastille noire de l'écran. On décale
+           tout de la zone sûre — env() vaut 0 dans un navigateur ordinaire. */
+        .coq { --coq-sur: env(safe-area-inset-top, 0px); --coq-sur-bas: env(safe-area-inset-bottom, 0px); }
+        .coq-entete { height: calc(var(--coq-entete) + var(--coq-sur)); padding-top: var(--coq-sur); pointer-events: none; display: flow-root; }
         /* flow-root : sans lui, la marge haute de la barre « traverse » l'en-tête
            (fusion des marges) et l'en-tête, collé à top: 0, la recolle au bord. */
         /* Repliée, la barre flotte : un voile de la couleur de la page passe
@@ -279,7 +337,7 @@ export function Coquille({ children }: { children: React.ReactNode }) {
         .coq-contour { border: 1px solid rgba(255,255,255,0.6); color: #fff; }
         .coq-feuille {
           margin-top: clamp(8px, 1.4vh, 16px);
-          min-height: calc(100dvh - var(--coq-entete) - clamp(8px, 1.4vh, 16px));
+          min-height: calc(100dvh - var(--coq-entete) - var(--coq-sur) - clamp(8px, 1.4vh, 16px));
           background: var(--bg-base, #fff);
           box-shadow: 0 -12px 40px rgba(70,40,190,0.10);
           padding-bottom: 96px;
@@ -295,6 +353,8 @@ export function Coquille({ children }: { children: React.ReactNode }) {
         /* Les pages prennent toute la largeur de la feuille et s'alignent sur
            le titre : une seule marge pour toute la feuille. */
         .coq-contenu > * { margin-left: 0 !important; max-width: none !important; padding-left: var(--coq-marge) !important; padding-right: var(--coq-marge) !important; }
+        .coq-flottant { right: 20px; bottom: calc(20px + var(--coq-sur-bas)); }
+        @media (min-width: 640px) { .coq-flottant { right: 28px; bottom: calc(28px + var(--coq-sur-bas)); } }
         .coq-fab { background: var(--cl-ink); box-shadow: 0 14px 34px rgba(25,23,27,0.28), 0 0 0 4px rgba(255,255,255,0.5); }
       `}</style>
     </FournisseurAgent>

@@ -27,8 +27,9 @@ export interface Notif {
   created_at: string;
 }
 
-/** Intervalle de rafraîchissement en arrière-plan. */
-const POLL_MS = 60_000;
+/** Intervalle de rafraîchissement en arrière-plan : assez court pour qu'une
+ *  commande sonne vite même sans push, l'onglet caché ne lisant rien. */
+const POLL_MS = 20_000;
 
 /**
  * Destination d'une notification. La table vit dans lib/notif-links, partagée

@@ -21,8 +21,12 @@ self.addEventListener("push", (event) => {
   try { d = event.data ? event.data.json() : {}; } catch { d = {}; }
 
   const titre = d.title || "Camille";
-  event.waitUntil(
-    self.registration.showNotification(titre, {
+  // L'application ouverte est prévenue tout de suite : c'est elle qui joue le
+  // « ka-ching » d'une commande (une notification web ne peut pas choisir son son).
+  const prevenir = self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((liste) => {
+    for (const c of liste) c.postMessage({ camille: "push", title: titre, data: d.data || {} });
+  });
+  event.waitUntil(Promise.all([prevenir, self.registration.showNotification(titre, {
       body: d.body || "",
       icon: "/icon",
       badge: "/icon",
@@ -31,7 +35,7 @@ self.addEventListener("push", (event) => {
       tag: (d.data && d.data.type) || "camille",
       renotify: true,
       data: d.data || {},
-    })
+    })])
   );
 });
 

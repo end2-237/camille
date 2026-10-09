@@ -34,7 +34,10 @@
         {
           "icon": "./assets/adaptive-icon.png",
           "color": "#101012",
-          "defaultChannel": "commandes"
+          "defaultChannel": "commandes_caisse",
+          "sounds": [
+            "./assets/sounds/caisse.wav"
+          ]
         }
       ],
       [

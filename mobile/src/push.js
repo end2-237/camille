@@ -31,6 +31,16 @@ async function setupChannels() {
     lightColor: "#C6F24E",
     sound: "default",
   });
+  // Les nouvelles commandes, avec le « ka-ching » (assets/sounds/caisse.wav,
+  // embarqué par le plugin expo-notifications). Canal distinct : Android ne
+  // permet plus de changer le son d'un canal existant.
+  await Notifications.setNotificationChannelAsync("commandes_caisse", {
+    name: "Nouvelles commandes (caisse)",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#C6F24E",
+    sound: "caisse.wav",
+  });
   await Notifications.setNotificationChannelAsync("alertes", {
     name: "Alertes agent",
     importance: Notifications.AndroidImportance.HIGH,

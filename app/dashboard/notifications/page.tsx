@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { useNotifications, notifHref, whenLabel, type Notif } from "@/hooks/useNotifications";
 import { activerPushWeb, desactiverPushWeb, lireEtatPush, pushRefuseIci, type EtatPush } from "@/lib/push-web";
+import { activerSon, jouerCaisse, sonActive } from "@/lib/son";
 import { Doodle } from "@/components/dashboard/Doodle";
 import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
@@ -171,6 +172,7 @@ export default function NotificationsPage() {
       <aside className="space-y-4 lg:sticky lg:top-[96px] lg:self-start">
         <Resume items={items} unread={unread} />
         <CartePush />
+        <CarteSon />
       </aside>
 
       <style jsx global>{`
@@ -344,6 +346,47 @@ function CartePush() {
             </span>
           </button>
         )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Le son des commandes ────────────────────────────────────────────────────
+// Le « ka-ching » joué par le tableau de bord ouvert à chaque nouvelle
+// commande. Réglage propre à cet appareil.
+
+function CarteSon() {
+  const [allume, setAllume] = useState(true);
+  useEffect(() => setAllume(sonActive()), []);
+  const basculer = () => {
+    const suite = !allume;
+    activerSon(suite);
+    setAllume(suite);
+    if (suite) jouerCaisse(true);
+  };
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ ...RESSORT, delay: 0.1 }}
+      className="ntf-carte rounded-[28px] p-5">
+      <div className="flex items-start gap-3.5">
+        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-[20px]"
+          style={{ background: allume ? "#E4F6EA" : "var(--cl-accent-soft)" }}>
+          💰
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-medium" style={{ color: "var(--cl-ink)" }}>Son des commandes</p>
+          <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+            Un « ka-ching » à chaque nouvelle commande, tant que Camille est ouverte sur cet appareil.
+          </p>
+          <button type="button" onClick={() => jouerCaisse(true)} className="mt-2 text-[13px] font-medium underline"
+            style={{ color: "var(--cl-accent-deep)" }}>
+            Écouter
+          </button>
+        </div>
+        <button role="switch" aria-checked={allume} aria-label="Son des commandes" onClick={basculer}
+          className="ntf-interrupteur relative mt-1 h-7 w-12 flex-shrink-0 rounded-full"
+          style={{ background: allume ? "#1DAB55" : "#DCD6E6" }}>
+          <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow" style={{ transform: allume ? "translateX(20px)" : "none" }} />
+        </button>
       </div>
     </motion.div>
   );

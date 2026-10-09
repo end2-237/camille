@@ -200,6 +200,8 @@ async function notifierUn(
 
   const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
 
+  const caisse = String(p.data?.type || "") === "order";
+
   await Promise.all(tokens.map(async (token) => {
     try {
       const res = await fetch(url, {
@@ -220,15 +222,20 @@ async function notifierUn(
               // le lit au clic, comme le fait le service worker côté web.
               ...(lienWeb ? { href: lienWeb } : {}),
             },
+            // Une commande sonne comme une caisse (« ka-ching ») : son fichier
+            // est embarqué dans l'application (res/raw/caisse.wav sur Android,
+            // caisse.wav dans le bundle iOS) et son canal Android dédié porte
+            // ce son — un canal ne peut plus changer de son une fois créé.
+            // Une version de l'app sans ce fichier joue le son par défaut.
             android: {
               priority: "HIGH",
               notification: {
-                channel_id: p.channel || "commandes",
-                sound: "default",
+                channel_id: caisse ? "commandes_caisse" : (p.channel || "commandes"),
+                sound: caisse ? "caisse" : "default",
                 color: "#101012",
               },
             },
-            apns: { payload: { aps: { sound: "default", badge: 1 } } },
+            apns: { payload: { aps: { sound: caisse ? "caisse.wav" : "default", badge: 1 } } },
           },
         }),
       });

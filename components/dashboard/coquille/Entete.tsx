@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { LayoutGrid, Receipt, BarChart3, Users, Package, Settings, Bell, Plus, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useNotifications } from "@/hooks/useNotifications";
+import { useNotifsCoquille } from "./Notifs";
 import { useAgentCourant } from "./AgentCourant";
 import { LogoBlanc } from "./LogoBlanc";
 import { FAMILLES, PAGES, hrefDe, pageDe, type Famille } from "./pages";
@@ -177,7 +177,7 @@ function useCompacte() {
 export function Entete() {
   const router = useRouter();
   const { agent } = useAgentCourant();
-  const { unread } = useNotifications(20);
+  const unread = useNotifsCoquille()?.unread ?? 0;
   const compacte = useCompacte();
   const chemin = usePathname();
   return (
