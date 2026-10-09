@@ -1,5 +1,7 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   landing.css — Landing v5 "Render-faithful" · Camille by Buyticle
+   landing.css — Landing v6 · Camille by Buyticle
+   v6 : identité du tableau de bord — logo en dégradé #A792F4 → #6442E8,
+   boutons pilule, cartes très arrondies, ciel lavande, doodles flottants.
    Réplique fidèle du design render.com : fond blanc, encre quasi-noire,
    accent violet, lavande, pilules noires, footer noir.
    Scopé .cl-landing, indépendant du ThemeProvider (toujours clair).
@@ -41,6 +43,8 @@
   --cl-black:       #16141A;
   --cl-green:       #1DAB55;
   --cl-wa:          #25D366;
+  --cl-lilas:       #A792F4;
+  --cl-lilas-doux:  #F1ECFF;
 
   background: var(--cl-bg);
   color: var(--cl-ink);
@@ -97,21 +101,21 @@
 .cl-btn-black {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   background: var(--cl-black); color: #FFFFFF;
-  border-radius: 8px; padding: 12px 22px;
+  border-radius: 999px; padding: 13px 24px;
   font-size: 0.94rem; font-weight: 500; letter-spacing: -0.012em;
   transition: background 0.16s ease, transform 0.16s ease;
   white-space: nowrap;
 }
 .cl-btn-black:hover { background: #2E2A35; }
-.cl-btn-black:active { transform: scale(0.985); }
+.cl-btn-black:active, .cl-btn-outline:active, .cl-btn-white:active { transform: scale(0.97); }
 
 .cl-btn-outline {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   background: #FFFFFF; color: var(--cl-ink);
   border: 1px solid var(--cl-line);
-  border-radius: 8px; padding: 11px 21px;
+  border-radius: 999px; padding: 12px 23px;
   font-size: 0.94rem; font-weight: 500; letter-spacing: -0.012em;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
   white-space: nowrap;
 }
 .cl-btn-outline:hover { border-color: #C9C4D2; background: #FAF9FB; }
@@ -119,7 +123,7 @@
 .cl-btn-white {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   background: #FFFFFF; color: var(--cl-ink);
-  border-radius: 8px; padding: 12px 22px;
+  border-radius: 999px; padding: 13px 24px;
   font-size: 0.94rem; font-weight: 550; letter-spacing: -0.012em;
   box-shadow: 0 1px 6px rgba(25, 23, 27, 0.14);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
@@ -129,7 +133,7 @@
 
 /* ── Nav ───────────────────────────────────────────────────────────────────── */
 .cl-nav-link {
-  padding: 8px 12px; border-radius: 8px;
+  padding: 8px 12px; border-radius: 999px;
   font-size: 0.885rem; font-weight: 450; color: var(--cl-ink-soft);
   letter-spacing: -0.008em;
   transition: color 0.14s ease;
@@ -141,7 +145,7 @@
 .cl-card {
   background: var(--cl-card);
   border: 1px solid var(--cl-line);
-  border-radius: 12px;
+  border-radius: 26px;
 }
 
 /* ── Grille décorative de fond (hero, façon Render) ────────────────────────── */
@@ -154,8 +158,37 @@
   -webkit-mask-image: radial-gradient(ellipse 78% 70% at 50% 12%, #000 38%, transparent 80%);
   mask-image: radial-gradient(ellipse 78% 70% at 50% 12%, #000 38%, transparent 80%);
 }
-.cl-card-hover { transition: box-shadow 0.2s ease; }
-.cl-card-hover:hover { box-shadow: 0 10px 30px rgba(25, 23, 27, 0.07); }
+.cl-card-hover { transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+.cl-card-hover:hover { box-shadow: 0 18px 40px rgba(70, 40, 190, 0.10); transform: translateY(-3px); }
+
+/* ── Le ciel lavande du tableau de bord (hero, CTA final) ──────────────────── */
+.cl-ciel {
+  background:
+    radial-gradient(70% 55% at 50% 0%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #C9BCFA 0%, #E4DCFD 45%, #FFFFFF 100%);
+}
+.cl-ciel-bas { transform: scaleY(-1); opacity: 0.75; }
+
+/* ── Le papier peint de WhatsApp (téléphone du hero) ────────────────────────── */
+.cl-wa-fond {
+  background-color: #EFEAE2;
+  background-image:
+    radial-gradient(rgba(84, 101, 111, 0.07) 1.2px, transparent 1.3px),
+    radial-gradient(rgba(84, 101, 111, 0.05) 1px, transparent 1.1px);
+  background-size: 22px 22px, 34px 34px;
+  background-position: 0 0, 11px 17px;
+}
+
+/* ── Le dégradé du logo, sur un mot ────────────────────────────────────────── */
+.cl-degrade {
+  background: linear-gradient(120deg, #9C84F6 0%, #6442E8 100%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+
+/* ── Les doodles flottent doucement (comme dans le tableau de bord) ─────────── */
+@keyframes cl-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.cl-flotte { animation: cl-flotte 5s ease-in-out infinite; }
 
 /* ── Curseur de frappe (barre violette, comme Render) ──────────────────────── */
 .cl-caret {
@@ -198,7 +231,7 @@
   background:
     radial-gradient(90% 120% at 0% 0%, rgba(255,255,255,0.5) 0%, transparent 45%),
     radial-gradient(110% 140% at 100% 110%, rgba(64, 35, 170, 0.42) 0%, transparent 55%),
-    linear-gradient(115deg, #D5C6FF 0%, #B195FF 36%, #8E66FA 68%, #7A4FEF 100%);
+    linear-gradient(125deg, #BCAAF8 0%, #A792F4 30%, #8566EE 66%, #6442E8 100%);
 }
 .cl-band-tile {
   display: flex; align-items: center; justify-content: center;
@@ -253,7 +286,7 @@
 
 /* ── Mouvement réduit — on fige les animations décoratives ─────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .cl-pulse, .cl-caret,
+  .cl-pulse, .cl-caret, .cl-flotte,
   .cl-rise, .cl-rise-1, .cl-rise-2, .cl-rise-3, .cl-rise-4 {
     animation: none !important;
   }

@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, ArrowRight } from "lucide-react";
+import { MarqueCamille } from "@/components/brand/LogoCamille";
 
 const NAV_LINKS = [
   { label: "Fonctionnalités",   href: "/#features" },
@@ -21,21 +22,9 @@ const NAV_LINKS = [
   { label: "Contact",           href: "/contact" },
 ];
 
-/** Marque — « C » violet + Camille (repris à l'identique de l'accueil) */
+/** Marque — le logo en dégradé de l'application + Camille */
 function Wordmark() {
-  return (
-    <Link href="/" className="flex flex-shrink-0 items-center gap-2.5" aria-label="Camille — accueil">
-      <span
-        className="flex h-8 w-8 items-center justify-center rounded-[7px]"
-        style={{ background: "#16141A", border: "1px solid rgba(124,90,248,0.55)" }}
-      >
-        <span style={{ fontFamily: "Blackout", fontSize: 17, color: "#8E6BFA", lineHeight: 1 }}>C</span>
-      </span>
-      <span style={{ fontFamily: "var(--font-good-timing)", fontSize: 16.5, letterSpacing: "0.03em", color: "var(--cl-ink)" }}>
-        Camille
-      </span>
-    </Link>
-  );
+  return <MarqueCamille />;
 }
 
 export function Navbar() {
@@ -60,19 +49,19 @@ export function Navbar() {
     <>
       {/* Bandeau d'annonce — barre noire pleine largeur (comme l'accueil) */}
       <Link
-        href="/company"
+        href="/#features"
         className="group relative z-40 flex items-center justify-center gap-2.5 px-4 py-2.5 text-center"
         style={{ background: "#16141A" }}
       >
         <span
           className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-          style={{ background: "var(--cl-accent)", color: "#fff" }}
+          style={{ background: "linear-gradient(120deg,#A792F4,#6442E8)", color: "#fff" }}
         >
-          Nouveau
+          Camille
         </span>
         <span className="text-[13px]" style={{ color: "rgba(255,255,255,0.9)" }}>
-          <span className="font-semibold" style={{ color: "#fff" }}>Camille v3 est là</span>
-          <span className="hidden sm:inline"> — monitoring en direct, sessions ultra-stables et accueils médias enrichis.</span>
+          <span className="font-semibold" style={{ color: "#fff" }}>Nouveau</span>
+          <span className="hidden sm:inline"> — panier WhatsApp relié à votre stock, suivi des livreurs et comptes d&apos;équipe.</span>
         </span>
         <span
           className="inline-flex items-center gap-1 text-[12.5px] font-semibold transition-transform group-hover:translate-x-0.5"
@@ -111,7 +100,7 @@ export function Navbar() {
           </div>
 
           <button
-            className="flex h-10 w-10 items-center justify-center rounded-lg lg:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-full lg:hidden"
             style={{ border: "1px solid var(--cl-line)" }}
             onClick={() => setOpen(!open)}
             aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
@@ -132,7 +121,7 @@ export function Navbar() {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className="rounded-lg px-3 py-2.5 text-[15px] font-medium"
+                  className="rounded-full px-4 py-2.5 text-[15px] font-medium"
                   style={{ color: "var(--cl-ink)" }}
                 >
                   {l.label}
