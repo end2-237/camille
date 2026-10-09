@@ -83,19 +83,37 @@ export async function GET(req: NextRequest) {
 
     // Les agents du compte, puis ceux qu'un autre compte a partagés avec
     // l'utilisateur (équipe) — chacun avec le rôle qu'il y tient.
-    const result = await query(
-      `SELECT a.* FROM camille.agents a
-       WHERE ${await sqlAgentAccessible("a", "$1")} AND a.status != 'archived'
-       ORDER BY (a.user_id = $1) DESC, a.created_at DESC`,
-      [user.id]
-    );
-    const roles = new Map((await agentsAccessibles(user.id)).map((x) => [x.id, x.role]));
-    return NextResponse.json({
-      agents: result.rows.map((row) => ({ ...rowToAgent(row), role: roles.get(row.id) ?? "proprietaire" })),
-    });
+    try {
+      const result = await query(
+        `SELECT a.* FROM camille.agents a
+         WHERE ${await sqlAgentAccessible("a", "$1")} AND a.status != 'archived'
+         ORDER BY (a.user_id = $1) DESC, a.created_at DESC`,
+        [user.id]
+      );
+      const roles = new Map((await agentsAccessibles(user.id)).map((x) => [x.id, x.role]));
+      return NextResponse.json({
+        agents: result.rows.map((row) => ({ ...rowToAgent(row), role: roles.get(row.id) ?? "proprietaire" })),
+      });
+    } catch (e) {
+      // L'équipe ne doit jamais faire disparaître les agents du propriétaire :
+      // en cas d'échec, on retombe sur la liste d'avant (ses agents seuls).
+      console.error("[GET /api/agents] liste équipe en échec, repli propriétaire :", e);
+      const result = await query(
+        `SELECT * FROM camille.agents
+         WHERE user_id = $1 AND status != 'archived'
+         ORDER BY created_at DESC`,
+        [user.id]
+      );
+      return NextResponse.json({
+        agents: result.rows.map((row) => ({ ...rowToAgent(row), role: "proprietaire" })),
+      });
+    }
   } catch (err) {
     console.error("[GET /api/agents]", err);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erreur serveur", detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
   }
 }
 

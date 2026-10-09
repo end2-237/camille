@@ -72,10 +72,13 @@ export async function peut(userId: string, agentId: string, action: Action, opts
  */
 export async function sqlAgentAccessible(alias: string, param: string): Promise<string> {
   if (!(await equipeActive())) return `${alias}.user_id = ${param}`;
+  // Comparaisons en texte : elles tiennent quel que soit le type réel des
+  // colonnes (uuid ou text selon l'âge de la base).
   return `(${alias}.user_id = ${param} OR EXISTS (
     SELECT 1 FROM camille.team_members tm
-     WHERE tm.owner_id = ${alias}.user_id AND tm.member_id = ${param} AND tm.status = 'active'
-       AND (tm.agent_ids IS NULL OR ${alias}.id = ANY(tm.agent_ids))))`;
+     WHERE tm.owner_id::text = ${alias}.user_id::text AND tm.member_id::text = ${param}::text
+       AND tm.status = 'active'
+       AND (tm.agent_ids IS NULL OR ${alias}.id::text = ANY(tm.agent_ids::text[]))))`;
 }
 
 /** Les agents accessibles et le rôle sur chacun. */
