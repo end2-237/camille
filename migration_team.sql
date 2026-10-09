@@ -30,3 +30,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS team_members_owner_email_uniq
 
 CREATE INDEX IF NOT EXISTS team_members_member_idx
   ON camille.team_members (member_id) WHERE status = 'active';
+
+-- Droits du compte de l'application : les migrations se passent souvent avec
+-- un compte administrateur, et une table qu'il crée reste illisible pour
+-- l'application (« permission denied ») sans ces GRANT.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_camille') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON camille.team_members TO app_camille;
+  END IF;
+END $$;

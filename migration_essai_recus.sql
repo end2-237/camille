@@ -26,3 +26,14 @@ UPDATE camille.payments p SET receipt_number = n.num
              WHERE status = 'success' AND receipt_number IS NULL ORDER BY created_at) s
   ) n
  WHERE p.id = n.id;
+
+-- Droits du compte de l'application : les migrations se passent souvent avec
+-- un compte administrateur, et une table qu'il crée reste illisible pour
+-- l'application (« permission denied ») sans ces GRANT.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_camille') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON camille.payments TO app_camille;
+    GRANT USAGE, SELECT, UPDATE ON SEQUENCE camille.receipt_seq TO app_camille;
+  END IF;
+END $$;

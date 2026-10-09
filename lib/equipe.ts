@@ -25,7 +25,13 @@ let tableVue: { ok: boolean; le: number } | null = null;
 async function equipeActive(): Promise<boolean> {
   if (tableVue && (tableVue.ok || Date.now() - tableVue.le < 5 * 60_000)) return tableVue.ok;
   try {
-    const r = await query(`SELECT to_regclass('camille.team_members') IS NOT NULL AS ok`);
+    // La table doit exister ET être lisible par le compte de l'application :
+    // créée par un autre compte sans GRANT, elle faisait planter toutes les
+    // listes (« permission denied for table team_members »).
+    const r = await query(
+      `SELECT CASE WHEN to_regclass('camille.team_members') IS NULL THEN FALSE
+                   ELSE has_table_privilege('camille.team_members', 'SELECT') END AS ok`
+    );
     tableVue = { ok: !!r.rows[0]?.ok, le: Date.now() };
   } catch {
     tableVue = { ok: false, le: Date.now() };
