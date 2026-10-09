@@ -3,6 +3,7 @@ import { query } from "@/lib/db";
 import { getMaxLevel } from "@/lib/plans";
 import { wahaSetWebhook } from "@/lib/waha";
 import { getUserFromRequest } from "@/lib/auth-server";
+import { roleSurAgent, permet } from "@/lib/equipe";
 import type {
   Agent, AgentStatus, AgentModel, BrandTone, SupportedLanguage,
   BusinessSector, AgentIdentity, BusinessContext, KnowledgeBase, AgentCapabilities,
@@ -96,10 +97,9 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
 
   try {
-    const result = await query(
-      "SELECT * FROM camille.agents WHERE id = $1 AND user_id = $2",
-      [agentId, user.id]
-    );
+    const role = await roleSurAgent(user.id, agentId, { archives: true });
+    if (!role) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
+    const result = await query("SELECT * FROM camille.agents WHERE id = $1", [agentId]);
     if (result.rows.length === 0) {
       return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
     }
@@ -107,6 +107,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({
       agent: {
         ...rowToAgent(row),
+        // Ce que l'utilisateur connecté peut faire sur cet agent (équipe).
+        role,
         // Config N1/N2 exposée pour l'écran de réglages
         level: row.level ?? 1,
         out_of_scope_behavior: row.out_of_scope_behavior ?? "site",
@@ -140,12 +142,21 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     const updates = await req.json();
     const flat: Record<string, unknown> = {};
 
+    // Modifier un agent : propriétaire ou gérant ; l'archiver : propriétaire.
+    const role = await roleSurAgent(user.id, agentId, { archives: true });
+    if (!role) return NextResponse.json({ error: "Agent introuvable ou accès refusé" }, { status: 404 });
+    if (!permet(role, updates.status === "archived" ? "supprimer" : "reglages")) {
+      return NextResponse.json({ error: "Votre rôle ne permet pas de modifier cet agent" }, { status: 403 });
+    }
+    // Les requêtes qui suivent s'adressent au compte du PROPRIÉTAIRE.
+    const proprio = (await query("SELECT user_id FROM camille.agents WHERE id = $1", [agentId])).rows[0]?.user_id as string;
+
     // ── Gating : le niveau ne peut pas dépasser ce que le plan autorise ──
     if (updates.level !== undefined) {
       const wanted = Number(updates.level);
       const planRow = await query(
         "SELECT plan FROM camille.agents WHERE id = $1 AND user_id = $2",
-        [agentId, user.id]
+        [agentId, proprio]
       );
       const plan = planRow.rows[0]?.plan ?? "free";
       const max = getMaxLevel(plan);
@@ -171,7 +182,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
              (SELECT COUNT(*)::int FROM camille.agents
                WHERE user_id = $2 AND id <> $1 AND status <> 'archived'
                  AND COALESCE(plan, 'free') = 'free') AS autres`,
-          [agentId, user.id]
+          [agentId, proprio]
         );
         const maxGratuits = Math.max(0, Number(process.env.MAX_AGENTS_GRATUITS ?? 1));
         if (r.rows[0]?.gratuit_archive && r.rows[0].autres >= maxGratuits) {
@@ -255,15 +266,13 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       typeof val === "object" && val !== null ? JSON.stringify(val) : val
     );
 
-    console.log("[PATCH /api/agents/:id] SQL:", `UPDATE camille.agents SET ${setClauses}, updated_at = NOW() WHERE id = $1 AND user_id = $2`);
-    console.log("[PATCH /api/agents/:id] params:", [agentId, user.id, ...values]);
 
     const result = await query(
       `UPDATE camille.agents
        SET ${setClauses}, updated_at = NOW()
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
-      [agentId, user.id, ...values]
+      [agentId, proprio, ...values]
     );
 
     if (result.rows.length === 0) {

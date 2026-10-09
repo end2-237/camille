@@ -4,25 +4,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut, type Action } from "@/lib/equipe";
 import { pousserUn } from "@/lib/whatsapp/catalogue-sync";
 import type { AxeVariante } from "@/lib/whatsapp/variantes";
 import { coerce } from "@/lib/productFields";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-async function assertOwner(req: NextRequest, agentId: string) {
+async function assertOwner(req: NextRequest, agentId: string, action: Action = "catalogue") {
   const user = await getUserFromRequest(req);
   if (!user) return null;
-  const r = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, user.id]
-  );
-  return r.rows.length ? user : null;
+  return (await peut(user.id, agentId, action)) ? user : null;
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const owner = await assertOwner(req, agentId);
+  const owner = await assertOwner(req, agentId, "voir");
   if (!owner) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
   const r = await query(
@@ -35,7 +32,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const owner = await assertOwner(req, agentId);
+  const owner = await assertOwner(req, agentId, "catalogue");
   if (!owner) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
   const b = await req.json();

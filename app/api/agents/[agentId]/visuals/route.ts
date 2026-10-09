@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut, type Action } from "@/lib/equipe";
 import { fichierDeLAgent } from "@/lib/fichiers";
 // Un fichier de route Next n'exporte que ses verbes HTTP : la liste vit à côté.
 import { MEDIA_KINDS } from "@/lib/mediaKinds";
@@ -47,12 +48,8 @@ function normalize(raw: unknown): MediaItem[] {
     .filter(Boolean) as MediaItem[];
 }
 
-async function owned(agentId: string, userId: string) {
-  const r = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, userId]
-  );
-  return r.rows.length > 0;
+function owned(agentId: string, userId: string, action: Action = "catalogue") {
+  return peut(userId, agentId, action);
 }
 
 async function readMedia(agentId: string): Promise<MediaItem[]> {
@@ -76,7 +73,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { agentId } = await params;
-  if (!(await owned(agentId, user.id))) {
+  if (!(await owned(agentId, user.id, "voir"))) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 

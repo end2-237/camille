@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
@@ -19,11 +20,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { agentId } = await params;
-  const owns = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, user.id]
-  );
-  if (!owns.rows.length) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
+  if (!(await peut(user.id, agentId, "catalogue"))) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
 
   let formData: FormData;
   try { formData = await req.formData(); }

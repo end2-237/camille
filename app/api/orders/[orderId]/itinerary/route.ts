@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       `SELECT o.lat, o.lng, o.address, a.latitude AS shop_lat, a.longitude AS shop_lng
          FROM camille.orders o
          JOIN camille.agents a ON a.id = o.agent_id
-        WHERE a.user_id = $1 AND o.id = $2`,
+        WHERE ${await sqlAgentAccessible("a", "$1")} AND o.id = $2`,
       [user.id, orderId]
     );
     if (!r.rows.length) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 });

@@ -11,7 +11,7 @@ type RouteContext = { params: Promise<{ agentId: string; taskId: string }> };
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const { agentId, taskId } = await params;
-  const { refus } = await accesAgent(req, agentId);
+  const { refus } = await accesAgent(req, agentId, "reglages");
   if (refus) return refus;
 
   try {
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
 export async function DELETE(req: NextRequest, { params }: RouteContext) {
   const { agentId, taskId } = await params;
-  const { refus } = await accesAgent(req, agentId);
+  const { refus } = await accesAgent(req, agentId, "reglages");
   if (refus) return refus;
 
   try {

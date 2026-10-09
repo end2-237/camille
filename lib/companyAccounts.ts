@@ -14,6 +14,7 @@
 // vérifiable plutôt que déclaratif.
 // ─────────────────────────────────────────────────────────────────────────────
 import { query } from "@/lib/db";
+import { peut, type Action } from "@/lib/equipe";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -164,13 +165,13 @@ export async function post(
 export const COMPANIES_MISSING =
   "Comptes entreprise non installés — applique migration_company_accounts.sql";
 
-/** Le marchand est-il bien propriétaire de cet agent ? */
-export async function ownsAgent(agentId: string, userId: string) {
-  const r = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, userId]
-  );
-  return r.rows.length > 0;
+/**
+ * L'utilisateur a-t-il accès à cet agent pour cette action ? Le propriétaire
+ * toujours ; un collaborateur selon son rôle (lib/equipe.ts). « ventes » par
+ * défaut : clients, livreurs, comptes entreprise, suivi.
+ */
+export async function ownsAgent(agentId: string, userId: string, action: Action = "ventes") {
+  return peut(userId, agentId, action);
 }
 
 /** Un champ de formulaire : coupé, débarrassé de ses espaces, vide = absent. */

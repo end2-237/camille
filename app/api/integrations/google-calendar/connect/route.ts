@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { getUserFromRequest } from "@/lib/auth-server";
 
 const SCOPES = [
@@ -25,11 +26,7 @@ export async function POST(req: NextRequest) {
   if (!agentId) return NextResponse.json({ error: "agentId manquant" }, { status: 400 });
 
   // Verify agent belongs to this user
-  const result = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2",
-    [agentId, user.id]
-  );
-  if (result.rows.length === 0) {
+  if (!(await peut(user.id, agentId, "reglages"))) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 

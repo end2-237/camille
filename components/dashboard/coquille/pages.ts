@@ -4,6 +4,8 @@
 // bouton flottant pour passer à un autre agent).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { Action } from "@/lib/roles";
+
 export type Famille = "accueil" | "ventes" | "chiffres" | "clients" | "catalogue" | "reglages";
 
 export const FAMILLES: Record<Famille, string> = {
@@ -20,27 +22,30 @@ export type Page = {
   segment?: string;
   /** Chemin global (/dashboard/orders…). */
   chemin?: string;
+  /** Ce qu'il faut pouvoir faire sur l'agent courant pour voir la page (équipe). */
+  action?: Action;
 };
 
 export const PAGES: Page[] = [
-  { famille: "ventes", titre: "Commandes", chemin: "/dashboard/orders", parAgent: true },
-  { famille: "ventes", titre: "Suivi des livraisons", segment: "suivi", parAgent: true },
-  { famille: "ventes", titre: "Réclamations", chemin: "/dashboard/complaints", parAgent: false },
-  { famille: "ventes", titre: "Modèles de message", chemin: "/dashboard/templates", parAgent: false },
+  { famille: "ventes", titre: "Commandes", chemin: "/dashboard/orders", parAgent: true, action: "ventes" },
+  { famille: "ventes", titre: "Suivi des livraisons", segment: "suivi", parAgent: true, action: "ventes" },
+  { famille: "ventes", titre: "Réclamations", chemin: "/dashboard/complaints", parAgent: false, action: "ventes" },
+  { famille: "ventes", titre: "Modèles de message", chemin: "/dashboard/templates", parAgent: false, action: "reglages" },
   { famille: "chiffres", titre: "Statistiques", chemin: "/dashboard/stats", parAgent: true },
-  { famille: "chiffres", titre: "Comptes entreprise", segment: "entreprises", parAgent: true },
-  { famille: "chiffres", titre: "Abonnement et facturation", chemin: "/dashboard/billing", parAgent: false },
-  { famille: "clients", titre: "Clientèle", segment: "clientele", parAgent: true },
-  { famille: "clients", titre: "Livreurs", segment: "livreurs", parAgent: true },
-  { famille: "catalogue", titre: "Catalogue", segment: "catalog", parAgent: true },
-  { famille: "catalogue", titre: "Catalogue WhatsApp", segment: "catalog-sync", parAgent: true },
-  { famille: "catalogue", titre: "WhatsApp officiel", segment: "whatsapp", parAgent: true },
-  { famille: "catalogue", titre: "Médias", segment: "medias", parAgent: true },
-  { famille: "reglages", titre: "Votre agent", segment: "", parAgent: true },
-  { famille: "reglages", titre: "Configuration de l'agent", segment: "settings", parAgent: true },
-  { famille: "reglages", titre: "Intégrations", segment: "integrations", parAgent: true },
+  { famille: "chiffres", titre: "Comptes entreprise", segment: "entreprises", parAgent: true, action: "ventes" },
+  { famille: "chiffres", titre: "Abonnement et facturation", chemin: "/dashboard/billing", parAgent: false, action: "facturation" },
+  { famille: "clients", titre: "Clientèle", segment: "clientele", parAgent: true, action: "ventes" },
+  { famille: "clients", titre: "Livreurs", segment: "livreurs", parAgent: true, action: "ventes" },
+  { famille: "catalogue", titre: "Catalogue", segment: "catalog", parAgent: true, action: "catalogue" },
+  { famille: "catalogue", titre: "Catalogue WhatsApp", segment: "catalog-sync", parAgent: true, action: "catalogue" },
+  { famille: "catalogue", titre: "WhatsApp officiel", segment: "whatsapp", parAgent: true, action: "reglages" },
+  { famille: "catalogue", titre: "Médias", segment: "medias", parAgent: true, action: "catalogue" },
+  { famille: "reglages", titre: "Votre agent", segment: "", parAgent: true, action: "reglages" },
+  { famille: "reglages", titre: "Configuration de l'agent", segment: "settings", parAgent: true, action: "reglages" },
+  { famille: "reglages", titre: "Intégrations", segment: "integrations", parAgent: true, action: "reglages" },
   { famille: "reglages", titre: "Trafic du site", segment: "trafic", parAgent: true },
   { famille: "reglages", titre: "Mon profil", chemin: "/dashboard/profil", parAgent: false },
+  { famille: "reglages", titre: "Équipe", chemin: "/dashboard/equipe", parAgent: false },
   { famille: "reglages", titre: "Notifications", chemin: "/dashboard/notifications", parAgent: false },
   { famille: "reglages", titre: "Exploitation", chemin: "/dashboard/admin", parAgent: false },
   { famille: "reglages", titre: "Qualité de l'agent", chemin: "/dashboard/insights", parAgent: false },

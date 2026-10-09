@@ -9,20 +9,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut, type Action } from "@/lib/equipe";
 import { chiffrer, coffrePret, dechiffrer } from "@/lib/whatsapp/coffre";
 import { oublierIdentifiants } from "@/lib/whatsapp/identifiants";
 import { appId, catalogueRelie, connecter, desabonner, profilNumeroApplication } from "@/lib/whatsapp/inscription";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-async function proprietaire(req: NextRequest, agentId: string) {
+async function proprietaire(req: NextRequest, agentId: string, action: Action = "reglages") {
   const user = await getUserFromRequest(req);
   if (!user) return null;
-  const r = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, user.id]
-  );
-  return r.rows.length ? user : null;
+  return (await peut(user.id, agentId, action)) ? user : null;
 }
 
 async function etat(agentId: string) {
@@ -62,7 +59,7 @@ function modeDe(agentId: string, e: Etat | null): "propre" | "application" | nul
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  if (!(await proprietaire(req, agentId))) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  if (!(await proprietaire(req, agentId, "voir"))) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   const e = await etat(agentId).catch(() => null);
   const mode = modeDe(agentId, e);
   const app = mode === "application" ? await profilNumeroApplication() : null;

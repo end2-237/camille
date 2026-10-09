@@ -15,6 +15,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useAgentCourant } from "./AgentCourant";
 import { LogoBlanc } from "./LogoBlanc";
 import { FAMILLES, PAGES, hrefDe, pageDe, type Famille } from "./pages";
+import { permet } from "@/lib/roles";
 
 const ICONES: Record<Famille, React.ElementType> = {
   accueil: LayoutGrid, ventes: Receipt, chiffres: BarChart3, clients: Users, catalogue: Package, reglages: Settings,
@@ -44,7 +45,9 @@ function MenuHaut() {
   const ici = chemin === "/dashboard" ? "accueil" : pageDe(chemin)?.famille;
   const admin = monte && Boolean(user?.is_admin);
   const liens = (f: Famille) => [
-    ...PAGES.filter((p) => p.famille === f && (admin || !["/dashboard/admin", "/dashboard/insights"].includes(p.chemin || "")))
+    ...PAGES.filter((p) => p.famille === f && (admin || !["/dashboard/admin", "/dashboard/insights"].includes(p.chemin || ""))
+      // Un collaborateur ne voit que ce que son rôle permet sur l'agent courant.
+      && (!p.action || permet(agent?.role ?? "proprietaire", p.action)))
       .map((p) => ({ href: hrefDe(p, agent?.id), label: p.titre }))
       .filter((l): l is { href: string; label: string } => Boolean(l.href)),
     ...(f === "clients" ? [{ href: "/livraison", label: "Espace livreur" }] : []),
@@ -135,6 +138,7 @@ function Compte() {
             className="coq-deroulant absolute right-0 top-[calc(100%+12px)] z-50 w-64 rounded-[22px] p-1.5">
             <p className="truncate px-3 py-2 text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>{monte ? user?.email : ""}</p>
             <Link href="/dashboard/profil" className="block rounded-2xl px-3 py-2.5 text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "var(--cl-ink)" }}>Mon profil</Link>
+            <Link href="/dashboard/equipe" className="block rounded-2xl px-3 py-2.5 text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "var(--cl-ink)" }}>Équipe</Link>
             <Link href="/dashboard/billing" className="block rounded-2xl px-3 py-2.5 text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "var(--cl-ink)" }}>Abonnement</Link>
             <Link href="/" className="block rounded-2xl px-3 py-2.5 text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "var(--cl-ink)" }}>Retour au site</Link>
             <button onClick={logout} className="flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-[14px] hover:bg-[var(--cl-accent-soft)]" style={{ color: "#A63D28" }}>

@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut, type Action } from "@/lib/equipe";
 import { pousserUn, retirerUn } from "@/lib/whatsapp/catalogue-sync";
 import { idsAttendus, type AxeVariante } from "@/lib/whatsapp/variantes";
 import { coerce } from "@/lib/productFields";
@@ -16,14 +17,10 @@ const FIELDS = new Set([
   "variants", "images", "daily_menu", "available_days", "options",
 ]);
 
-async function assertOwner(req: NextRequest, agentId: string) {
+async function assertOwner(req: NextRequest, agentId: string, action: Action = "catalogue") {
   const user = await getUserFromRequest(req);
   if (!user) return null;
-  const r = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, user.id]
-  );
-  return r.rows.length ? user : null;
+  return (await peut(user.id, agentId, action)) ? user : null;
 }
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {

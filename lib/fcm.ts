@@ -18,6 +18,7 @@ import crypto from "crypto";
 import { query } from "@/lib/db";
 import { lienNotif } from "@/lib/notif-links";
 import { envoyerWebPush, estSouscriptionWeb, webPushConfigure } from "@/lib/webpush";
+import { membresPour } from "@/lib/equipe";
 
 export type ServiceAccount = { client_email: string; private_key: string; project_id: string };
 
@@ -97,7 +98,28 @@ export type PushPayload = {
  * notification pour le centre in-app.
  * Ne lève jamais : le push est un bonus, jamais un point de rupture.
  */
+/** Ce qui touche aux ventes d'un agent part aussi à son équipe (gérants, vendeurs). */
+const POUR_L_EQUIPE = new Set(["order", "stock", "rupture", "complaint"]);
+
 export async function notifyUser(
+  userId: string,
+  kind: "commande" | "alerte" | "systeme",
+  p: PushPayload
+): Promise<{ sent: number; skipped?: string; errors?: string[] }> {
+  const res = await notifierUn(userId, kind, p);
+  const type = String(p.data?.type || "");
+  const agentId = String(p.data?.agentId || "");
+  if (POUR_L_EQUIPE.has(type) && agentId) {
+    try {
+      for (const membre of await membresPour(userId, agentId, "ventes")) {
+        await notifierUn(membre, kind, p).catch(() => {});
+      }
+    } catch { /* l'équipe est un plus : le propriétaire, lui, est prévenu */ }
+  }
+  return res;
+}
+
+async function notifierUn(
   userId: string,
   kind: "commande" | "alerte" | "systeme",
   p: PushPayload

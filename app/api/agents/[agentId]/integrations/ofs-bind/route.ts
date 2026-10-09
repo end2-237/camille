@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { connectOfs, ofsEnabled } from "@/lib/ofs";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
@@ -18,11 +19,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const { agentId } = await params;
 
-  const owns = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, user.id]
-  );
-  if (!owns.rows.length) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
+  if (!(await peut(user.id, agentId, "reglages"))) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
   const source = ["ofs_shop", "ofs_cj", "camille"].includes(body.source) ? body.source : "ofs_shop";

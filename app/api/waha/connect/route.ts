@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { wahaStartSession, makeSessionName } from "@/lib/waha";
 
 // Limite de sessions WhatsApp simultanées par utilisateur.
@@ -19,11 +20,14 @@ export async function POST(req: NextRequest) {
     const { agentId } = await req.json();
     if (!agentId) return NextResponse.json({ error: "agentId requis" }, { status: 400 });
 
+    // Propriétaire ou gérant ; la session reste rattachée au compte du
+    // propriétaire, qui en porte le quota.
     const agentRes = await query(
-      "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-      [agentId, user.id]
+      "SELECT id, user_id FROM camille.agents WHERE id = $1 AND status != 'archived'",
+      [agentId]
     );
-    if (agentRes.rows.length === 0) {
+    const proprio = agentRes.rows[0]?.user_id as string | undefined;
+    if (!proprio || !(await peut(user.id, agentId, "reglages"))) {
       return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
     }
 
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
        WHERE user_id = $1
          AND agent_id IS DISTINCT FROM $2
          AND COALESCE(status, '') <> ALL($3::text[])`,
-      [user.id, agentId, DEAD_STATUSES]
+      [proprio, agentId, DEAD_STATUSES]
     );
     const count = parseInt(countRes.rows[0].count, 10);
     if (count >= MAX_SESSIONS) {
@@ -62,7 +66,7 @@ export async function POST(req: NextRequest) {
        ON CONFLICT (session_name) DO UPDATE
          SET agent_id = $2, user_id = $3, status = 'STARTING', updated_at = NOW()
        WHERE camille.whatsapp_sessions.user_id = $3`,
-      [sessionName, agentId, user.id]
+      [sessionName, agentId, proprio]
     );
 
     return NextResponse.json({ session_name: sessionName });

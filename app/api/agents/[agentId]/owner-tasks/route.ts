@@ -12,7 +12,7 @@ type RouteContext = { params: Promise<{ agentId: string }> };
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const { refus } = await accesAgent(req, agentId);
+  const { refus } = await accesAgent(req, agentId, "reglages");
   if (refus) return refus;
   const phone  = req.nextUrl.searchParams.get("phone");
   const status = req.nextUrl.searchParams.get("status") ?? "active";
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const { refus } = await accesAgent(req, agentId);
+  const { refus } = await accesAgent(req, agentId, "reglages");
   if (refus) return refus;
 
   try {

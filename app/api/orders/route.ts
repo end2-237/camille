@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 import { createOrder } from "@/lib/orders";
 import { appelInterne, refusInterne } from "@/lib/interne";
 
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest) {
                       a.business_name AS shop_name
                  FROM camille.orders o
                  JOIN camille.agents a ON a.id = o.agent_id
-                WHERE a.user_id = $1`;
+                WHERE ${await sqlAgentAccessible("a", "$1")}`;
     if (agentId) { params.push(agentId); sql += ` AND o.agent_id = $${params.length}`; }
     if (status)  { params.push(status);  sql += ` AND o.status = $${params.length}`; }
     sql += " ORDER BY o.created_at DESC LIMIT 200";

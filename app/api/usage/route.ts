@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse }         from "next/server";
 import { getUserFromRequest }                 from "@/lib/auth-server";
 import { query }                             from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { currentPeriod }                     from "@/lib/plans";
 import { consommation }                      from "@/lib/quota";
 import { getPlanLimitDB, getPlanLabelDB, isUnlimitedTokens, getPlansFromDB } from "@/lib/plans-db";
@@ -18,10 +19,10 @@ export async function GET(req: NextRequest) {
 
     // Vérifie que l'agent appartient à l'utilisateur et récupère son plan
     const agentRes = await query(
-      "SELECT id, plan FROM camille.agents WHERE id = $1 AND user_id = $2",
-      [agentId, user.id]
+      "SELECT id, plan, user_id FROM camille.agents WHERE id = $1",
+      [agentId]
     );
-    if (agentRes.rows.length === 0) {
+    if (agentRes.rows.length === 0 || !(await peut(user.id, agentId, "voir", { archives: true }))) {
       return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
     }
 
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
     // Le gratuit se compte par compte (lib/quota.ts) : la jauge doit dire la
     // même chose que la règle qui fera taire l'agent.
     const used      = planId === "free"
-      ? await consommation(agentId, user.id, planId, period)
+      ? await consommation(agentId, agentRes.rows[0].user_id, planId, period)
       : Number(row.total_tokens);
     const remaining = unlimited ? -1 : Math.max(0, limit - used);
     const percent   = unlimited ? 0 : Math.min(100, Math.round((used / limit) * 100));

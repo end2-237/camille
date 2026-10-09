@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { wahaSetWebhook } from "@/lib/waha";
 import { activerAgentSiBrouillon } from "@/lib/agent-activation";
 
@@ -19,10 +20,11 @@ export async function POST(req: NextRequest) {
 
   // Vérifier que l'agent appartient bien à l'utilisateur
   const agentCheck = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, user.id]
+    "SELECT id, user_id FROM camille.agents WHERE id = $1 AND status != 'archived'",
+    [agentId]
   );
-  if (!agentCheck.rows.length) {
+  const proprio = agentCheck.rows[0]?.user_id as string | undefined;
+  if (!proprio || !(await peut(user.id, agentId, "reglages"))) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
            updated_at = NOW()
      WHERE camille.whatsapp_sessions.user_id = $3
      RETURNING session_name`,
-    [sessionName, agentId, user.id]
+    [sessionName, agentId, proprio]
   );
   if (!lien.rows.length) {
     return NextResponse.json({ error: "Cette session appartient à un autre compte" }, { status: 409 });

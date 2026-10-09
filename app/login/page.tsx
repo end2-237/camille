@@ -48,8 +48,22 @@ export default function LoginPage() {
   const [voir, setVoir]         = useState(false);
   const [retenir, setRetenir]   = useState(true);
 
+  // ?suite=/rejoindre?jeton=… : là où revenir après la connexion (invitation
+  // d'équipe). Chemin interne seulement. ?mode=register ouvre l'inscription.
   useEffect(() => {
-    if (isLoggedIn) router.replace(user?.email_verified === false ? "/verifier-email?suite=/dashboard" : "/dashboard");
+    if (new URLSearchParams(window.location.search).get("mode") === "register") setMode("register");
+  }, []);
+  const apres = (u: { email_verified?: boolean } | null) => {
+    // Lu à chaque appel (pas d'état) : la redirection d'un utilisateur déjà
+    // connecté part dès le premier rendu.
+    const s = new URLSearchParams(window.location.search).get("suite");
+    const suite = s && s.startsWith("/") && !s.startsWith("//") ? s : "/dashboard";
+    return u?.email_verified === false ? `/verifier-email?suite=${encodeURIComponent(suite)}` : suite;
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) router.replace(apres(user));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, user, router]);
 
   const loginForm    = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
@@ -61,7 +75,7 @@ export default function LoginPage() {
       const user = await login(email, password);
       retenirConnexion(retenir);
       toast.success(`Bienvenue, ${user.full_name ?? user.email} !`);
-      router.push(user.email_verified === false ? "/verifier-email?suite=/dashboard" : "/dashboard");
+      router.push(apres(user));
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erreur de connexion");
     } finally {
@@ -75,7 +89,7 @@ export default function LoginPage() {
       const user = await registerUser(email, password, full_name);
       retenirConnexion(true);
       toast.success(`Compte créé ! Un code de vérification vient de partir à ${user.email}.`);
-      router.push(user.email_verified === false ? "/verifier-email?suite=/dashboard" : "/dashboard");
+      router.push(apres(user));
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erreur d'inscription");
     } finally {

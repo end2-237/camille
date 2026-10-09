@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { fichierDeLAgent } from "@/lib/fichiers";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -100,11 +101,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   const { agentId } = await params;
 
-  const ownerCheck = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2",
-    [agentId, user.id]
-  );
-  if (!ownerCheck.rows.length) {
+  if (!(await peut(user.id, agentId, "reglages"))) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 
@@ -205,11 +202,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'type doit être "audio" ou "video"' }, { status: 400 });
   }
 
-  const ownerCheck = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2",
-    [agentId, user.id]
-  );
-  if (!ownerCheck.rows.length) {
+  if (!(await peut(user.id, agentId, "reglages"))) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 

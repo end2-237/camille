@@ -852,6 +852,35 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("iPhone (m4a) → .m4a", extensionAudio("audio/mp4"), "m4a");
 }
 
+// ═══ roles — ce que chaque membre d'une équipe peut faire ═══════════════════
+{
+  groupe("roles — propriétaire, gérant, vendeur");
+  const { permet } = await import(`${DIST}/roles.js`);
+  chk("propriétaire : facturation", permet("proprietaire", "facturation"));
+  chk("propriétaire : équipe", permet("proprietaire", "equipe"));
+  chk("gérant : réglages", permet("gerant", "reglages"));
+  chk("gérant : catalogue", permet("gerant", "catalogue"));
+  chk("gérant : PAS la facturation", !permet("gerant", "facturation"));
+  chk("gérant : PAS l'équipe", !permet("gerant", "equipe"));
+  chk("gérant : PAS la suppression", !permet("gerant", "supprimer"));
+  chk("vendeur : ventes", permet("vendeur", "ventes"));
+  chk("vendeur : voir", permet("vendeur", "voir"));
+  chk("vendeur : PAS le catalogue", !permet("vendeur", "catalogue"));
+  chk("vendeur : PAS les réglages", !permet("vendeur", "reglages"));
+  chk("sans rôle : rien", !permet(null, "voir"));
+}
+
+// ═══ fichiers — on ne supprime que les fichiers de SON agent ════════════════
+{
+  groupe("fichiers — suppression sur camille-core");
+  const { fichierDeLAgent } = await import(`${DIST}/fichiers.js`);
+  const A = "11111111-2222-3333-4444-555555555555";
+  eq("fichier de l'agent → son nom", fichierDeLAgent("https://core/media/11111111222233334444555555555555_logo_1.png", A), "11111111222233334444555555555555_logo_1.png");
+  eq("fichier d'un autre agent → refusé", fichierDeLAgent("https://core/media/99999999222233334444555555555555_logo_1.png", A), null);
+  eq("remontée de dossier → refusée", fichierDeLAgent("https://core/media/11111111222233334444555555555555_..%2F..%2Fetc", A), null);
+  eq("URL vide → rien", fichierDeLAgent("", A), null);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log(`\n${"═".repeat(66)}`);
 if (echecs.length) {

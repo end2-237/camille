@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { wahaPairingCode } from "@/lib/waha";
 
 export async function POST(req: NextRequest) {
@@ -29,9 +30,12 @@ export async function POST(req: NextRequest) {
     }
 
     const sessionRes = await query(
-      "SELECT session_name FROM camille.whatsapp_sessions WHERE agent_id = $1 AND user_id = $2",
-      [agentId, user.id]
+      "SELECT session_name FROM camille.whatsapp_sessions WHERE agent_id = $1",
+      [agentId]
     );
+    if (!(await peut(user.id, agentId, "reglages", { archives: true }))) {
+      return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
+    }
     if (sessionRes.rows.length === 0) {
       return NextResponse.json(
         { error: "Aucune session pour cet agent. Appuie d'abord sur « Connecter »." },

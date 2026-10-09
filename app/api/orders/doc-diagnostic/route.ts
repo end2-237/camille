@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 
 type Check = { ok: boolean; label: string; detail?: string; fix?: string };
 
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
       `SELECT COUNT(*)::int AS n
          FROM camille.whatsapp_sessions ws
          JOIN camille.agents a ON a.id = ws.agent_id
-        WHERE a.user_id = $1 AND COALESCE(ws.status,'') NOT IN ('STOPPED','FAILED')`,
+        WHERE ${await sqlAgentAccessible("a", "$1")} AND COALESCE(ws.status,'') NOT IN ('STOPPED','FAILED')`,
       [user.id]
     );
     const n = r.rows[0]?.n ?? 0;

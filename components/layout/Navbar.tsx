@@ -54,7 +54,7 @@ export function Navbar() {
 
   // Le dashboard a sa propre barre ; ailleurs (accueil inclus) → nav du site.
   // La page de connexion a sa propre mise en page, pleine hauteur.
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/livraison") || pathname === "/login" || pathname === "/mot-de-passe-oublie" || pathname === "/reinitialiser" || pathname === "/verifier-email") return null;
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/livraison") || pathname === "/login" || pathname === "/mot-de-passe-oublie" || pathname === "/reinitialiser" || pathname === "/verifier-email" || pathname === "/rejoindre") return null;
 
   return (
     <>

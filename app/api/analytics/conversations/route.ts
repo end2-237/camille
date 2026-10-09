@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 
 const GAP_MS = 12 * 3600 * 1000; // 12 h → nouvelle discussion
 
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
   const days = Number(String(params.get("period") ?? "30d").replace(/\D/g, "")) || 30;
 
   const agentsRes = await query(
-    "SELECT id FROM camille.agents WHERE user_id = $1",
+    `SELECT id FROM camille.agents WHERE ${await sqlAgentAccessible("camille.agents", "$1")}`,
     [user.id]
   );
   let agentIds: string[] = agentsRes.rows.map((r: any) => r.id);

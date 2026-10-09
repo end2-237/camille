@@ -19,7 +19,7 @@ type RouteContext = { params: Promise<{ agentId: string }> };
 /* ─── GET — Vérifier / lister les sessions propriétaire ─────────────────── */
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const { refus } = await accesAgent(req, agentId);
+  const { refus } = await accesAgent(req, agentId, "reglages");
   if (refus) return refus;
   const phone = req.nextUrl.searchParams.get("phone");
 
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 /* ─── POST — Vérifier mot de passe + créer session ──────────────────────── */
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const { refus } = await accesAgent(req, agentId);
+  const { refus } = await accesAgent(req, agentId, "reglages");
   if (refus) return refus;
 
   let phone: string;
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 /* ─── DELETE — Révoquer une ou toutes les sessions ──────────────────────── */
 export async function DELETE(req: NextRequest, { params }: RouteContext) {
   const { agentId } = await params;
-  const { refus } = await accesAgent(req, agentId);
+  const { refus } = await accesAgent(req, agentId, "reglages");
   if (refus) return refus;
   const phone  = req.nextUrl.searchParams.get("phone");
   const allStr = req.nextUrl.searchParams.get("all");

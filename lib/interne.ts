@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { query } from "@/lib/db";
 import { getUserFromRequest, type AuthUser } from "@/lib/auth-server";
+import { peut, type Action } from "@/lib/equipe";
 
 export function egalConstant(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -43,14 +44,9 @@ export function appelInterne(req: NextRequest, opts: { strict?: boolean } = {}):
 export const refusInterne = () =>
   NextResponse.json({ error: "Clé interne absente ou invalide" }, { status: 401 });
 
-/** L'agent appartient-il à cet utilisateur ? */
-export async function possedeAgent(userId: string, agentId: string): Promise<boolean> {
-  if (!/^[0-9a-f-]{36}$/i.test(agentId)) return false;
-  const r = await query(
-    `SELECT 1 FROM camille.agents WHERE id = $1 AND user_id = $2`,
-    [agentId, userId]
-  );
-  return r.rows.length > 0;
+/** L'utilisateur peut-il agir sur cet agent (propriétaire ou collaborateur) ? */
+export async function possedeAgent(userId: string, agentId: string, action: Action = "ventes"): Promise<boolean> {
+  return peut(userId, agentId, action, { archives: true });
 }
 
 /**
@@ -59,12 +55,13 @@ export async function possedeAgent(userId: string, agentId: string): Promise<boo
  */
 export async function accesAgent(
   req: NextRequest,
-  agentId: string
+  agentId: string,
+  action: Action = "ventes"
 ): Promise<{ refus: NextResponse | null; user: AuthUser | null; interne: boolean }> {
   if (appelInterne(req)) return { refus: null, user: null, interne: true };
   const user = await getUserFromRequest(req);
   if (!user) return { refus: refusInterne(), user: null, interne: false };
-  if (!(await possedeAgent(user.id, agentId))) {
+  if (!(await possedeAgent(user.id, agentId, action))) {
     return { refus: NextResponse.json({ error: "Agent introuvable" }, { status: 404 }), user, interne: false };
   }
   return { refus: null, user, interne: false };
@@ -76,9 +73,11 @@ export async function accesSession(req: NextRequest, session: string): Promise<N
   const user = await getUserFromRequest(req);
   if (!user) return refusInterne();
   const r = await query(
-    `SELECT 1 FROM camille.whatsapp_sessions ws JOIN camille.agents a ON a.id = ws.agent_id
-      WHERE ws.session_name = $1 AND a.user_id = $2`,
-    [session, user.id]
+    `SELECT agent_id FROM camille.whatsapp_sessions WHERE session_name = $1`,
+    [session]
   );
-  return r.rows.length ? null : NextResponse.json({ error: "Session introuvable" }, { status: 404 });
+  const agentId = r.rows[0]?.agent_id as string | undefined;
+  return agentId && (await peut(user.id, agentId, "ventes", { archives: true }))
+    ? null
+    : NextResponse.json({ error: "Session introuvable" }, { status: 404 });
 }

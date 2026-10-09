@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth-server";
+import { agentsAccessibles, sqlAgentAccessible } from "@/lib/equipe";
 import { subscriptionState } from "@/lib/subscription";
 import type {
   Agent, AgentFormData, SystemPromptConfig,
@@ -75,13 +76,18 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   try {
+    // Les agents du compte, puis ceux qu'un autre compte a partagés avec
+    // l'utilisateur (équipe) — chacun avec le rôle qu'il y tient.
     const result = await query(
-      `SELECT * FROM camille.agents
-       WHERE user_id = $1 AND status != 'archived'
-       ORDER BY created_at DESC`,
+      `SELECT a.* FROM camille.agents a
+       WHERE ${await sqlAgentAccessible("a", "$1")} AND a.status != 'archived'
+       ORDER BY (a.user_id = $1) DESC, a.created_at DESC`,
       [user.id]
     );
-    return NextResponse.json({ agents: result.rows.map(rowToAgent) });
+    const roles = new Map((await agentsAccessibles(user.id)).map((x) => [x.id, x.role]));
+    return NextResponse.json({
+      agents: result.rows.map((row) => ({ ...rowToAgent(row), role: roles.get(row.id) ?? "proprietaire" })),
+    });
   } catch (err) {
     console.error("[GET /api/agents]", err);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

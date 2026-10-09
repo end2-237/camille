@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 import { sendOrderDocument, sendThankYou } from "@/lib/facturation";
 import { restoreStock } from "@/lib/orders";
 import { ORDER_STATUSES, statusLabel, statusStep } from "@/lib/orderStatus";
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
                       a.location       AS shop_location
                  FROM camille.orders o
                  JOIN camille.agents a ON a.id = o.agent_id
-                WHERE o.id = $1 AND a.user_id = $2`;
+                WHERE o.id = $1 AND ${await sqlAgentAccessible("a", "$2")}`;
 
   let order: Record<string, unknown> | undefined;
   try {
@@ -96,7 +97,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
                                 THEN COALESCE(o.delivered_at, NOW()) ELSE o.delivered_at END,
            updated_at    = NOW()
       FROM camille.agents a
-     WHERE o.agent_id = a.id AND a.user_id = $3 AND o.id = $4
+     WHERE o.agent_id = a.id AND ${await sqlAgentAccessible("a", "$3")} AND o.id = $4
      RETURNING o.*`;
 
   // Repli si les colonnes de suivi n'ont pas encore été migrées (dispatched_at
@@ -106,7 +107,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     UPDATE camille.orders o
        SET status = $1, note = COALESCE($2, o.note), updated_at = NOW()
       FROM camille.agents a
-     WHERE o.agent_id = a.id AND a.user_id = $3 AND o.id = $4
+     WHERE o.agent_id = a.id AND ${await sqlAgentAccessible("a", "$3")} AND o.id = $4
      RETURNING o.*`;
 
   // Statut AVANT la mise à jour : c'est lui qui dit si l'on entre dans
@@ -117,7 +118,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     const b = await query(
       `SELECT o.status, o.items, o.agent_id
          FROM camille.orders o JOIN camille.agents a ON a.id = o.agent_id
-        WHERE o.id = $1 AND a.user_id = $2`,
+        WHERE o.id = $1 AND ${await sqlAgentAccessible("a", "$2")}`,
       [orderId, user.id]
     );
     before = b.rows[0] || {};

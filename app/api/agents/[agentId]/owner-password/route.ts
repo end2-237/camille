@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { getUserFromRequest } from "@/lib/auth-server";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
@@ -33,11 +34,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   // Verify agent ownership
-  const check = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2",
-    [agentId, user.id]
-  );
-  if (check.rows.length === 0) {
+  if (!(await peut(user.id, agentId, "reglages"))) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 
@@ -47,8 +44,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     await query(
       `UPDATE camille.agents
        SET owner_password_hash = $1, updated_at = NOW()
-       WHERE id = $2 AND user_id = $3`,
-      [hash, agentId, user.id]
+       WHERE id = $2`,
+      [hash, agentId]
     );
 
     return NextResponse.json({ success: true });
@@ -65,11 +62,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
   const { agentId } = await params;
 
-  const check = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2",
-    [agentId, user.id]
-  );
-  if (check.rows.length === 0) {
+  if (!(await peut(user.id, agentId, "reglages"))) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 
@@ -77,8 +70,8 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     await query(
       `UPDATE camille.agents
        SET owner_password_hash = NULL, updated_at = NOW()
-       WHERE id = $1 AND user_id = $2`,
-      [agentId, user.id]
+       WHERE id = $1`,
+      [agentId]
     );
 
     // Invalider toutes les sessions propriétaire actives de cet agent

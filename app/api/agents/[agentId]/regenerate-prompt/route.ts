@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { generateSystemPrompt } from "@/lib/generateSystemPrompt";
 import type { AgentFormData } from "@/types/agent";
 
@@ -21,13 +22,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const { agentId } = await params;
 
+  if (!(await peut(user.id, agentId, "reglages"))) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   const r = await query(
     `SELECT name, agent_tagline, brand_voice, primary_language, secondary_languages,
             business_name, sector, description, website_url, location, latitude, longitude, target_audience,
             products_services, pricing_info, business_hours, policies, faq, forbidden_topics,
             target_model, level, out_of_scope_behavior, welcome_enabled, welcome_message
-     FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'`,
-    [agentId, user.id]
+     FROM camille.agents WHERE id = $1 AND status != 'archived'`,
+    [agentId]
   );
   if (!r.rows.length) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   const a = r.rows[0];
@@ -62,8 +64,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   });
 
   await query(
-    "UPDATE camille.agents SET compiled_prompt = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3",
-    [cfg.compiled_prompt, agentId, user.id]
+    "UPDATE camille.agents SET compiled_prompt = $1, updated_at = NOW() WHERE id = $2",
+    [cfg.compiled_prompt, agentId]
   );
 
   return NextResponse.json({ success: true, level: a.level ?? 1, tokens: cfg.estimated_tokens });

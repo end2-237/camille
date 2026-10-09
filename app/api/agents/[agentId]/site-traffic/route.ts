@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -21,11 +22,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { agentId } = await ctx.params;
-  const owned = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2",
-    [agentId, user.id]
-  );
-  if (!owned.rows.length) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
+  if (!(await peut(user.id, agentId, "voir"))) return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
 
   const days = Math.min(90, Math.max(1, Number(req.nextUrl.searchParams.get("days")) || 7));
   const since = `${days} days`;

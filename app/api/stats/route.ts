@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest }                         from "@/lib/auth-server";
 import { query }                                      from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 import { currentPeriod }                              from "@/lib/plans";
 import { getPlanLimitDB, isUnlimitedTokens }          from "@/lib/plans-db";
 import { wahaAnalytics }                              from "@/lib/waha";
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
     const agentsRes = await safe(
       `SELECT ${AGENT_STATS_COLUMNS}
        FROM camille.agents
-       WHERE user_id = $1
+       WHERE ${await sqlAgentAccessible("camille.agents", "$1")}
        ORDER BY created_at DESC`,
       [user.id]
     );

@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { wahaGetQR } from "@/lib/waha";
 
 export async function GET(req: NextRequest) {
@@ -28,10 +29,10 @@ export async function GET(req: NextRequest) {
     if (!sessionName) return NextResponse.json({ error: "session requis" }, { status: 400 });
 
     const check = await query(
-      "SELECT session_name FROM camille.whatsapp_sessions WHERE session_name = $1 AND user_id = $2",
-      [sessionName, user.id]
+      "SELECT session_name, agent_id FROM camille.whatsapp_sessions WHERE session_name = $1",
+      [sessionName]
     );
-    if (check.rows.length === 0) {
+    if (check.rows.length === 0 || !(await peut(user.id, check.rows[0].agent_id, "reglages", { archives: true }))) {
       return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
     }
 

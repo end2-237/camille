@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { appelInterne, refusInterne } from "@/lib/interne";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 import { notifyUser } from "@/lib/fcm";
 import { envoyerTexte } from "@/lib/whatsapp/envoi";
 
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
   notifyUser(agent.user_id, "alerte", {
     title: `${KINDS[kind]} — ${agent.business_name || "ton agent"}`,
     body: message.slice(0, 120),
-    data: { type: "complaint", id, phone },
+    data: { type: "complaint", id, phone, agentId },
   }).catch(() => {});
 
   return NextResponse.json({ ok: true, id }, { status: 201 });
@@ -124,7 +125,7 @@ export async function GET(req: NextRequest) {
 
   const status = req.nextUrl.searchParams.get("status"); // active | done | (tous)
   const params: unknown[] = [user.id];
-  let where = "WHERE a.user_id = $1 AND t.type = 'complaint'";
+  let where = `WHERE ${await sqlAgentAccessible("a", "$1")} AND t.type = 'complaint'`;
   if (status) {
     params.push(status);
     where += ` AND t.status = $${params.length}`;
@@ -178,7 +179,7 @@ export async function PATCH(req: NextRequest) {
         `SELECT t.agent_id, t.phone
            FROM camille.owner_tasks t
            JOIN camille.agents a ON a.id = t.agent_id
-          WHERE t.id = $1 AND a.user_id = $2`,
+          WHERE t.id = $1 AND ${await sqlAgentAccessible("a", "$2")}`,
         [id, user.id]
       );
       const t = own.rows[0];
@@ -212,7 +213,7 @@ export async function PATCH(req: NextRequest) {
       `UPDATE camille.owner_tasks t
           SET status = $1
          FROM camille.agents a
-        WHERE t.id = $2 AND t.agent_id = a.id AND a.user_id = $3
+        WHERE t.id = $2 AND t.agent_id = a.id AND ${await sqlAgentAccessible("a", "$3")}
       RETURNING t.id, t.status, t.agent_id, t.phone`,
       [status, id, user.id]
     );

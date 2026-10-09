@@ -21,6 +21,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import * as meta from "@/lib/whatsapp/meta";
 import { avecAgent } from "@/lib/whatsapp/identifiants";
 import { reconcilier } from "@/lib/whatsapp/catalogue-sync";
@@ -29,10 +30,11 @@ import { reconcilier } from "@/lib/whatsapp/catalogue-sync";
 async function proprietaire(req: NextRequest, agentId: string) {
   const user = await getUserFromRequest(req);
   if (!user) return null;
+  if (!(await peut(user.id, agentId, "catalogue"))) return null;
   const r = await query(
     `SELECT id, business_name, website_url FROM camille.agents
-      WHERE id = $1 AND user_id = $2 AND status != 'archived'`,
-    [agentId, user.id]
+      WHERE id = $1 AND status != 'archived'`,
+    [agentId]
   );
   return r.rows[0] || null;
 }

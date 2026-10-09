@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { getUserFromRequest } from "@/lib/auth-server";
 
 export async function POST(req: NextRequest) {
@@ -19,10 +20,10 @@ export async function POST(req: NextRequest) {
 
   // Verify ownership and fetch token for revocation
   const result = await query(
-    "SELECT google_refresh_token FROM camille.agents WHERE id = $1 AND user_id = $2",
-    [agentId, user.id]
+    "SELECT google_refresh_token FROM camille.agents WHERE id = $1",
+    [agentId]
   );
-  if (result.rows.length === 0) {
+  if (result.rows.length === 0 || !(await peut(user.id, agentId, "reglages"))) {
     return NextResponse.json({ error: "Agent introuvable" }, { status: 404 });
   }
 

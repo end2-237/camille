@@ -297,6 +297,8 @@ export interface AgentFormData {
 export interface Agent {
   id: UUID;
   user_id: UUID;
+  /** Rôle de l'utilisateur connecté sur cet agent (équipe). Absent = propriétaire. */
+  role?: "proprietaire" | "gerant" | "vendeur";
 
   identity: AgentIdentity;
   business_context: BusinessContext;

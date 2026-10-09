@@ -6,16 +6,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { peut } from "@/lib/equipe";
 import { generateKey, hashKey } from "@/lib/publicApi";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-async function owns(agentId: string, userId: string) {
-  const r = await query(
-    "SELECT id FROM camille.agents WHERE id = $1 AND user_id = $2 AND status != 'archived'",
-    [agentId, userId]
-  );
-  return r.rows.length > 0;
+function owns(agentId: string, userId: string) {
+  return peut(userId, agentId, "reglages");
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
@@ -84,8 +81,8 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
   try {
     await query(
-      "UPDATE camille.api_keys SET revoked_at = NOW() WHERE id = $1 AND agent_id = $2 AND user_id = $3",
-      [b.id, agentId, user.id]
+      "UPDATE camille.api_keys SET revoked_at = NOW() WHERE id = $1 AND agent_id = $2",
+      [b.id, agentId]
     );
     return NextResponse.json({ ok: true });
   } catch (e) {

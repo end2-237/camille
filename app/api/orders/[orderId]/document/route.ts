@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 import { sendOrderDocument } from "@/lib/facturation";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       `SELECT o.id, o.doc_url, o.doc_number
          FROM camille.orders o
          JOIN camille.agents a ON a.id = o.agent_id
-        WHERE o.id = $1 AND a.user_id = $2`,
+        WHERE o.id = $1 AND ${await sqlAgentAccessible("a", "$2")}`,
       [orderId, user.id]
     );
     order = r.rows[0];

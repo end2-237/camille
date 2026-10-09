@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
+import { sqlAgentAccessible } from "@/lib/equipe";
 import { AGENT_STATS_COLUMNS } from "@/lib/stats-agents";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
   // Exactement les colonnes que /api/stats demande : si une seule a disparu du
   // schema, l'echec doit apparaitre ici plutot que de se traduire en zeros.
   const agents = await probe(
-    `SELECT ${AGENT_STATS_COLUMNS} FROM camille.agents WHERE user_id = $1`,
+    `SELECT ${AGENT_STATS_COLUMNS} FROM camille.agents WHERE ${await sqlAgentAccessible("camille.agents", "$1")}`,
     [user.id]
   );
   const agentIds = agents.rows.map((a) => a.id);
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
   );
 
   const sessions = await probe(
-    `SELECT agent_id, session_name, status FROM camille.whatsapp_sessions WHERE user_id = $1`,
+    `SELECT agent_id, session_name, status FROM camille.whatsapp_sessions WHERE agent_id IN (SELECT a.id FROM camille.agents a WHERE ${await sqlAgentAccessible("a", "$1")})`,
     [user.id]
   );
 
