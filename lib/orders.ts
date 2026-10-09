@@ -131,9 +131,10 @@ type RuptureLine = { name: string; demande: number; dispo: number };
 async function applyStock(
   agentId: string,
   items: NewOrderItem[]
-): Promise<{ low: LowLine[]; ruptures: RuptureLine[] }> {
+): Promise<{ low: LowLine[]; ruptures: RuptureLine[]; touches: string[] }> {
   const low: LowLine[] = [];
   const ruptures: RuptureLine[] = [];
+  const touches = new Set<string>();
 
   for (const it of items) {
     const qty = Math.max(1, Number(it.qty) || 1);
@@ -153,21 +154,26 @@ async function applyStock(
                FROM camille.products avant
               WHERE avant.id = p.id
                 AND p.id = $2 AND p.agent_id = $3 AND p.stock IS NOT NULL
-            RETURNING p.name, p.stock, avant.stock AS stock_avant`,
+            RETURNING p.id::text AS id, p.name, p.stock, avant.stock AS stock_avant`,
             [qty, it.productId, agentId]
           )
         : await query(
+            // Par le nom, seulement s'il est UNIQUE : deux articles « Tasse »
+            // auraient tous deux perdu une unité pour une seule vendue.
             `UPDATE camille.products p
                 SET stock = GREATEST(0, p.stock - $1), updated_at = NOW()
                FROM camille.products avant
               WHERE avant.id = p.id
                 AND p.agent_id = $2 AND lower(p.name) = lower($3) AND p.stock IS NOT NULL
-            RETURNING p.name, p.stock, avant.stock AS stock_avant`,
+                AND (SELECT COUNT(*) FROM camille.products d
+                      WHERE d.agent_id = $2 AND lower(d.name) = lower($3)) = 1
+            RETURNING p.id::text AS id, p.name, p.stock, avant.stock AS stock_avant`,
             [qty, agentId, String(it.name || "")]
           );
 
       const row = r.rows[0];
       if (!row) continue;
+      if (row.id) touches.add(String(row.id));
 
       const apres = Number(row.stock);
       const avant = Number(row.stock_avant);
@@ -187,7 +193,19 @@ async function applyStock(
     }
   }
 
-  return { low, ruptures };
+  return { low, ruptures, touches: [...touches] };
+}
+
+/**
+ * Le stock vient de bouger : Meta doit le savoir. Sans ça, un article tombé à
+ * zéro restait « en stock » dans le catalogue WhatsApp, et le client pouvait
+ * le remettre au panier. En arrière-plan : la commande ne l'attend pas.
+ */
+function signalerAMeta(agentId: string, ids: string[]) {
+  if (!ids.length) return;
+  import("@/lib/whatsapp/catalogue-sync")
+    .then((m) => m.rafraichirChezMeta(agentId, ids))
+    .catch((e) => console.error("[stock] Meta non prévenu :", e instanceof Error ? e.message : e));
 }
 
 /**
@@ -201,24 +219,29 @@ async function applyStock(
  * marchandise serait recréditée deux fois.
  */
 export async function restoreStock(agentId: string, items: NewOrderItem[]) {
+  const touches: string[] = [];
   for (const it of items) {
     const qty = Math.max(1, Number(it.qty) || 1);
     try {
-      if (it.productId) {
-        await query(
-          `UPDATE camille.products SET stock = stock + $1, updated_at = NOW()
-            WHERE id = $2 AND agent_id = $3 AND stock IS NOT NULL`,
-          [qty, it.productId, agentId]
-        );
-      } else {
-        await query(
-          `UPDATE camille.products SET stock = stock + $1, updated_at = NOW()
-            WHERE agent_id = $2 AND lower(name) = lower($3) AND stock IS NOT NULL`,
-          [qty, agentId, String(it.name || "")]
-        );
-      }
+      const r = it.productId
+        ? await query(
+            `UPDATE camille.products SET stock = stock + $1, updated_at = NOW()
+              WHERE id = $2 AND agent_id = $3 AND stock IS NOT NULL
+            RETURNING id::text AS id`,
+            [qty, it.productId, agentId]
+          )
+        : await query(
+            `UPDATE camille.products p SET stock = stock + $1, updated_at = NOW()
+              WHERE agent_id = $2 AND lower(name) = lower($3) AND stock IS NOT NULL
+                AND (SELECT COUNT(*) FROM camille.products d
+                      WHERE d.agent_id = $2 AND lower(d.name) = lower($3)) = 1
+            RETURNING id::text AS id`,
+            [qty, agentId, String(it.name || "")]
+          );
+      for (const row of r.rows) touches.push(String(row.id));
     } catch { /* produit supprimé depuis : rien à recréditer */ }
   }
+  signalerAMeta(agentId, touches);
 }
 
 
@@ -304,7 +327,8 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
   // Une commande enregistrée sort la marchandise : sans ce décompte, le
   // catalogue annonçait indéfiniment des quantités déjà vendues, et l'agent
   // continuait de proposer des articles épuisés.
-  const { low: lowStock, ruptures } = await applyStock(input.agentId, items);
+  const { low: lowStock, ruptures, touches } = await applyStock(input.agentId, items);
+  signalerAMeta(input.agentId, touches);
 
   const ag = await query(
     // business_hours sert à ne pas promettre un rappel immédiat la nuit.

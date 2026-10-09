@@ -135,6 +135,10 @@ export type Produit = {
   variantes?: VarianteAffichable[];
   /** Les options du plat (accompagnement, sauce…), demandées après le panier. */
   groupes?: GroupeOptions[];
+  /** Lu dans camille.products (et non dans le catalogue Meta) : son stock fait foi. */
+  deCamille?: boolean;
+  /** Désactivé par le commerçant (lu seulement pour vérifier un panier). */
+  actif?: boolean;
 };
 
 /**
@@ -191,18 +195,21 @@ function money(n: number, cur = "XAF"): string {
  * Un article épuisé n'est jamais renvoyé : proposer ce qu'on ne peut pas
  * honorer est la faute qui coûte un client.
  */
-async function catalogue(agentId: string): Promise<Produit[]> {
+async function catalogue(agentId: string, tous = false): Promise<Produit[]> {
   try {
+    // `tous` : aussi les épuisés et les désactivés, pour vérifier un panier —
+    // un article commandé puis tombé à zéro doit être reconnu, et signalé.
     const r = await query(
       `SELECT id, name, price, COALESCE(currency,'XAF') AS currency, category, stock, image_url,
+              COALESCE(active, true) AS actif,
               to_jsonb(p)->>'meta_retailer_id' AS retailer,
               COALESCE(to_jsonb(p)->'variants', '[]'::jsonb) AS variants,
               COALESCE(to_jsonb(p)->'options', '[]'::jsonb) AS options
          FROM camille.products p
-        WHERE agent_id = $1 AND active = true
+        WHERE agent_id = $1 AND (COALESCE(active, true) = true OR $2::boolean)
         ORDER BY sort_order ASC, created_at DESC
-        LIMIT 100`,
-      [agentId]
+        LIMIT ${tous ? 5000 : 100}`,
+      [agentId, tous]
     );
     const mappes = r.rows
       .filter((x: Record<string, unknown>) => x.retailer)
@@ -214,6 +221,8 @@ async function catalogue(agentId: string): Promise<Produit[]> {
         category: (x.category as string) || null,
         stock: x.stock != null ? Number(x.stock) : null,
         image_url: (x.image_url as string) || null,
+        deCamille: true,
+        actif: x.actif !== false,
         variants: Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null,
         groupes: normaliserOptions(x.options),
         ...optionsDe(Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null),
@@ -237,7 +246,7 @@ async function catalogue(agentId: string): Promise<Produit[]> {
               )
             : String(x.retailer),
       }))
-      .filter((p) => p.stock == null || p.stock > 0);
+      .filter((p) => tous || p.stock == null || p.stock > 0);
     if (mappes.length) return mappes;
   } catch { /* colonne absente ou base non migrée : on lit chez Meta */ }
 
@@ -661,27 +670,93 @@ function recapPanier(items: LignePanier[], cur: string): { texte: string; total:
   return { texte: items.map((l) => `• ${l.qty} × ${l.name}${l.variant ? ` (${l.variant})` : ""}`).join("\n"), total };
 }
 
+/** En dessous, on prévient le client que l'article part vite (même seuil que le commerçant). */
+const STOCK_FAIBLE = Number(process.env.LOW_STOCK_THRESHOLD || 5);
+
+/**
+ * Ajuste le panier au stock réel et le dit au client, en lui MONTRANT l'article :
+ *   • épuisé ou désactivé → retiré du panier ;
+ *   • moins que demandé  → quantité ramenée à ce qui reste ;
+ *   • stock faible       → gardé tel quel, mais on prévient qu'il en reste peu.
+ * Les variations d'un même produit partagent son stock.
+ */
+async function verifierStock(
+  ctx: Contexte, lignes: LignePanier[], trouves: (Produit | undefined)[]
+): Promise<LignePanier[]> {
+  const { agent, phone } = ctx;
+  const restant = new Map<string, number>();
+  const avis: { image?: string | null; texte: string }[] = [];
+  const gardees: LignePanier[] = [];
+
+  lignes.forEach((l, k) => {
+    const p = trouves[k];
+    // Article du catalogue Meta seul, ou stock non suivi : rien à vérifier.
+    if (!p?.deCamille || (p.stock == null && p.actif !== false)) { gardees.push(l); return; }
+    const nom = `*${l.name}*${l.variant ? ` (${l.variant})` : ""}`;
+    const reste = restant.has(p.id) ? restant.get(p.id)! : p.actif === false ? 0 : Math.max(0, p.stock ?? 0);
+
+    if (reste <= 0) {
+      avis.push({ image: p.image_url, texte: `${nom} est épuisé pour le moment 😕 Je l'ai retiré de ton panier.` });
+      return;
+    }
+    if (l.qty > reste) {
+      avis.push({
+        image: p.image_url,
+        texte: `Stock faible pour ${nom} : il n'en reste que *${reste}* pour le moment. ` +
+          `Tu en voulais ${l.qty}, j'ai ajusté ton panier à ${reste}.`,
+      });
+      gardees.push({ ...l, qty: reste });
+      restant.set(p.id, 0);
+      return;
+    }
+    if (reste <= STOCK_FAIBLE) {
+      avis.push({
+        image: p.image_url,
+        texte: `Bonne nouvelle, ${nom} est encore disponible — mais le stock est faible : ` +
+          `plus que *${reste}* pour le moment.`,
+      });
+    }
+    gardees.push(l);
+    restant.set(p.id, reste - l.qty);
+  });
+
+  // La photo d'abord : le client reconnaît l'article sans relire son panier.
+  // Trois photos au plus, le reste en un seul message.
+  const enImage = avis.filter((a) => a.image).slice(0, 3);
+  const enTexte = avis.filter((a) => !enImage.includes(a));
+  for (const a of enImage) {
+    const r = await meta.sendImage(phone, a.image!, a.texte);
+    if (!r.ok) enTexte.push(a);
+  }
+  if (enTexte.length) await meta.sendText(phone, enTexte.map((a) => a.texte).join("\n\n"));
+  for (const a of avis) await tracer(agent.id, phone, "assistant", `[stock] ${a.texte}`);
+  return gardees;
+}
+
 /** Le panier natif reçu : on le met de côté, puis on pose les questions utiles. */
 async function recevoirPanier(ctx: Contexte, resto: boolean) {
   const { agent, msg, phone } = ctx;
   const items = msg.order?.items || [];
   if (!items.length) return;
 
-  const prods = await catalogue(agent.id);
+  const prods = await catalogue(agent.id, true);
   const parRetailer = new Map(prods.map((p) => [p.retailerId, p]));
 
-  const lignes: LignePanier[] = items.map((it) => {
+  const trouves = items.map((it) =>
     // Une commande de VARIATION porte « <produit>:<option> ». C'est le PARENT
     // qui tient le stock : sans ce repli, une commande de variation ne
     // décompterait rien — le défaut d'origine, rouvert par une autre porte.
-    const p =
-      parRetailer.get(it.retailerId) ||
-      parRetailer.get(produitParent(it.retailerId)) ||
-      prods.find((x) => x.id === produitParent(it.retailerId));
+    parRetailer.get(it.retailerId) ||
+    parRetailer.get(produitParent(it.retailerId)) ||
+    prods.find((x) => x.id === produitParent(it.retailerId))
+  );
+
+  const toutes: LignePanier[] = items.map((it, k) => {
+    const p = trouves[k];
     return {
       // Quand le produit vient de Camille, on passe son vrai identifiant :
       // c'est lui qui permet de décompter le stock.
-      productId: p && p.id !== p.retailerId ? p.id : undefined,
+      productId: p?.deCamille ? p.id : undefined,
       name: p?.name || it.retailerId,
       // La variation choisie (« Noir », « 42 »…) : sans elle, le commerçant
       // ne sait pas laquelle préparer.
@@ -695,6 +770,20 @@ async function recevoirPanier(ctx: Contexte, resto: boolean) {
       ...(p?.groupes?.length ? { groupes: p.groupes } : {}),
     };
   });
+
+  // ── Le stock, vérifié AVANT de poser la moindre question ────────────────
+  // WhatsApp laisse mettre au panier ce que Meta croit en stock. Mieux vaut
+  // le dire tout de suite, photo à l'appui, que d'encaisser une commande que
+  // le commerçant devra annuler.
+  const lignes = await verifierStock(ctx, toutes, trouves);
+  if (!lignes.length) {
+    await meta.sendText(
+      phone,
+      "Rien de ce panier n'est disponible pour le moment 😕\nDis-moi ce que tu cherches, je te propose ce qu'on a en rayon."
+    );
+    await tracer(agent.id, phone, "assistant", "[panier] entièrement épuisé");
+    return;
+  }
 
   const panier: PanierEnAttente = {
     etape: "mode", items: lignes, note: msg.order?.note || "", contactName: msg.contactName || "",

@@ -731,7 +731,7 @@ export type MetaCatalogItem = {
  * ou un produit en `out of stock` fait échouer l'envoi d'une fiche, et le
  * message d'erreur de Meta ne dit pas lequel.
  */
-export async function listCatalog(catalogId = catalogueId(), limit = 50): Promise<{
+export async function listCatalog(catalogId = catalogueId(), max = 2000): Promise<{
   ok: boolean; items: MetaCatalogItem[]; error?: string;
 }> {
   if (!jeton() || !catalogId) return { ok: false, items: [], error: "WHATSAPP_TOKEN ou CATALOG_ID absent" };
@@ -739,19 +739,27 @@ export async function listCatalog(catalogId = catalogueId(), limit = 50): Promis
     const fields =
       "retailer_id,name,price,availability,image_url,description,capability_to_review_status," +
       "product_group{id},color,size,pattern,material,custom_label_0";
-    const res = await fetch(
-      `https://graph.facebook.com/${GRAPH}/${catalogId}/products?fields=${fields}&limit=${limit}`,
-      { headers: { Authorization: `Bearer ${jeton()}` } }
-    );
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const err = (json.error || {}) as { message?: string };
-      return { ok: false, items: [], error: err.message || `HTTP ${res.status}` };
-    }
-    const items = ((json.data || []) as (MetaCatalogItem & {
+    // TOUTES les pages. On ne lisait que les 50 premiers articles : au-delà,
+    // la réconciliation ne voyait rien — ni doublons à retirer, ni articles à
+    // relier — et les réimportait parfois en croyant les découvrir.
+    const bruts: (MetaCatalogItem & {
       capability_to_review_status?: { key: string; value: string }[];
       product_group?: { id?: string } | null;
-    })[]).map((it) => {
+    })[] = [];
+    let url: string | null =
+      `https://graph.facebook.com/${GRAPH}/${catalogId}/products?fields=${fields}&limit=250`;
+    while (url && bruts.length < max) {
+      const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${jeton()}` } });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = (json.error || {}) as { message?: string };
+        return { ok: false, items: [], error: err.message || `HTTP ${res.status}` };
+      }
+      bruts.push(...(json.data || []));
+      const suivant = json.paging?.next as string | undefined;
+      url = suivant && suivant !== url ? suivant : null;
+    }
+    const items = bruts.slice(0, max).map((it) => {
       const wa = (it.capability_to_review_status || []).find((c) => c.key === "WHATSAPP");
       return {
         ...it,
@@ -767,6 +775,81 @@ export async function listCatalog(catalogId = catalogueId(), limit = 50): Promis
   } catch (e) {
     return { ok: false, items: [], error: (e as Error).message };
   }
+}
+
+/**
+ * Tous les articles Meta du même produit que `retailerId` : lui seul, ou toutes
+ * les variations de son groupe. Pour mettre à jour (ou retirer) un article
+ * importé de Meta sans relire tout le catalogue.
+ *
+ * `ok: false` si Meta n'a pas répondu — à distinguer d'un article absent
+ * (`ok: true`, liste vide), sinon on republierait en double un article
+ * simplement injoignable.
+ */
+export async function membresDuGroupe(
+  retailerId: string, catalogId = catalogueId()
+): Promise<{ ok: boolean; ids: string[] }> {
+  if (!jeton() || !catalogId || !retailerId) return { ok: false, ids: [] };
+  try {
+    const filtre = encodeURIComponent(JSON.stringify({ retailer_id: { eq: retailerId } }));
+    const r = await fetch(
+      `https://graph.facebook.com/${GRAPH}/${catalogId}/products?fields=retailer_id,product_group{id}&filter=${filtre}&limit=5`,
+      { headers: { Authorization: `Bearer ${jeton()}` } }
+    );
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, ids: [] };
+    const it = ((j.data || []) as { retailer_id?: string; product_group?: { id?: string } }[])
+      .find((x) => x.retailer_id === retailerId);
+    if (!it) return { ok: true, ids: [] };
+    const groupe = it.product_group?.id;
+    if (!groupe) return { ok: true, ids: [retailerId] };
+    const g = await fetch(
+      `https://graph.facebook.com/${GRAPH}/${groupe}/products?fields=retailer_id&limit=250`,
+      { headers: { Authorization: `Bearer ${jeton()}` } }
+    );
+    const gj = await g.json().catch(() => ({}));
+    if (!g.ok) return { ok: true, ids: [retailerId] };
+    const ids = ((gj.data || []) as { retailer_id?: string }[]).map((x) => String(x.retailer_id || "")).filter(Boolean);
+    return { ok: true, ids: ids.length ? [...new Set([retailerId, ...ids])] : [retailerId] };
+  } catch {
+    return { ok: false, ids: [] };
+  }
+}
+
+/** Meta accepte de gros lots, mais un lot énorme qui échoue échoue en entier. */
+const TAILLE_LOT = 500;
+
+async function envoyerLots(
+  catalogId: string, requests: Record<string, unknown>[]
+): Promise<{ ok: boolean; envoyes: number; erreurs: string[]; error?: string }> {
+  const erreurs: string[] = [];
+  let envoyes = 0;
+  for (let i = 0; i < requests.length; i += TAILLE_LOT) {
+    const lot = requests.slice(i, i + TAILLE_LOT);
+    const res = await fetch(`https://graph.facebook.com/${GRAPH}/${catalogId}/items_batch`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${jeton()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ item_type: "PRODUCT_ITEM", requests: lot }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = (j.error || {}) as {
+        message?: string; error_user_msg?: string; error_data?: { details?: string };
+      };
+      return {
+        ok: false, envoyes, erreurs,
+        error: [err.error_user_msg, err.error_data?.details, err.message].filter(Boolean).join(" — ") || `HTTP ${res.status}`,
+      };
+    }
+    // Meta renvoie ses propres remarques par article : on les fait remonter.
+    for (const v of (j.validation_status || []) as {
+      retailer_id?: string; errors?: { message?: string }[];
+    }[]) {
+      for (const e of v.errors || []) erreurs.push(`${v.retailer_id} : ${e.message}`);
+    }
+    envoyes += lot.length;
+  }
+  return { ok: true, envoyes, erreurs };
 }
 
 // ── Synchronisation : camille.products → catalogue Meta ─────────────────────
@@ -786,6 +869,13 @@ export type ProduitASyncer = {
   variants?: AxeVariante[] | null;
   /** Les photos en plus de l'image principale (colonne `images`). */
   images?: string[] | null;
+  /**
+   * Article IMPORTÉ de Meta : ses identifiants chez Meta, à mettre à jour sur
+   * place (prix, stock, disponibilité). On ne le republie pas sous son
+   * identifiant Camille : ce serait un doublon dans WhatsApp, à faire
+   * réexaminer par Meta, pendant que l'original resterait en vente.
+   */
+  retailerIds?: string[] | null;
 };
 
 /**
@@ -838,32 +928,30 @@ export async function syncCatalogue(
   if (!produits.length) return { ok: true, envoyes: 0, avertissements: [] };
 
   // Meta refuse un produit sans image ni prix : autant le dire plutôt que de
-  // laisser la synchronisation échouer en bloc.
+  // laisser la synchronisation échouer en bloc. Un article importé n'a besoin
+  // que de son prix : son image est déjà chez Meta.
   const avertissements: string[] = [];
   const valides = produits.filter((p) => {
+    if (p.price == null || !(Number(p.price) >= 0)) { avertissements.push(`${p.name} : pas de prix, non synchronisé`); return false; }
+    if (p.retailerIds?.length) return true;
     if (!p.image_url) { avertissements.push(`${p.name} : pas d'image, non synchronisé`); return false; }
-    if (p.price == null) { avertissements.push(`${p.name} : pas de prix, non synchronisé`); return false; }
     return true;
   });
   if (!valides.length) return { ok: true, envoyes: 0, avertissements };
 
-  // Les axes multiples ne sont PAS multipliés entre eux : le marchand doit
-  // savoir pourquoi, et quoi faire. Voir lib/whatsapp/variantes.ts.
-  for (const p of valides) {
-    const { avertissements: a } = articlesPour(
-      { id: p.id, name: p.name, image_url: p.image_url || null }, p.variants
-    );
-    avertissements.push(...a);
-  }
-
   const requests = valides.flatMap((p) => {
+    if (p.retailerIds?.length) {
+      return p.retailerIds.map((id) => ({ method: "UPDATE", data: { id, ...resteDuProduit(p, options) } }));
+    }
     // Un produit à variations devient PLUSIEURS articles, reliés par
     // item_group_id : c'est ce qui donne au client un sélecteur de couleur au
-    // lieu de quatre fiches séparées.
-    const { articles } = articlesPour(
+    // lieu de quatre fiches séparées. Les axes multiples ne sont PAS
+    // multipliés entre eux : l'avertissement dit au marchand quoi faire.
+    const { articles, avertissements: a } = articlesPour(
       { id: p.id, name: p.name, image_url: p.image_url || null },
       p.variants
     );
+    avertissements.push(...a);
     return articles.map((a) => ({
       method: "UPDATE",
       data: {
@@ -883,32 +971,12 @@ export async function syncCatalogue(
     }));
   });
 
-
   try {
-    const res = await fetch(`https://graph.facebook.com/${GRAPH}/${catalogId}/items_batch`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${jeton()}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ item_type: "PRODUCT_ITEM", requests }),
-    });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const err = (j.error || {}) as {
-        message?: string; error_user_msg?: string; error_data?: { details?: string };
-      };
-      return {
-        ok: false, envoyes: 0, avertissements,
-        error: [err.error_user_msg, err.error_data?.details, err.message].filter(Boolean).join(" — "),
-      };
-    }
-    // Meta renvoie ses propres remarques par produit : on les fait remonter.
-    for (const v of (j.validation_status || []) as {
-      retailer_id?: string; errors?: { message?: string }[]; warnings?: { message?: string }[];
-    }[]) {
-      for (const e of v.errors || []) avertissements.push(`${v.retailer_id} : ${e.message}`);
-    }
+    const r = await envoyerLots(catalogId, requests);
+    avertissements.push(...r.erreurs);
     // `requests.length`, pas `valides.length` : un produit à variations compte
     // pour autant d'articles qu'il a de déclinaisons.
-    return { ok: true, envoyes: requests.length, avertissements };
+    return { ok: r.ok, envoyes: r.envoyes, avertissements, ...(r.error ? { error: r.error } : {}) };
   } catch (e) {
     return { ok: false, envoyes: 0, avertissements, error: (e as Error).message };
   }
@@ -925,27 +993,12 @@ export async function supprimerDuCatalogue(
   retailerIds: string[], catalogId = catalogueId()
 ): Promise<{ ok: boolean; supprimes: number; error?: string }> {
   if (!jeton() || !catalogId) return { ok: false, supprimes: 0, error: "WHATSAPP_TOKEN ou CATALOG_ID absent" };
-  const ids = retailerIds.filter(Boolean);
+  const ids = [...new Set(retailerIds.filter(Boolean))];
   if (!ids.length) return { ok: true, supprimes: 0 };
 
   try {
-    const res = await fetch(`https://graph.facebook.com/${GRAPH}/${catalogId}/items_batch`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${jeton()}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        item_type: "PRODUCT_ITEM",
-        requests: ids.map((id) => ({ method: "DELETE", data: { id } })),
-      }),
-    });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const err = (j.error || {}) as { message?: string; error_data?: { details?: string } };
-      return {
-        ok: false, supprimes: 0,
-        error: [err.error_data?.details, err.message].filter(Boolean).join(" — "),
-      };
-    }
-    return { ok: true, supprimes: ids.length };
+    const r = await envoyerLots(catalogId, ids.map((id) => ({ method: "DELETE", data: { id } })));
+    return { ok: r.ok, supprimes: r.envoyes, ...(r.error ? { error: r.error } : {}) };
   } catch (e) {
     return { ok: false, supprimes: 0, error: (e as Error).message };
   }

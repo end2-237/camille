@@ -25,6 +25,7 @@ import { peut } from "@/lib/equipe";
 import * as meta from "@/lib/whatsapp/meta";
 import { avecAgent } from "@/lib/whatsapp/identifiants";
 import { reconcilier } from "@/lib/whatsapp/catalogue-sync";
+import { idsAttendus, type AxeVariante } from "@/lib/whatsapp/variantes";
 
 /** L'agent appartient-il bien à l'utilisateur connecté ? */
 async function proprietaire(req: NextRequest, agentId: string) {
@@ -41,8 +42,10 @@ async function proprietaire(req: NextRequest, agentId: string) {
 
 const PRODUITS = `
   SELECT id, name, description, price, COALESCE(currency,'XAF') AS currency,
-         image_url, stock, category, active
-    FROM camille.products
+         image_url, stock, category, active,
+         to_jsonb(p)->>'meta_retailer_id' AS lien,
+         COALESCE(to_jsonb(p)->'variants', '[]'::jsonb) AS variants
+    FROM camille.products p
    WHERE agent_id = $1
    ORDER BY sort_order ASC, created_at DESC`;
 
@@ -86,12 +89,25 @@ export async function GET(req: NextRequest) {
       en_attente_whatsapp: met.items.filter((i) => !i.sendable).map((i) => i.retailer_id),
     },
     // Ce que la synchronisation ferait, produit par produit.
-    apercu: cam.rows.map((p: Record<string, unknown>) => ({
+    // Un produit à variations n'existe chez Meta que sous « <id>:<option> »,
+    // un produit importé sous son identifiant Meta : on cherche les trois.
+    apercu: cam.rows.map((p: Record<string, unknown>) => {
+      const ids = [
+        ...(p.lien ? [String(p.lien)] : []),
+        String(p.id),
+        ...idsAttendus(
+          { id: String(p.id), name: String(p.name), image_url: p.image_url as string | null },
+          Array.isArray(p.variants) ? (p.variants as AxeVariante[]) : null
+        ),
+      ];
+      const trouve = ids.map((i) => parId.get(i)).find(Boolean);
+      return {
       name: p.name,
-      synchronise: parId.has(String(p.id)),
-      envoyable: parId.get(String(p.id))?.sendable ?? false,
+      synchronise: Boolean(trouve),
+      envoyable: trouve?.sendable ?? false,
       bloquant: !p.image_url ? "pas d'image" : p.price == null ? "pas de prix" : null,
-    })),
+      };
+    }),
   });
 }
 
