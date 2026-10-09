@@ -559,8 +559,10 @@ export default function PrivacyPage() {
                 Camille utilise un stockage minimal côté navigateur :
               </P>
               <Ul items={[
-                "localStorage : stockage du token d'authentification JWT pour maintenir votre session (aucun cookie de tracking).",
-                "Aucun cookie publicitaire, aucun tracker tiers (Google Analytics, Facebook Pixel, etc.) n'est utilisé.",
+                "Session de connexion : un jeton d'authentification, pour ne pas vous redemander votre mot de passe à chaque page (et, si vous ne cochez pas « Se souvenir de moi », un repère effacé à la fermeture du navigateur).",
+                "Préférences : le thème d'affichage, l'agent sélectionné dans le tableau de bord, votre choix pour les notifications, et le fait que vous avez lu l'information sur ce stockage.",
+                "Tout est gardé dans le stockage local de votre navigateur (localStorage), pas dans des cookies, et n'est jamais lu par un tiers. Ce stockage est strictement nécessaire au service : il ne demande pas de consentement.",
+                "Aucun cookie publicitaire, aucun outil de mesure ni traceur tiers (Google Analytics, Facebook Pixel, etc.) n'est utilisé.",
                 "Aucune donnée n'est partagée avec des régies publicitaires.",
               ]} />
             </Section>
