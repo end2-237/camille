@@ -834,7 +834,7 @@ function BillingContent() {
                       </p>
                       <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>
                         {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}
-                        {p.transaction_id && ` · ${p.transaction_id}`}
+                        {p.transaction_id && (p.transaction_id.startsWith("agence:") ? " · payé en agence" : ` · ${p.transaction_id}`)}
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">

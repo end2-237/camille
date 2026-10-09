@@ -4,6 +4,12 @@
 //   { plan: "pro" }                  → change le plan
 //   { plan_expires_at: "2026-12-31" }→ prolonge (ou "" pour retirer l'échéance)
 //   { action: "restart_session" }    → relance la session WhatsApp
+//   { action: "prolonger", plan?, mois }      → remet l'agent en service pour
+//                                              N mois (ou en enterprise)
+//   { action: "paiement_agence", plan, mois, montant, mode, reference? }
+//                                            → réabonnement payé en agence :
+//                                              paiement enregistré, reçu
+//                                              envoyé, agent prolongé
 //
 // Ce sont exactement les deux choses qu'on faisait à la main dans Postgres et
 // dans camille-core. Les sortir de la console d'administration, c'est éviter
@@ -17,6 +23,40 @@ import { getAdminFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { wahaStartSession } from "@/lib/waha";
 import { getPlansFromDB, type DbPlan } from "@/lib/plans-db";
+import { randomBytes } from "crypto";
+import { sortirDeLEssai } from "@/lib/essai";
+import { envoyerRecu, numeroterRecu } from "@/lib/recu";
+
+const MODES: Record<string, string> = { especes: "espèces", momo: "Mobile Money", virement: "virement", autre: "autre" };
+
+/** Le plan demandé, s'il existe (liste lue en base). */
+async function planConnu(plan: string): Promise<boolean> {
+  const { plans } = await getPlansFromDB().catch(() => ({ plans: [] as DbPlan[] }));
+  const connus = new Set(plans.map((p: DbPlan) => p.id));
+  return !connus.size || connus.has(plan);
+}
+
+/**
+ * Pose le plan et repousse l'échéance de N mois, à partir de la fin en cours si
+ * elle est encore devant (un renouvellement anticipé s'ajoute), sinon
+ * d'aujourd'hui. free et enterprise n'ont pas d'échéance.
+ */
+async function prolonger(agentId: string, plan: string, mois: number) {
+  const r = await query(
+    `UPDATE camille.agents
+        SET plan = $2,
+            plan_expires_at = CASE
+              WHEN $2 IN ('free', 'enterprise') THEN NULL
+              ELSE GREATEST(COALESCE(plan_expires_at, NOW()), NOW()) + ($3 || ' months')::interval
+            END,
+            updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, name, plan, plan_expires_at`,
+    [agentId, plan, String(mois)]
+  );
+  await sortirDeLEssai(agentId);
+  return r.rows[0];
+}
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
@@ -52,6 +92,43 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     } catch (e) {
       return NextResponse.json({ error: `Relance impossible : ${(e as Error).message}` }, { status: 502 });
     }
+  }
+
+  // ── Remise en service / réabonnement en agence ──────────────────────────────
+  if (body.action === "prolonger" || body.action === "paiement_agence") {
+    const plan = String(body.plan || agent.plan || "starter").trim();
+    const mois = Math.round(Number(body.mois) || 1);
+    if (!(await planConnu(plan))) return NextResponse.json({ error: `Plan inconnu : ${plan}` }, { status: 400 });
+    if (mois < 1 || mois > 36) return NextResponse.json({ error: "Durée entre 1 et 36 mois" }, { status: 400 });
+
+    let recu: string | null = null;
+    if (body.action === "paiement_agence") {
+      const montant = Math.round(Number(body.montant));
+      const mode = String(body.mode || "especes");
+      if (!(montant > 0)) return NextResponse.json({ error: "Montant reçu requis" }, { status: 400 });
+      if (!MODES[mode]) return NextResponse.json({ error: "Mode de paiement inconnu" }, { status: 400 });
+      const reference = String(body.reference || "").replace(/:/g, "-").trim().slice(0, 60);
+      const owner = await query(`SELECT user_id FROM camille.agents WHERE id = $1`, [agentId]);
+      const ref = `AGC-${Date.now()}-${randomBytes(3).toString("hex").toUpperCase()}`;
+      // Même table que Monetbil : l'historique, les reçus et les rappels
+      // voient un paiement en agence comme n'importe quel autre.
+      await query(
+        `INSERT INTO camille.payments
+           (id, user_id, agent_id, plan_id, amount, currency, status, transaction_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'XAF', 'success', $6, NOW(), NOW())`,
+        [ref, owner.rows[0].user_id, agentId, plan, montant,
+         `agence:${mode}${reference ? `:${reference}` : ""}:${mois}m:${admin.email}`]
+      );
+      recu = await numeroterRecu(ref);
+      const a = await prolonger(agentId, plan, mois);
+      await envoyerRecu(ref);
+      console.log(`[admin] ${admin.email} a encaissé en agence ${montant} XAF (${MODES[mode]}) pour ${agent.name} : ${plan} ${mois} mois, reçu ${recu ?? ref}`);
+      return NextResponse.json({ ok: true, agent: a, paiement: ref, recu });
+    }
+
+    const a = await prolonger(agentId, plan, mois);
+    console.log(`[admin] ${admin.email} a remis ${agent.name} en service : ${plan}${plan === "free" || plan === "enterprise" ? "" : ` ${mois} mois`}`);
+    return NextResponse.json({ ok: true, agent: a });
   }
 
   // ── Plan et échéance ────────────────────────────────────────────────────────

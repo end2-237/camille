@@ -16,8 +16,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { RefreshCw, ShieldAlert, RotateCw, Check, X, Radio, TrendingUp, Bot, Siren, Eye, HeartPulse, ChevronDown } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { RefreshCw, ShieldAlert, RotateCw, Check, X, Radio, TrendingUp, Bot, Siren, Eye, HeartPulse, ChevronDown, CalendarPlus } from "lucide-react";
+import { getPlanPriceXAF } from "@/lib/plans";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
 import { Bandeau, Bouton, Pastille, Squelettes, StylesUI, TONS, Tuile, Vide, apparait, type Ton } from "@/components/dashboard/ui";
@@ -195,6 +197,7 @@ export default function AdminPage() {
   const [charge, setCharge] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [plateforme, setPlateforme] = useState<Plateforme | null>(null);
+  const [abonnement, setAbonnement] = useState<Ligne | null>(null);
 
   const load = useCallback(async () => {
     setCharge(true);
@@ -391,7 +394,12 @@ export default function AdminPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="admin-actions min-w-0 xl:justify-self-end">
+                    <div className="admin-actions flex min-w-0 flex-wrap gap-2 xl:justify-self-end">
+                      <Bouton variante="encre" icone={CalendarPlus} disabled={occupe}
+                        title="Relancer pour 1 mois ou plus, passer en enterprise, enregistrer un paiement en agence"
+                        onClick={() => setAbonnement(l)}>
+                        Abonnement
+                      </Bouton>
                       <Bouton
                         variante="doux"
                         icone={RotateCw}
@@ -418,6 +426,13 @@ export default function AdminPage() {
         </section>
       </div>
 
+      <AnimatePresence>
+        {abonnement && (
+          <FenetreAbonnement ligne={abonnement} onFermer={() => setAbonnement(null)}
+            onFait={async () => { setAbonnement(null); await load(); }} />
+        )}
+      </AnimatePresence>
+
       <style jsx global>{`
         /* Téléphone : l'agent en tête, puis l'état et l'action, puis les
            trois mesures côte à côte quand la place le permet. */
@@ -443,5 +458,155 @@ function Champ({ libelle, children }: { libelle: string; children: React.ReactNo
       <p className="admin-libelle mb-1 px-1 text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>{libelle}</p>
       {children}
     </div>
+  );
+}
+
+// ── La fenêtre « Abonnement » ───────────────────────────────────────────────
+// Remettre un agent en service (1, 3, 6, 12 mois, ou enterprise sans
+// échéance), et enregistrer un réabonnement payé en agence : le paiement entre
+// dans l'historique du marchand, un reçu numéroté lui part par e-mail.
+
+const DUREES = [1, 3, 6, 12];
+const MODES_PAIEMENT = [
+  { id: "especes", libelle: "Espèces" },
+  { id: "momo", libelle: "Mobile Money" },
+  { id: "virement", libelle: "Virement" },
+  { id: "autre", libelle: "Autre" },
+];
+
+function FenetreAbonnement({ ligne, onFermer, onFait }: { ligne: Ligne; onFermer: () => void; onFait: () => void }) {
+  const [plan, setPlan] = useState(ligne.plan === "free" ? "starter" : ligne.plan);
+  const [mois, setMois] = useState(1);
+  const [agence, setAgence] = useState(false);
+  const [montant, setMontant] = useState("");
+  const [mode, setMode] = useState("especes");
+  const [reference, setReference] = useState("");
+  const [occupe, setOccupe] = useState(false);
+
+  const sansTerme = plan === "enterprise" || plan === "free";
+  const prixMois = Math.max(0, getPlanPriceXAF(plan));
+  useEffect(() => { setMontant(prixMois > 0 ? String(prixMois * mois) : ""); }, [plan, mois, prixMois]);
+
+  // Nouvelle échéance : depuis la fin en cours si elle est encore devant.
+  const base = ligne.plan_expires_at && new Date(ligne.plan_expires_at).getTime() > Date.now()
+    ? new Date(ligne.plan_expires_at) : new Date();
+  const fin = new Date(base); fin.setMonth(fin.getMonth() + mois);
+
+  async function valider() {
+    setOccupe(true);
+    try {
+      const corps = agence
+        ? { action: "paiement_agence", plan, mois, montant: Number(montant), mode, reference }
+        : { action: "prolonger", plan, mois };
+      const r = await fetch(`/api/admin/agents/${ligne.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(corps),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error ?? "Échec");
+      toast.success(agence
+        ? `Paiement enregistré${d.recu ? ` — reçu ${d.recu}` : ""} · ${ligne.business_name || ligne.name} relancé`
+        : `${ligne.business_name || ligne.name} relancé${sansTerme ? ` en ${plan}` : ` pour ${mois} mois`}`);
+      onFait();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setOccupe(false); }
+  }
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[90] flex items-end justify-center p-3 sm:items-center"
+      style={{ background: "rgba(25,23,27,0.38)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onFermer(); }}>
+      <motion.div initial={{ y: 24, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 16, opacity: 0 }} transition={RESSORT}
+        className="w-full max-w-[460px] rounded-[28px] bg-white p-5 sm:p-6" style={{ boxShadow: "0 30px 80px rgba(40,20,110,0.25)" }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[18px] font-medium" style={{ color: "var(--cl-ink)" }}>Abonnement</p>
+            <p className="truncate text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>
+              {ligne.business_name || ligne.name} · {ligne.plan}
+              {ligne.plan_expires_at && ` · ${ligne.plan_expired ? "expiré le" : "jusqu'au"} ${new Date(ligne.plan_expires_at).toLocaleDateString("fr-FR")}`}
+            </p>
+          </div>
+          <button onClick={onFermer} aria-label="Fermer" className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-black/5">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mb-1.5 mt-5 px-1 text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Forfait</p>
+        <div className="grid grid-cols-4 gap-1.5 rounded-full p-1" style={{ background: "#F4F2F7" }}>
+          {PLANS.map((p) => (
+            <button key={p} onClick={() => setPlan(p)} className="rounded-full py-2 text-[13px] capitalize transition"
+              style={{ background: plan === p ? "#fff" : "transparent", color: "var(--cl-ink)", fontWeight: plan === p ? 600 : 400,
+                boxShadow: plan === p ? "0 2px 8px rgba(25,23,27,0.08)" : "none" }}>
+              {p}
+            </button>
+          ))}
+        </div>
+
+        {!sansTerme ? (
+          <>
+            <p className="mb-1.5 mt-4 px-1 text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Durée</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {DUREES.map((n) => (
+                <button key={n} onClick={() => setMois(n)} className="rounded-[14px] py-2.5 text-[13.5px] transition"
+                  style={{ background: mois === n ? "var(--cl-ink)" : "#F4F2F7", color: mois === n ? "#fff" : "var(--cl-ink)" }}>
+                  {n} mois
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 px-1 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+              Actif jusqu&apos;au <b style={{ color: "var(--cl-ink)" }}>{fin.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</b>
+            </p>
+          </>
+        ) : (
+          <p className="mt-3 px-1 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+            {plan === "enterprise" ? "Sans échéance ni limite de tokens : l'agent ne sera jamais coupé automatiquement." : "Forfait gratuit, sans échéance."}
+          </p>
+        )}
+
+        <label className="mt-5 flex cursor-pointer items-center justify-between gap-3 rounded-[18px] px-4 py-3" style={{ background: "#F7F6FA" }}>
+          <span>
+            <span className="block text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>Paiement reçu en agence</span>
+            <span className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Enregistré dans son historique, reçu envoyé par e-mail</span>
+          </span>
+          <input type="checkbox" checked={agence} onChange={(e) => setAgence(e.target.checked)} className="h-5 w-5" style={{ accentColor: "var(--cl-accent-deep)" }} />
+        </label>
+
+        <AnimatePresence initial={false}>
+          {agence && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden">
+              <div className="grid grid-cols-2 gap-2 pt-3">
+                <label className="col-span-2 sm:col-span-1">
+                  <span className="mb-1 block px-1 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>Montant reçu (FCFA)</span>
+                  <input className="ui-champ" inputMode="numeric" value={montant} onChange={(e) => setMontant(e.target.value.replace(/\D/g, ""))} />
+                </label>
+                <label className="col-span-2 sm:col-span-1">
+                  <span className="mb-1 block px-1 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>Mode</span>
+                  <select className="ui-champ" value={mode} onChange={(e) => setMode(e.target.value)}>
+                    {MODES_PAIEMENT.map((m) => <option key={m.id} value={m.id}>{m.libelle}</option>)}
+                  </select>
+                </label>
+                <label className="col-span-2">
+                  <span className="mb-1 block px-1 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>Référence (optionnelle)</span>
+                  <input className="ui-champ" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="N° de transaction, de bordereau…" />
+                </label>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <Bouton onClick={onFermer}>Annuler</Bouton>
+          <Bouton variante="encre" occupe={occupe} disabled={occupe || (agence && !(Number(montant) > 0))} onClick={valider}>
+            {agence ? "Enregistrer et relancer" : "Relancer l'agent"}
+          </Bouton>
+        </div>
+      </motion.div>
+    </motion.div>,
+    document.body
   );
 }

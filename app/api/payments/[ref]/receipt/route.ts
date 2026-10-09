@@ -33,6 +33,15 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const p = r.rows[0];
   if (!p) return NextResponse.json({ error: "Reçu introuvable" }, { status: 404 });
   const numero = (await numeroterRecu(ref)) || ref;
+  // Paiement en agence : transaction_id = agence:<mode>[:<réf>]:<N>m:<admin>
+  const agence = String(p.transaction_id || "").startsWith("agence:");
+  const [, modeAg, ...resteAg] = agence ? String(p.transaction_id).split(":") : [];
+  const refAg = agence && resteAg.length > 2 ? resteAg[0] : "";
+  const moisAg = agence ? Number((resteAg.find((x: string) => /^\d+m$/.test(x)) || "1m").replace("m", "")) : 1;
+  const MODES: Record<string, string> = { especes: "espèces", momo: "Mobile Money", virement: "virement", autre: "autre" };
+  const moyen = agence
+    ? `Paiement en agence (${e(MODES[modeAg] || modeAg)})${refAg ? ` · réf. ${e(refAg)}` : ""}`
+    : `Paiement Mobile Money via Monetbil${p.transaction_id ? ` · transaction ${e(p.transaction_id)}` : ""}`;
   const date = new Date(p.updated_at || p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
@@ -54,10 +63,10 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 </div>
 <p style="margin-top:28px;font-size:14px"><span class="muted">Client</span><br><b>${e(p.full_name || p.email)}</b><br>${e(p.email)}${p.business_name ? `<br>${e(p.business_name)}` : ""}</p>
 <table>
-  <tr><td>Abonnement Camille ${e(getPlanLabel(p.plan_id))} — 1 mois<br><span class="muted">${e(p.agent)}</span></td><td>${e(fcfa(p.amount))}</td></tr>
+  <tr><td>Abonnement Camille ${e(getPlanLabel(p.plan_id))} — ${moisAg} mois<br><span class="muted">${e(p.agent)}</span></td><td>${e(fcfa(p.amount))}</td></tr>
   <tr class="total"><td>Total payé</td><td>${e(fcfa(p.amount))}</td></tr>
 </table>
-<p class="muted" style="font-size:12.5px;margin-top:20px">Paiement Mobile Money via Monetbil${p.transaction_id ? ` · transaction ${e(p.transaction_id)}` : ""} · référence ${e(p.id)}</p>
+<p class="muted" style="font-size:12.5px;margin-top:20px">${moyen} · référence ${e(p.id)}</p>
 <button onclick="window.print()">Imprimer / enregistrer en PDF</button>
 </div></body></html>`;
 
