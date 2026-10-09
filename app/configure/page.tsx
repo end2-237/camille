@@ -1,14 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+// ─────────────────────────────────────────────────────────────────────────────
+// Créer un agent — dans la lignée de la page de connexion : deux colonnes,
+// clair, aux couleurs de Camille.
+//
+// À droite, trois étapes courtes (le commerce, l'agent, la vérification). À
+// gauche, l'aperçu WhatsApp suit chaque frappe : le commerçant voit son agent
+// saluer un client avec son nom, celui de sa boutique et le ton choisi, avant
+// même de l'avoir créé.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Building2, Bot, Rocket, ArrowRight, ArrowLeft, Check,
-  Briefcase, MessageSquare, Globe, Zap,
+  ArrowLeft, ArrowRight, Check, CheckCheck, Loader2, Rocket, ShoppingBag, UtensilsCrossed, Sparkles,
+  HeartPulse, Hotel, GraduationCap, Home, Landmark, Laptop, Briefcase, MoreHorizontal, Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,167 +29,58 @@ import { generateSystemPrompt } from "@/lib/generateSystemPrompt";
 import type { AgentFormData, BusinessSector, BrandTone } from "@/types/agent";
 
 const schema = z.object({
-  business_name: z.string().min(2, "Requis"),
-  sector:        z.string().min(1, "Choisissez un secteur"),
-  description:   z.string().min(10, "Décrivez votre activité en quelques mots"),
-  agent_name:    z.string().min(2, "Requis"),
+  business_name: z.string().trim().min(2, "Le nom de votre commerce"),
+  sector:        z.string().min(1, "Choisissez votre activité"),
+  description:   z.string().trim().min(10, "Quelques mots sur ce que vous vendez (10 caractères au moins)"),
+  agent_name:    z.string().trim().min(2, "Donnez-lui un prénom"),
   brand_voice:   z.enum(["professional", "friendly", "casual", "luxury"]),
 });
-
 type FormData = z.infer<typeof schema>;
 
-const SECTORS = [
-  { value: "ecommerce",       label: "E-Commerce" },
-  { value: "hospitality",     label: "Hôtellerie & Tourisme" },
-  { value: "healthcare",      label: "Santé & Bien-être" },
-  { value: "finance",         label: "Finance & Banque" },
-  { value: "education",       label: "Éducation & Formation" },
-  { value: "food_beverage",   label: "Restauration & Food" },
-  { value: "beauty_wellness", label: "Beauté & Cosmétique" },
-  { value: "real_estate",     label: "Immobilier" },
-  { value: "tech_saas",       label: "Tech & SaaS" },
-  { value: "consulting",      label: "Conseil & Consulting" },
-  { value: "other",           label: "Autre" },
+const SECTEURS: { value: string; label: string; icone: React.ElementType }[] = [
+  { value: "ecommerce",       label: "Boutique",        icone: ShoppingBag },
+  { value: "food_beverage",   label: "Restauration",    icone: UtensilsCrossed },
+  { value: "beauty_wellness", label: "Beauté",          icone: Sparkles },
+  { value: "healthcare",      label: "Santé",           icone: HeartPulse },
+  { value: "hospitality",     label: "Hôtellerie",      icone: Hotel },
+  { value: "education",       label: "Formation",       icone: GraduationCap },
+  { value: "real_estate",     label: "Immobilier",      icone: Home },
+  { value: "finance",         label: "Finance",         icone: Landmark },
+  { value: "tech_saas",       label: "Tech",            icone: Laptop },
+  { value: "consulting",      label: "Conseil",         icone: Briefcase },
+  { value: "other",           label: "Autre",           icone: MoreHorizontal },
 ];
 
-const TONES: { value: FormData["brand_voice"]; label: string; desc: string }[] = [
-  { value: "professional", label: "Professionnel",  desc: "Formel, précis, rassurant" },
-  { value: "friendly",     label: "Amical",          desc: "Chaleureux, accessible, humain" },
-  { value: "casual",       label: "Décontracté",     desc: "Direct, spontané, moderne" },
-  { value: "luxury",       label: "Luxe",            desc: "Élégant, exclusif, raffiné" },
+const TONS: { value: FormData["brand_voice"]; label: string; desc: string }[] = [
+  { value: "friendly",     label: "Amical",        desc: "Chaleureux, proche" },
+  { value: "professional", label: "Professionnel", desc: "Clair, rassurant" },
+  { value: "casual",       label: "Décontracté",   desc: "Direct, spontané" },
+  { value: "luxury",       label: "Haut de gamme", desc: "Élégant, attentionné" },
 ];
 
-const STEPS = [
-  { id: 1, label: "Entreprise", icon: Building2 },
-  { id: 2, label: "Agent",      icon: Bot       },
-  { id: 3, label: "Lancer",     icon: Rocket    },
-];
+const ETAPES = ["Votre commerce", "Votre agent", "C'est parti"];
 
-const SLIDE = {
-  enter:  (d: number) => ({ x: d > 0 ?  32 : -32, opacity: 0 }),
-  center: { x: 0, opacity: 1, transition: { duration: 0.38, ease: [0.22, 1, 0.36, 1] } },
-  exit:   (d: number) => ({ x: d > 0 ? -32 :  32, opacity: 0, transition: { duration: 0.25 } }),
-};
-
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{label}</label>
-      {children}
-      {error && <p className="text-xs" style={{ color: "#f87171" }}>{error}</p>}
-    </div>
-  );
-}
-
-function StepEntreprise({ register, errors }: { register: any; errors: any }) {
-  return (
-    <div className="space-y-5">
-      <Field label="Nom de l'entreprise" error={errors.business_name?.message}>
-        <div className="relative">
-          <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: "var(--text-disabled)" }} />
-          <input {...register("business_name")} placeholder="Ex: La Belle Époque" className="input-midnight pl-10" />
-        </div>
-      </Field>
-      <Field label="Secteur d'activité" error={errors.sector?.message}>
-        <select {...register("sector")} className="input-midnight">
-          <option value="">— Choisir un secteur —</option>
-          {SECTORS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-      </Field>
-      <Field label="Décrivez votre activité en quelques mots" error={errors.description?.message}>
-        <div className="relative">
-          <MessageSquare className="absolute left-3.5 top-3 w-3.5 h-3.5 pointer-events-none" style={{ color: "var(--text-disabled)" }} />
-          <textarea {...register("description")} rows={3}
-            placeholder="Nous sommes une boutique de mode premium…"
-            className="input-midnight resize-none pl-10" />
-        </div>
-      </Field>
-    </div>
-  );
-}
-
-function StepAgent({ register, errors, watch, setValue }: { register: any; errors: any; watch: any; setValue: any }) {
-  const selected = watch("brand_voice");
-  return (
-    <div className="space-y-6">
-      <Field label="Nom de votre agent" error={errors.agent_name?.message}>
-        <div className="relative">
-          <Bot className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: "var(--text-disabled)" }} />
-          <input {...register("agent_name")} placeholder="Ex: Aria, Max, Sophie…" className="input-midnight pl-10" />
-        </div>
-      </Field>
-      <Field label="Ton de votre agent" error={errors.brand_voice?.message}>
-        <div className="grid grid-cols-2 gap-2">
-          {TONES.map((t) => {
-            const active = selected === t.value;
-            return (
-              <button key={t.value} type="button"
-                onClick={() => setValue("brand_voice", t.value, { shouldValidate: true })}
-                className="flex flex-col items-start gap-0.5 px-4 py-3 rounded-xl text-left transition-all duration-200"
-                style={{
-                  background: active ? "rgba(124,90,248,0.08)" : "var(--bg-muted)",
-                  border:     active ? "1px solid rgba(124,90,248,0.35)" : "1px solid var(--border-subtle)",
-                  color:      active ? "var(--text-primary)" : "var(--text-secondary)",
-                }}>
-                <span className="text-xs font-semibold">{t.label}</span>
-                <span className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{t.desc}</span>
-              </button>
-            );
-          })}
-        </div>
-      </Field>
-    </div>
-  );
-}
-
-function StepLancer({ watch }: { watch: any }) {
-  const data = watch();
-  const sectorLabel = SECTORS.find((s) => s.value === data.sector)?.label ?? data.sector;
-  const toneLabel   = TONES.find((t)   => t.value === data.brand_voice)?.label ?? data.brand_voice;
-  const rows = [
-    { icon: Briefcase,    label: "Entreprise", value: data.business_name },
-    { icon: Globe,        label: "Secteur",    value: sectorLabel },
-    { icon: Bot,          label: "Agent",      value: data.agent_name },
-    { icon: MessageSquare, label: "Ton",       value: toneLabel },
-    { icon: Zap,          label: "Modèle",     value: "Claude 3.5 Sonnet" },
-  ];
-  return (
-    <div className="space-y-5">
-      <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-        Vérifiez les informations avant de générer votre agent.
-      </p>
-      <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
-        {rows.map((r, i) => {
-          const Icon = r.icon;
-          return (
-            <div key={r.label} className="flex items-center gap-3 px-4 py-3"
-              style={{ borderBottom: i < rows.length - 1 ? "1px solid var(--border-subtle)" : undefined, background: i % 2 === 0 ? "var(--bg-muted)" : "var(--bg-base)" }}>
-              <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--text-disabled)" }} />
-              <span className="text-xs w-24 flex-shrink-0" style={{ color: "var(--text-tertiary)" }}>{r.label}</span>
-              <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{r.value || "—"}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl"
-        style={{ background: "rgba(124,90,248,0.05)", border: "1px solid rgba(124,90,248,0.15)" }}>
-        <Zap className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
-        <p className="text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
-          Le system prompt sera généré automatiquement. Vous pourrez l'affiner dans le dashboard.
-        </p>
-      </div>
-    </div>
-  );
+/** Ce que dit l'agent au premier message, selon le ton : l'aperçu de gauche. */
+function salut(ton: FormData["brand_voice"], agent: string, commerce: string) {
+  const a = agent.trim() || "Aria";
+  const c = commerce.trim() || "votre boutique";
+  switch (ton) {
+    case "professional": return `Bonjour et bienvenue chez ${c}. Je suis ${a}, comment puis-je vous aider ?`;
+    case "casual":       return `Hello ! ${a} ici 😄 Dis-moi ce que tu cherches chez ${c}, je m'occupe du reste.`;
+    case "luxury":       return `Bonsoir, je suis ${a}, votre conseillère chez ${c}. Que puis-je faire pour vous aujourd'hui ?`;
+    default:             return `Bonjour 👋 Moi c'est ${a}, de ${c} ! Je vous montre ce qu'on a ?`;
+  }
 }
 
 export default function ConfigurePage() {
-  const router         = useRouter();
+  const router = useRouter();
   const { isLoggedIn, user } = useAuth();
-  const [step, setStep]     = useState(1);
-  const [dir, setDir]       = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [etape, setEtape] = useState(0);
+  const [sens, setSens] = useState(1);
+  const [envoi, setEnvoi] = useState(false);
+  const [limite, setLimite] = useState<string | null>(null);
 
-  useEffect(() => { if (!isLoggedIn) router.replace("/login"); }, [isLoggedIn, router]);
+  useEffect(() => { if (!isLoggedIn) router.replace("/login?suite=/configure"); }, [isLoggedIn, router]);
   // Créer un agent demande une adresse confirmée : on passe par le code
   // AVANT le formulaire, pour ne rien faire retaper.
   useEffect(() => {
@@ -186,188 +89,371 @@ export default function ConfigurePage() {
 
   const { register, handleSubmit, trigger, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { brand_voice: "professional" },
-    mode: "onBlur",
+    defaultValues: { brand_voice: "friendly", sector: "" },
+    mode: "onTouched",
   });
+  const v = watch();
 
-  const STEP_FIELDS: Record<number, (keyof FormData)[]> = {
-    1: ["business_name", "sector", "description"],
-    2: ["agent_name", "brand_voice"],
-    3: [],
-  };
+  const CHAMPS: (keyof FormData)[][] = [["business_name", "sector", "description"], ["agent_name", "brand_voice"], []];
 
-  async function goNext() {
-    const ok = await trigger(STEP_FIELDS[step] as any);
-    if (!ok) return;
-    setDir(1);
-    setStep((s) => Math.min(s + 1, 3));
+  async function suivant() {
+    if (!(await trigger(CHAMPS[etape]))) return;
+    setSens(1);
+    setEtape((e) => Math.min(e + 1, 2));
+  }
+  function precedent() {
+    setSens(-1);
+    setEtape((e) => Math.max(e - 1, 0));
   }
 
-  function goPrev() {
-    setDir(-1);
-    setStep((s) => Math.max(s - 1, 1));
-  }
-
-  const onSubmit = handleSubmit(async (data) => {
-    setLoading(true);
+  const creer = handleSubmit(async (data) => {
+    setEnvoi(true);
+    setLimite(null);
     try {
       const formData: AgentFormData = {
-        business_name:    data.business_name,
-        owner_name:       "Propriétaire",
-        owner_email:      "contact@camille.ai",
+        business_name:    data.business_name.trim(),
+        owner_name:       user?.full_name || "Propriétaire",
+        owner_email:      user?.email || "",
         sector:           data.sector as BusinessSector,
-        description:      data.description,
-        agent_name:       data.agent_name,
+        description:      data.description.trim(),
+        agent_name:       data.agent_name.trim(),
         brand_voice:      data.brand_voice as BrandTone,
         primary_language: "fr",
         capabilities: {
-          support_whatsapp:     true,
-          content_generation:   false,
-          image_creation:       false,
-          community_management: false,
-          strategy_advisor:     false,
-          lead_capture:         false,
-          proactive_messaging:  false,
-          calendar_booking:     false,
+          support_whatsapp: true, content_generation: false, image_creation: false, community_management: false,
+          strategy_advisor: false, lead_capture: false, proactive_messaging: false, calendar_booking: false,
         },
         target_model:     "claude-3-5-sonnet-20241022",
         faq:              [],
         forbidden_topics: [],
       };
-
       const systemPrompt = generateSystemPrompt(formData, formData.target_model);
-
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ formData, systemPrompt }),
       });
-
+      const d = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const { error } = await res.json();
-        throw new Error(error ?? "Erreur serveur");
+        if (d.code === "email_non_verifie") { router.push("/verifier-email?suite=/configure"); return; }
+        if (d.code === "limite_agents_gratuits") { setLimite(d.error); return; }
+        throw new Error(d.error ?? "Création impossible");
       }
-
-      const { agent } = await res.json();
-      toast.success(`Agent "${agent.identity.name}" créé !`, { description: "Prêt dans votre dashboard." });
-      router.push(`/dashboard/${agent.id}`);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erreur lors de la création.");
+      toast.success(`${d.agent.identity.name} est prêt !`, { description: "Connectez maintenant son WhatsApp." });
+      router.push(`/dashboard/${d.agent.id}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Création impossible");
     } finally {
-      setLoading(false);
+      setEnvoi(false);
     }
   });
 
-  const progress = ((step - 1) / 2) * 100;
+  const erreur = (m?: string) => (m ? <p className="mt-1.5 text-[12px]" style={{ color: "#C2504B" }}>{m}</p> : null);
+  const secteur = SECTEURS.find((s) => s.value === v.sector);
+  const ton = TONS.find((t) => t.value === v.brand_voice);
 
   return (
-    <main className="relative min-h-dvh flex flex-col items-center justify-center py-24 overflow-hidden">
-      <div aria-hidden className="pointer-events-none fixed inset-0"
-        style={{ background: "radial-gradient(ellipse 80% 50% at 50% -5%, rgba(124,90,248,0.11) 0%, transparent 60%)" }} />
-      <div aria-hidden className="pointer-events-none fixed inset-0 opacity-[0.018]"
-        style={{ backgroundImage: "linear-gradient(rgba(124,90,248,1) 1px,transparent 1px),linear-gradient(90deg,rgba(124,90,248,1) 1px,transparent 1px)", backgroundSize: "72px 72px" }} />
-
-      <div className="relative z-10 w-full max-w-lg mx-auto px-4 sm:px-6">
-        <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-          className="text-center mb-10 space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: "var(--color-gold)" }}>
-            Configurateur
-          </p>
-          <h1 className="font-good-timing text-3xl md:text-4xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Créez votre agent <span className="text-gold-gradient">en 3 étapes</span>
+    <div className="cfg flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* ── Gauche : l'agent, en direct ───────────────────────────────── */}
+        <aside className="cfg-gauche cfg-pv hidden min-h-0 flex-col px-12 lg:flex lg:w-1/2 xl:px-16">
+          <Marque />
+          <h1 className="cfg-titre font-bold leading-[1.08] tracking-[-0.03em]" style={{ color: "var(--cl-ink)" }}>
+            Votre vendeur,<br />en deux minutes.
           </h1>
-        </motion.div>
+          <p className="cfg-accroche max-w-[440px] leading-[1.55]" style={{ color: "var(--cl-ink-soft)" }}>
+            Voici comment il accueillera vos clients sur WhatsApp. Tout se règle ensuite depuis le tableau de bord.
+          </p>
+          <div className="flex min-h-0 flex-1 items-center justify-center py-6">
+            <ApercuWhatsapp agent={v.agent_name || ""} commerce={v.business_name || ""}
+              message={salut(v.brand_voice, v.agent_name || "", v.business_name || "")} />
+          </div>
+        </aside>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}>
+        {/* ── Droite : les étapes ───────────────────────────────────────── */}
+        <main className="cfg-pv flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-5 sm:px-10">
+          <div className="mb-5 self-stretch lg:hidden"><Marque /></div>
 
-          {/* Step indicator */}
-          <div className="relative flex items-start justify-between mb-10">
-            <div className="absolute top-4 left-0 right-0 flex px-4">
-              {[0, 1].map((i) => (
-                <div key={i} className="flex-1 flex" style={{ justifyContent: i === 0 ? "flex-end" : "flex-start", paddingLeft: i === 1 ? 8 : 0, paddingRight: i === 0 ? 8 : 0 }}>
-                  <div className="h-px w-full transition-colors duration-500"
-                    style={{ background: step > i + 1 ? "rgba(124,90,248,0.45)" : "var(--border-subtle)", marginLeft: i === 0 ? "50%" : 0, marginRight: i === 1 ? "50%" : 0 }} />
+          <div className="cfg-carte w-full max-w-[540px] rounded-2xl bg-white px-6 sm:px-9">
+            {/* Les étapes */}
+            <div className="flex items-center gap-2">
+              {ETAPES.map((e, i) => (
+                <div key={e} className="flex flex-1 items-center gap-2">
+                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition-colors"
+                    style={{
+                      background: i < etape ? "var(--cl-accent-deep)" : i === etape ? "var(--cl-accent-soft)" : "#F4F2F7",
+                      color: i < etape ? "#fff" : i === etape ? "var(--cl-accent-deep)" : "var(--cl-ink-faint)",
+                    }}>
+                    {i < etape ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                  </span>
+                  <span className="hidden truncate text-[12.5px] font-medium sm:block" style={{ color: i === etape ? "var(--cl-ink)" : "var(--cl-ink-faint)" }}>{e}</span>
+                  {i < ETAPES.length - 1 && <span className="h-px flex-1" style={{ background: i < etape ? "var(--cl-accent)" : "var(--cl-line)" }} />}
                 </div>
               ))}
             </div>
-            {STEPS.map((s) => {
-              const Icon = s.icon; const done = step > s.id; const active = step === s.id;
-              return (
-                <div key={s.id} className="relative flex flex-col items-center gap-2 flex-1">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 z-10"
-                    style={{ background: done ? "rgba(124,90,248,0.22)" : active ? "rgba(124,90,248,0.12)" : "var(--bg-muted)", border: done || active ? "1px solid rgba(124,90,248,0.4)" : "1px solid var(--border-subtle)", boxShadow: active ? "0 0 12px rgba(124,90,248,0.25)" : "none" }}>
-                    {done ? <Check className="w-3.5 h-3.5" style={{ color: "var(--color-gold)" }} /> : <Icon className="w-3.5 h-3.5" style={{ color: active ? "var(--color-gold)" : "var(--text-disabled)" }} />}
-                  </div>
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-center"
-                    style={{ color: active ? "var(--color-gold)" : done ? "var(--text-tertiary)" : "var(--text-disabled)" }}>
-                    {s.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
 
-          {/* Card */}
-          <div className="relative rounded-3xl overflow-hidden"
-            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset" }}>
-            <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(124,90,248,0.5), transparent)" }} />
-            <div className="h-0.5 w-full" style={{ background: "var(--border-subtle)" }}>
-              <motion.div animate={{ width: `${progress}%` }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="h-full" style={{ background: "linear-gradient(90deg, #7C5AF8, #A78BFA)" }} />
-            </div>
+            <form noValidate onSubmit={(e) => { if (etape < 2) { e.preventDefault(); suivant(); } else creer(e); }}>
+              <div className="cfg-corps relative">
+                <AnimatePresence mode="wait" custom={sens} initial={false}>
+                  <motion.div key={etape} custom={sens}
+                    initial={{ opacity: 0, x: sens * 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: sens * -24 }}
+                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
 
-            <form onSubmit={onSubmit} noValidate>
-              <div className="px-6 py-7 min-h-[300px]">
-                <AnimatePresence mode="wait" custom={dir}>
-                  <motion.div key={step} custom={dir} variants={SLIDE} initial="enter" animate="center" exit="exit">
-                    {step === 1 && <StepEntreprise register={register} errors={errors} />}
-                    {step === 2 && <StepAgent register={register} errors={errors} watch={watch} setValue={setValue} />}
-                    {step === 3 && <StepLancer watch={watch} />}
+                    {etape === 0 && (
+                      <>
+                        <h2 className="cfg-h2 font-bold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>Votre commerce</h2>
+                        <p className="mt-1 text-[15px]" style={{ color: "var(--cl-ink-soft)" }}>Ce que votre agent doit savoir pour bien vendre.</p>
+                        <div className="cfg-form">
+                          <Champ label="Nom du commerce">
+                            <input {...register("business_name")} autoFocus placeholder="Ex. Boutique Marie" className="cfg-input" />
+                            {erreur(errors.business_name?.message)}
+                          </Champ>
+                          <Champ label="Activité">
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              {SECTEURS.map(({ value, label, icone: Icone }) => {
+                                const actif = v.sector === value;
+                                return (
+                                  <button key={value} type="button" onClick={() => setValue("sector", value, { shouldValidate: true })}
+                                    className="flex flex-col items-center gap-1.5 rounded-xl px-2 py-2.5 text-[12.5px] transition"
+                                    style={{
+                                      background: actif ? "var(--cl-accent-soft)" : "#fff",
+                                      border: `1px solid ${actif ? "var(--cl-accent)" : "#E4E0EA"}`,
+                                      color: actif ? "var(--cl-accent-deep)" : "var(--cl-ink-soft)",
+                                      fontWeight: actif ? 600 : 500,
+                                    }}>
+                                    <Icone className="h-[18px] w-[18px]" />
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {erreur(errors.sector?.message)}
+                          </Champ>
+                          <Champ label="Ce que vous vendez">
+                            <textarea {...register("description")} rows={3}
+                              placeholder="Ex. Vêtements et chaussures pour femmes, livraison à Douala et Yaoundé."
+                              className="cfg-input cfg-zone" />
+                            {erreur(errors.description?.message)}
+                          </Champ>
+                        </div>
+                      </>
+                    )}
+
+                    {etape === 1 && (
+                      <>
+                        <h2 className="cfg-h2 font-bold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>Votre agent</h2>
+                        <p className="mt-1 text-[15px]" style={{ color: "var(--cl-ink-soft)" }}>Son prénom et sa façon de parler à vos clients.</p>
+                        <div className="cfg-form">
+                          <Champ label="Prénom de l'agent">
+                            <input {...register("agent_name")} autoFocus placeholder="Ex. Aria, Max, Sophie…" className="cfg-input" />
+                            {erreur(errors.agent_name?.message)}
+                          </Champ>
+                          <Champ label="Ton">
+                            <div className="grid grid-cols-2 gap-2">
+                              {TONS.map((t) => {
+                                const actif = v.brand_voice === t.value;
+                                return (
+                                  <button key={t.value} type="button" onClick={() => setValue("brand_voice", t.value, { shouldValidate: true })}
+                                    className="rounded-xl px-4 py-3 text-left transition"
+                                    style={{ background: actif ? "var(--cl-accent-soft)" : "#fff", border: `1px solid ${actif ? "var(--cl-accent)" : "#E4E0EA"}` }}>
+                                    <span className="block text-[14px] font-semibold" style={{ color: actif ? "var(--cl-accent-deep)" : "var(--cl-ink)" }}>{t.label}</span>
+                                    <span className="text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>{t.desc}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </Champ>
+                          {/* Téléphone : l'aperçu n'a pas de colonne, il vient ici. */}
+                          <div className="lg:hidden">
+                            <p className="mb-1.5 text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>Aperçu</p>
+                            <div className="rounded-xl px-4 py-3 text-[14px] leading-snug" style={{ background: "#E7FCE3", color: "#111B21" }}>
+                              {salut(v.brand_voice, v.agent_name || "", v.business_name || "")}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {etape === 2 && (
+                      <>
+                        <h2 className="cfg-h2 font-bold tracking-[-0.02em]" style={{ color: "var(--cl-ink)" }}>C&apos;est parti</h2>
+                        <p className="mt-1 text-[15px]" style={{ color: "var(--cl-ink-soft)" }}>Vérifiez, puis créez votre agent.</p>
+                        <div className="cfg-form">
+                          <dl className="overflow-hidden rounded-xl" style={{ border: "1px solid var(--cl-line-soft)" }}>
+                            {[
+                              ["Commerce", v.business_name],
+                              ["Activité", secteur?.label],
+                              ["Agent", v.agent_name],
+                              ["Ton", ton?.label],
+                            ].map(([k, val], i) => (
+                              <div key={k} className="flex items-center justify-between gap-4 px-4 py-3 text-[14px]"
+                                style={{ background: i % 2 ? "#fff" : "#FAF9FC" }}>
+                                <dt style={{ color: "var(--cl-ink-faint)" }}>{k}</dt>
+                                <dd className="truncate font-medium" style={{ color: "var(--cl-ink)" }}>{val || "—"}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                          <div className="flex items-start gap-3 rounded-xl p-4 text-[13.5px] leading-[1.5]" style={{ background: "var(--cl-accent-soft)", color: "var(--cl-ink-soft)" }}>
+                            <Gift className="mt-0.5 h-5 w-5 flex-shrink-0" style={{ color: "var(--cl-accent-deep)" }} />
+                            <span>
+                              Votre premier agent démarre avec <b style={{ color: "var(--cl-ink)" }}>14 jours d&apos;essai</b>. Ensuite : connectez
+                              son WhatsApp et ajoutez votre catalogue depuis le tableau de bord.
+                            </span>
+                          </div>
+                          {limite && (
+                            <div className="rounded-xl p-4 text-[13.5px] leading-[1.5]" style={{ background: "#FDF1EE", color: "#9A3A26" }}>
+                              {limite}{" "}
+                              <Link href="/dashboard/billing" className="font-semibold underline">Voir les forfaits</Link>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </motion.div>
                 </AnimatePresence>
               </div>
 
-              <div className="px-6 py-4 flex items-center justify-between gap-3"
-                style={{ borderTop: "1px solid var(--border-subtle)" }}>
-                <button type="button" onClick={goPrev} disabled={step === 1}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 disabled:opacity-30"
-                  style={{ color: "var(--text-secondary)", border: "1px solid var(--border-default)" }}
-                  onMouseEnter={(e) => { if (step > 1) { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-secondary)"; }}>
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  Retour
-                </button>
-
-                <span className="font-mono text-[10px]" style={{ color: "var(--text-disabled)" }}>{step} / 3</span>
-
-                {step < 3 ? (
-                  <button type="button" onClick={goNext}
-                    className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 hover:brightness-110 active:scale-[0.97]"
-                    style={{ background: "linear-gradient(135deg,#7C5AF8,#A78BFA 50%,#6442E8)", color: "#000" }}>
-                    Continuer <ArrowRight className="w-3.5 h-3.5" />
+              <div className="cfg-actions flex items-center gap-3">
+                {etape > 0 && (
+                  <button type="button" onClick={precedent} className="cfg-secondaire flex items-center justify-center gap-2 px-5">
+                    <ArrowLeft className="h-4 w-4" /> Retour
+                  </button>
+                )}
+                {etape < 2 ? (
+                  // Deux boutons distincts (key) : sinon React réutilise le même
+                  // élément, qui devient « submit » pendant le clic sur
+                  // « Continuer » — et l'agent se créait tout seul à l'étape 3.
+                  <button key="suivant" type="button" onClick={(e) => { e.preventDefault(); suivant(); }}
+                    className="cfg-btn flex flex-1 items-center justify-center gap-2 rounded-lg font-semibold text-white"
+                    style={{ background: "var(--cl-accent-deep)" }}>
+                    Continuer <ArrowRight className="h-4 w-4" />
                   </button>
                 ) : (
-                  <button type="submit" disabled={loading}
-                    className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
-                    style={{ background: "linear-gradient(135deg,#7C5AF8,#A78BFA 50%,#6442E8)", color: "#000" }}>
-                    {loading ? (
-                      <span className="flex items-center gap-1.5">
-                        <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="inline-block">
-                          <Rocket className="w-3.5 h-3.5" />
-                        </motion.span>
-                        Génération…
-                      </span>
-                    ) : (
-                      <><Rocket className="w-3.5 h-3.5" /> Lancer l'agent</>
-                    )}
+                  <button key="creer" type="submit" disabled={envoi}
+                    className="cfg-btn flex flex-1 items-center justify-center gap-2 rounded-lg font-semibold text-white disabled:opacity-70"
+                    style={{ background: "var(--cl-accent-deep)" }}>
+                    {envoi ? <Loader2 className="h-5 w-5 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                    {envoi ? "Création…" : "Créer mon agent"}
                   </button>
                 )}
               </div>
             </form>
           </div>
-        </motion.div>
+
+          <p className="cfg-lien text-center text-[14px]" style={{ color: "var(--cl-ink-soft)" }}>
+            <Link href="/dashboard" className="font-medium hover:underline" style={{ color: "var(--cl-accent-deep)" }}>
+              Retour au tableau de bord
+            </Link>
+          </p>
+        </main>
       </div>
-    </main>
+
+      <style jsx>{`
+        .cfg { background: #fff; font-family: "Inter Variable", "Inter", system-ui, sans-serif; }
+        .cfg-pv { padding-top: clamp(14px, 3.2vh, 44px); padding-bottom: clamp(14px, 3.2vh, 44px); }
+        .cfg-gauche { background: linear-gradient(180deg, #FAF8FF 0%, #F5F1FF 100%); }
+        .cfg-titre { margin-top: clamp(16px, 4.5vh, 56px); font-size: clamp(30px, 4.6vh, 44px); }
+        .cfg-accroche { margin-top: clamp(8px, 1.8vh, 20px); font-size: clamp(14.5px, 1.9vh, 17px); }
+        .cfg-carte { padding-top: clamp(18px, 3.4vh, 32px); padding-bottom: clamp(18px, 3.4vh, 32px);
+          box-shadow: 0 1px 2px rgba(25,23,27,0.04), 0 18px 50px rgba(100,66,232,0.08); border: 1px solid var(--cl-line-soft); }
+        .cfg-corps { margin-top: clamp(16px, 3vh, 28px); }
+        .cfg-h2 { font-size: clamp(22px, 3vh, 28px); }
+        .cfg-lien { margin-top: clamp(10px, 2.2vh, 22px); }
+        .cfg-actions { margin-top: clamp(16px, 3vh, 28px); }
+        :global(.cfg-form) { margin-top: clamp(14px, 2.6vh, 24px); display: flex; flex-direction: column; gap: clamp(12px, 2vh, 20px); }
+        :global(.cfg-input) {
+          width: 100%; height: clamp(42px, 5.4vh, 50px); border-radius: 8px; padding: 0 16px; font-size: 16px;
+          color: var(--cl-ink); background: #fff; border: 1px solid #D9D5DF; outline: none;
+          transition: border-color .15s, box-shadow .15s;
+        }
+        :global(.cfg-zone) { height: auto; padding: 12px 16px; resize: none; line-height: 1.45; }
+        :global(.cfg-input::placeholder) { color: #8E88A0; }
+        :global(.cfg-input:focus) { border-color: var(--cl-accent); box-shadow: 0 0 0 3px rgba(124,90,248,0.14); }
+        :global(.cfg-btn) { height: clamp(44px, 6vh, 54px); font-size: 16px; box-shadow: 0 8px 22px rgba(100,66,232,0.28); transition: filter .15s, transform .1s; }
+        :global(.cfg-btn:hover) { filter: brightness(1.06); }
+        :global(.cfg-btn:active) { transform: scale(0.98); }
+        :global(.cfg-secondaire) {
+          height: clamp(44px, 6vh, 54px); border-radius: 8px; font-size: 15px; font-weight: 500;
+          color: var(--cl-ink); background: #fff; border: 1px solid #D9D5DF; transition: background .15s, border-color .15s;
+        }
+        :global(.cfg-secondaire:hover) { background: var(--cl-accent-soft); border-color: var(--cl-lavender); }
+      `}</style>
+    </div>
+  );
+}
+
+function Marque() {
+  return (
+    <Link href="/dashboard" className="flex items-center gap-3.5">
+      <Image src="/icons/camille-192.png" alt="" width={44} height={44} className="rounded-xl" />
+      <div className="leading-tight">
+        <div className="text-[22px] font-bold tracking-[-0.02em]" style={{ color: "var(--cl-ink)", fontFamily: "var(--font-good-timing)" }}>Camille</div>
+        <div className="text-[12.5px] font-medium tracking-[0.14em]" style={{ color: "var(--cl-ink-soft)" }}>BY BUYTICLE</div>
+      </div>
+    </Link>
+  );
+}
+
+function Champ({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-[14px] font-medium" style={{ color: "var(--cl-ink)" }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+// ── L'aperçu WhatsApp ───────────────────────────────────────────────────────
+
+function ApercuWhatsapp({ agent, commerce, message }: { agent: string; commerce: string; message: string }) {
+  const nom = agent.trim() || "Votre agent";
+  const heure = useMemo(() => new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), []);
+  return (
+    <div className="w-full max-w-[340px] overflow-hidden rounded-[36px] p-2.5"
+      style={{ background: "#1C1A21", boxShadow: "0 30px 70px rgba(70,40,190,0.22)" }}>
+      <div className="overflow-hidden rounded-[28px]" style={{ background: "#EFEAE2" }}>
+        <div className="flex items-center gap-3 px-4 pb-3 pt-4" style={{ background: "#075E54", color: "#fff" }}>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full text-[15px] font-semibold" style={{ background: "rgba(255,255,255,0.18)" }}>
+            {nom.charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-[15px] font-semibold">{commerce.trim() || "Votre commerce"}</p>
+            <p className="text-[12px] opacity-80">en ligne</p>
+          </div>
+        </div>
+        <div className="space-y-2.5 px-3 py-4" style={{ minHeight: 260 }}>
+          <Bulle cote="client" heure={heure}>Bonsoir, vous avez quoi en ce moment ?</Bulle>
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.div key={message} initial={{ opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}>
+              <Bulle cote="agent" heure={heure} nom={nom}>{message}</Bulle>
+            </motion.div>
+          </AnimatePresence>
+          <Bulle cote="client" heure={heure}>Je peux voir le catalogue ?</Bulle>
+          <div className="flex w-fit items-center gap-1 rounded-2xl rounded-tl-sm bg-white px-3 py-2.5">
+            {[0, 1, 2].map((i) => (
+              <motion.span key={i} className="h-1.5 w-1.5 rounded-full" style={{ background: "#9AA3A8" }}
+                animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Bulle({ cote, heure, nom, children }: { cote: "client" | "agent"; heure: string; nom?: string; children: React.ReactNode }) {
+  const client = cote === "client";
+  return (
+    <div className={"flex " + (client ? "justify-end" : "justify-start")}>
+      <div className={"max-w-[82%] rounded-2xl px-3 py-2 text-[13.5px] leading-snug shadow-sm " + (client ? "rounded-tr-sm" : "rounded-tl-sm")}
+        style={{ background: client ? "#D9FDD3" : "#fff", color: "#111B21" }}>
+        {nom && <p className="mb-0.5 text-[12px] font-semibold" style={{ color: "#6442E8" }}>{nom}</p>}
+        {children}
+        <span className="ml-2 inline-flex items-center gap-0.5 align-bottom text-[10.5px]" style={{ color: "#667781" }}>
+          {heure}{client && <CheckCheck className="h-3.5 w-3.5" style={{ color: "#53BDEB" }} />}
+        </span>
+      </div>
+    </div>
   );
 }

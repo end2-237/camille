@@ -28,8 +28,10 @@ self.addEventListener("push", (event) => {
   });
   event.waitUntil(Promise.all([prevenir, self.registration.showNotification(titre, {
       body: d.body || "",
-      icon: "/icon",
-      badge: "/icon",
+      // Le logo Camille ; le badge (barre d'état Android) doit être une
+      // silhouette blanche sur fond transparent, sinon il s'affiche en carré.
+      icon: "/icons/camille-192.png",
+      badge: "/icons/camille-badge-96.png",
       // Deux alertes du même type se remplacent au lieu de s'empiler : après
       // une nuit, on veut l'état actuel, pas quarante bannières.
       tag: (d.data && d.data.type) || "camille",

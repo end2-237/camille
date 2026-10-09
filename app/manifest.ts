@@ -23,8 +23,10 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#16141A",
-    theme_color: "#16141A",
+    // Les couleurs du logo : l'écran de lancement et la barre d'état se fondent
+    // dans le haut violet du tableau de bord.
+    background_color: "#A792F4",
+    theme_color: "#A792F4",
     lang: "fr",
     categories: ["business", "productivity"],
     icons: [
