@@ -196,27 +196,32 @@ function AppelWhatsapp({ agent, meta }: { agent?: Agent; meta: EtatMeta | null }
       <motion.div initial={false} animate={{ width: meta ? "auto" : 52 }} transition={RESSORT}
         className="acc-appel h-[52px] max-w-full overflow-hidden rounded-full">
         <Link href={page} aria-label={meta?.connecte ? "WhatsApp officiel connecté" : "Connecter le WhatsApp officiel"}
-          className="group flex h-full items-center gap-3 whitespace-nowrap pl-2 pr-2">
+          className="group flex h-full min-w-0 items-center gap-3 whitespace-nowrap pl-2 pr-2">
           <motion.span initial={false} animate={{ rotate: meta ? 0 : -90, scale: meta ? 1 : 0.92 }} transition={RESSORT}
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "#25D366", color: "#fff" }}>
             {meta?.connecte ? <Check className="h-4 w-4" /> : <IconeWhatsapp className="h-5 w-5" />}
           </motion.span>
           <AnimatePresence mode="wait" initial={false}>
             {meta && (
-              <motion.span key={meta.connecte ? "ok" : "appel"} className="flex items-center gap-3"
+              <motion.span key={meta.connecte ? "ok" : "appel"} className="flex min-w-0 items-center gap-3"
                 initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
                 transition={{ duration: 0.22, delay: 0.12 }}>
                 {meta.connecte ? (
-                  <span className="pr-3 text-[14px]" style={{ color: "var(--cl-ink)" }}>
-                    WhatsApp officiel · <strong className="font-semibold">{meta.nom_verifie || meta.numero || "connecté"}</strong>
+                  <span className="min-w-0 truncate pr-3 text-[14px]" style={{ color: "var(--cl-ink)" }}>
+                    <span className="hidden sm:inline">WhatsApp officiel · </span>
+                    <strong className="font-semibold">{meta.nom_verifie || meta.numero || "connecté"}</strong>
                   </span>
                 ) : (
                   <>
-                    <span className="text-left leading-tight">
-                      <span className="block text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>Connectez votre WhatsApp officiel</span>
+                    <span className="min-w-0 text-left leading-tight">
+                      {/* Téléphone : la phrase entière poussait « Connecter » hors de l'écran. */}
+                      <span className="block truncate text-[14px] font-semibold" style={{ color: "var(--cl-ink)" }}>
+                        <span className="sm:hidden">WhatsApp officiel</span>
+                        <span className="hidden sm:inline">Connectez votre WhatsApp officiel</span>
+                      </span>
                       <span className="hidden text-[12px] sm:block" style={{ color: "var(--cl-ink-faint)" }}>Votre numéro, votre nom vérifié, en 2 minutes</span>
                     </span>
-                    <span className="ml-1 flex h-9 items-center rounded-full px-4 text-[13px] font-semibold text-white transition group-hover:brightness-110"
+                    <span className="ml-1 flex h-9 flex-shrink-0 items-center rounded-full px-4 text-[13px] font-semibold text-white transition group-hover:brightness-110"
                       style={{ background: "var(--cl-ink)" }}>
                       Connecter
                     </span>
