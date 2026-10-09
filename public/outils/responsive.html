@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Responsive Tester Pro — Camille</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root {
+    --bg-main: #090d16;
+    --bg-panel: #0d1420;
+    --card-bg: #131c2e;
+    --card-bg-2: #0f1728;
+    --card-border: #223049;
+    --card-border-soft: #1a2537;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --accent-soft: rgba(59, 130, 246, 0.12);
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-main);
+    color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+  }
+
+  button, input, select, textarea {
+    font-family: inherit;
+    outline: none;
+  }
+
+  /* ---------- LAYOUT ---------- */
+  .app {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  /* ---------- STAGE (gauche) ---------- */
+  .stage-wrap {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: 100vh;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--card-border-soft);
+    flex-wrap: wrap;
+  }
+
+  .toolbar .brand {
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: -0.02em;
+    margin-right: 0.4rem;
+    white-space: nowrap;
+  }
+  .toolbar .brand span { color: var(--accent); }
+
+  .url-bar {
+    flex: 1;
+    display: flex;
+    min-width: 200px;
+    background: var(--bg-main);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .url-bar input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    padding: 0.55rem 0.8rem;
+    font-size: 0.85rem;
+  }
+  .url-bar button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 0 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .url-bar button:hover { background: var(--accent-hover); }
+
+  .tool-btn {
+    background: var(--card-bg);
+    color: var(--text-muted);
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    padding: 0.5rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .tool-btn:hover { border-color: var(--accent); color: var(--text-main); }
+  .tool-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--text-main); }
+
+  /* ---------- STAGE CENTER ---------- */
+  .stage {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2.5rem;
+    background: radial-gradient(circle at center, #16213a 0%, #090d16 75%);
+    overflow: auto;
+    padding: 2rem;
+    position: relative;
+  }
+
+  .device-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  .device-caption {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .device-caption b { color: var(--text-main); font-weight: 600; }
+
+  /* ---------- PHONE FRAME ---------- */
+  .phone {
+    position: relative;
+    background: #000;
+    border-radius: 44px;
+    box-shadow: 0 25px 50px -20px rgba(0,0,0,0.9), 0 0 0 10px #27272a, 0 0 0 12px #3f3f46;
+    transition: box-shadow 0.3s, border-radius 0.3s;
+    display: flex;
+    overflow: hidden;
+  }
+  .phone .screen {
+    position: relative;
+    background: #fff;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+  }
+  .phone iframe {
+    border: none;
+    display: block;
+    background: #fff;
+    transform-origin: top left;
+  }
+
+  .notch {
+    position: absolute;
+    background: #000;
+    z-index: 20;
+    pointer-events: none;
+    top: 10px; left: 50%;
+    transform: translateX(-50%);
+    width: 30%; height: 24px;
+    border-radius: 20px;
+    transition: all 0.3s;
+  }
+  .home-bar {
+    position: absolute;
+    bottom: 7px; left: 50%;
+    transform: translateX(-50%);
+    width: 34%; height: 4px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 10px;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  /* variations chassis */
+  .phone.chassis-android { border-radius: 30px; box-shadow: 0 25px 50px -20px rgba(0,0,0,0.9), 0 0 0 8px #1f2937, 0 0 0 10px #374151; }
+  .phone.chassis-android .notch {
+    width: 11px; height: 11px;
+    min-width: 11px; min-height: 11px;
+    border-radius: 50%;
+    top: 9px;
+    background: #0a0a0a;
+    box-shadow: 0 0 0 1.5px #1a1a1a;
+  }
+  .phone.chassis-android .home-bar { display: none; }
+  .phone.chassis-tablet { border-radius: 24px; box-shadow: 0 25px 50px -20px rgba(0,0,0,0.9), 0 0 0 10px #27272a, 0 0 0 12px #3f3f46; }
+  .phone.chassis-tablet .notch { display: none; }
+  .phone.chassis-tablet .home-bar { width: 22%; }
+  .phone.chassis-desktop { border-radius: 12px; box-shadow: 0 25px 50px -20px rgba(0,0,0,0.9), 0 0 0 3px #3f3f46; }
+  .phone.chassis-desktop .notch, .phone.chassis-desktop .home-bar { display: none; }
+  .phone.chassis-none { border-radius: 6px; box-shadow: 0 20px 40px -20px rgba(0,0,0,0.9), 0 0 0 1px var(--card-border); }
+  .phone.chassis-none .notch, .phone.chassis-none .home-bar { display: none; }
+
+  .phone.landscape .notch { top: 50%; left: 10px; transform: translateY(-50%); width: 24px; height: 30%; }
+  .phone.landscape .home-bar { right: 7px; bottom: 50%; left: auto; top: auto; transform: translateY(50%); width: 4px; height: 22%; }
+  /* Android : le poinçon reste un rond même en paysage, il glisse juste sur le côté */
+  .phone.chassis-android.landscape .notch {
+    top: 50%; left: 9px; transform: translateY(-50%);
+    width: 11px; height: 11px;
+  }
+
+  /* overlay bloqué */
+  .block-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(160deg, #131c2e, #0b1120);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem 1.5rem;
+    gap: 1rem;
+    z-index: 15;
+  }
+  .block-overlay.show { display: flex; }
+  .block-overlay .ico { font-size: 2.5rem; }
+  .block-overlay h4 { font-size: 1rem; color: var(--text-main); }
+  .block-overlay p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+  .block-overlay button {
+    background: var(--accent); color: #fff; border: none;
+    padding: 0.6rem 1.2rem; border-radius: 9px; font-weight: 600;
+    cursor: pointer; font-size: 0.85rem;
+  }
+  .block-overlay button:hover { background: var(--accent-hover); }
+
+  /* ---------- SIDEBAR (droite) ---------- */
+  .sidebar {
+    background: var(--bg-panel);
+    border-left: 1px solid var(--card-border-soft);
+    height: 100vh;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .sidebar::-webkit-scrollbar { width: 8px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border-soft);
+    border-radius: var(--radius);
+    padding: 0.9rem;
+  }
+  .card > h3 {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .field { margin-bottom: 0.7rem; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  select, .txt-input {
+    width: 100%;
+    background: var(--bg-main);
+    color: var(--text-main);
+    border: 1px solid var(--card-border);
+    padding: 0.55rem 0.7rem;
+    border-radius: 9px;
+    font-size: 0.85rem;
+  }
+  select:focus, .txt-input:focus { border-color: var(--accent); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
+  .btn {
+    width: 100%;
+    background: var(--card-bg-2);
+    color: var(--text-main);
+    border: 1px solid var(--card-border);
+    padding: 0.6rem;
+    border-radius: 9px;
+    font-size: 0.83rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border: none; }
+  .btn.primary:hover { background: var(--accent-hover); }
+
+  /* toggles */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.45rem 0;
+  }
+  .toggle-row span { font-size: 0.82rem; color: var(--text-main); }
+  .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: var(--card-border); border-radius: 22px; transition: 0.2s;
+  }
+  .slider::before {
+    content: ""; position: absolute; height: 16px; width: 16px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.2s;
+  }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(18px); }
+
+  /* chips presets */
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .chip {
+    background: var(--bg-main);
+    border: 1px solid var(--card-border);
+    color: var(--text-muted);
+    padding: 0.35rem 0.6rem;
+    border-radius: 7px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--text-main); }
+
+  textarea.txt-input { resize: vertical; min-height: 60px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem; }
+
+  .hint {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    line-height: 1.45;
+    margin-top: 0.5rem;
+  }
+  .hint code { background: var(--bg-main); padding: 0.1rem 0.3rem; border-radius: 4px; color: var(--amber); }
+
+  .status-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 0.3rem; vertical-align: middle;
+  }
+  .status-dot.ok { background: var(--green); }
+  .status-dot.warn { background: var(--amber); }
+  .status-dot.err { background: var(--red); }
+
+  .ruler-badge {
+    position: absolute;
+    top: 0.6rem; left: 0.6rem;
+    background: rgba(9,13,22,0.85);
+    border: 1px solid var(--card-border);
+    padding: 0.3rem 0.6rem;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    z-index: 30;
+    pointer-events: none;
+  }
+
+  /* Panneau masqué : la scène prend toute la largeur */
+  .app.sans-panneau { grid-template-columns: 1fr 0; }
+  .app.sans-panneau .sidebar { display: none; }
+
+  .origine {
+    font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 8px; white-space: nowrap;
+    border: 1px solid var(--card-border); color: var(--text-muted); background: var(--bg-main);
+  }
+  .origine.ok { color: var(--green); border-color: rgba(34,197,94,0.35); }
+  .origine.warn { color: var(--amber); border-color: rgba(245,158,11,0.35); }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ STAGE ============ -->
+  <div class="stage-wrap">
+    <div class="toolbar">
+      <div class="brand">Responsive<span>Tester</span></div>
+      <div class="url-bar">
+        <input type="url" id="url" placeholder="https://localhost:3000  ou  https://ton-site.com" value="">
+        <button onclick="App.load()">Charger</button>
+      </div>
+      <button class="tool-btn" id="btn-rotate" onclick="App.rotate()">⟳ Rotation</button>
+      <button class="tool-btn" id="btn-compare" onclick="App.toggleCompare()">◫ Comparer</button>
+      <button class="tool-btn" onclick="App.reload()">↻ Recharger</button>
+      <button class="tool-btn" onclick="App.popup()">⧉ Popup réelle</button>
+      <button class="tool-btn" onclick="App.screenshot()">▣ Capture</button>
+      <button class="tool-btn" id="btn-panneau" onclick="App.togglePanneau()">▤ Panneau</button>
+      <button class="tool-btn" id="btn-full" onclick="App.pleinEcran()">⛶ Plein écran</button>
+      <span class="origine" id="origine">—</span>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="ruler-badge" id="ruler">—</div>
+
+      <!-- Device A -->
+      <div class="device-slot" id="slot-a">
+        <div class="phone chassis-android" id="phone-a">
+          <div class="notch"></div>
+          <div class="screen" id="screen-a">
+            <iframe id="frame-a" src="about:blank" title="Preview A"></iframe>
+          </div>
+          <div class="home-bar"></div>
+          <div class="block-overlay" id="block-a">
+            <div class="ico">🔒</div>
+            <h4>Chargement bloqué par le site</h4>
+            <p>Ce site interdit l'affichage en iframe (X-Frame-Options / CSP).<br>C'est fréquent sur les pages avec authentification.</p>
+            <button onclick="App.popup()">Ouvrir en fenêtre réelle →</button>
+          </div>
+        </div>
+        <div class="device-caption" id="cap-a">—</div>
+      </div>
+
+      <!-- Device B (compare) -->
+      <div class="device-slot" id="slot-b" style="display:none">
+        <div class="phone chassis-android" id="phone-b">
+          <div class="notch"></div>
+          <div class="screen" id="screen-b">
+            <iframe id="frame-b" src="about:blank" title="Preview B"></iframe>
+          </div>
+          <div class="home-bar"></div>
+        </div>
+        <div class="device-caption" id="cap-b">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SIDEBAR ============ -->
+  <div class="sidebar">
+
+    <div class="card">
+      <h3>📱 Appareil</h3>
+      <div class="field">
+        <label>Modèle (écran A)</label>
+        <select id="device-a" onchange="App.applyDevice('a')"></select>
+      </div>
+      <div class="field" id="device-b-field" style="display:none">
+        <label>Modèle (écran B — comparaison)</label>
+        <select id="device-b" onchange="App.applyDevice('b')"></select>
+      </div>
+      <div class="field">
+        <label>Châssis visuel</label>
+        <select id="chassis" onchange="App.applyChassis()">
+          <option value="chassis-ios">iOS (encoche + barre)</option>
+          <option value="chassis-android" selected>Android (poinçon)</option>
+          <option value="chassis-tablet">Tablette</option>
+          <option value="chassis-desktop">Desktop (cadre fin)</option>
+          <option value="chassis-none">Aucun (écran nu)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📐 Dimensions personnalisées</h3>
+      <div class="row2">
+        <div class="field">
+          <label>Largeur (px)</label>
+          <input type="number" class="txt-input" id="cw" value="360" onchange="App.applyCustom()">
+        </div>
+        <div class="field">
+          <label>Hauteur (px)</label>
+          <input type="number" class="txt-input" id="ch" value="800" onchange="App.applyCustom()">
+        </div>
+      </div>
+      <div class="field">
+        <label>Densité (DPR)</label>
+        <select id="dpr" onchange="App.updateRuler()">
+          <option value="1">1x</option>
+          <option value="2">2x</option>
+          <option value="3" selected>3x</option>
+        </select>
+      </div>
+      <div class="chips">
+        <div class="chip" onclick="App.quickSize(320,568)">320×568</div>
+        <div class="chip" onclick="App.quickSize(375,667)">375×667</div>
+        <div class="chip" onclick="App.quickSize(390,844)">390×844</div>
+        <div class="chip" onclick="App.quickSize(768,1024)">768×1024</div>
+        <div class="chip" onclick="App.quickSize(1280,800)">1280×800</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔐 Session & Auth (tes propres sites)</h3>
+      <div class="field">
+        <label>En-têtes / cookies à injecter</label>
+        <textarea class="txt-input" id="inject" placeholder="localStorage.setItem('token','...');
+document.cookie='session=abc; path=/';"></textarea>
+      </div>
+      <button class="btn" onclick="App.injectSession()">Injecter dans l'iframe</button>
+      <div class="toggle-row" style="margin-top:0.5rem">
+        <span>Maintien de session (ré-injection)</span>
+        <label class="switch"><input type="checkbox" id="tg-keepalive" onchange="App.keepAlive()"><span class="slider"></span></label>
+      </div>
+      <div class="hint">
+        <span class="status-dot ok"></span><b>Ouvert depuis Camille</b> (<code>/outils/responsive.html</code>), l'outil est sur la même origine que le site : l'iframe partage ta session (Camille la garde dans le <code>localStorage</code>), tu es déjà connecté et tu le restes d'une page à l'autre.<br>
+        Ouvert comme fichier local ou sur un autre domaine, le navigateur isole le stockage de l'iframe : la connexion ne tient pas. Dans ce cas, « Popup réelle ».
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🛠️ Outils développeur</h3>
+      <div class="toggle-row">
+        <span>Thème sombre forcé</span>
+        <label class="switch"><input type="checkbox" id="tg-dark" onchange="App.applyDevTools()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span>Curseur tactile</span>
+        <label class="switch"><input type="checkbox" id="tg-touch" onchange="App.applyDevTools()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span>Grille / règle</span>
+        <label class="switch"><input type="checkbox" id="tg-grid" onchange="App.applyDevTools()"><span class="slider"></span></label>
+      </div>
+      <div class="field" style="margin-top:0.6rem">
+        <label>Réseau simulé</label>
+        <select id="throttle" onchange="App.applyThrottle()">
+          <option value="none">Rapide (aucun délai)</option>
+          <option value="3g">3G lent (~2s)</option>
+          <option value="offline">Hors ligne</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Zoom du rendu</label>
+        <select id="zoom" onchange="App.applyZoom()">
+          <option value="fit" selected>Ajuster à l'écran (auto)</option>
+          <option value="0.4">40%</option>
+          <option value="0.5">50%</option>
+          <option value="0.65">65%</option>
+          <option value="0.8">80%</option>
+          <option value="1">100%</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📝 Journal / Logs</h3>
+      <div class="row2">
+        <button class="btn" onclick="Logger.pickFile()">📂 Fichier log…</button>
+        <button class="btn" onclick="Logger.download()">⬇ Exporter</button>
+      </div>
+      <div class="toggle-row" style="margin-top:0.5rem">
+        <span>Journalisation active</span>
+        <label class="switch"><input type="checkbox" id="tg-logging" checked onchange="Logger.toggle()"><span class="slider"></span></label>
+      </div>
+      <div class="field" style="margin-top:0.4rem">
+        <label id="log-status">Aucun fichier lié — les logs restent en mémoire</label>
+        <div id="log-view" style="background:var(--bg-main);border:1px solid var(--card-border);border-radius:9px;padding:0.5rem;height:130px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:0.68rem;line-height:1.5;color:var(--text-muted);"></div>
+      </div>
+      <div class="row2">
+        <button class="btn" onclick="Logger.note()">✎ Note manuelle</button>
+        <button class="btn" onclick="Logger.clear()">🗑 Vider</button>
+      </div>
+      <div class="hint">
+        Le bouton « Fichier log… » ouvre un vrai fichier <code>.log</code> sur ton PC (Chrome/Edge) : chaque action y est écrite en direct. Sinon, « Exporter » télécharge le journal.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const DEVICES = [
+  { id:'iphone-se',    name:'iPhone SE',           w:375,  h:667,  dpr:2, chassis:'chassis-ios' },
+  { id:'iphone-13',    name:'iPhone 13/14',        w:390,  h:844,  dpr:3, chassis:'chassis-ios' },
+  { id:'iphone-15-pro',name:'iPhone 15 Pro',       w:393,  h:852,  dpr:3, chassis:'chassis-ios' },
+  { id:'iphone-15-pm', name:'iPhone 15 Pro Max',   w:430,  h:932,  dpr:3, chassis:'chassis-ios' },
+  { id:'pixel-8',      name:'Google Pixel 8',      w:412,  h:915,  dpr:3, chassis:'chassis-android' },
+  { id:'s24',          name:'Samsung Galaxy S24',  w:360,  h:780,  dpr:3, chassis:'chassis-android' },
+  { id:'s24-ultra',    name:'Galaxy S24 Ultra',    w:384,  h:824,  dpr:3, chassis:'chassis-android' },
+  { id:'s23-fe',       name:'Galaxy S23 FE',       w:360,  h:780,  dpr:3, chassis:'chassis-android' },
+  { id:'a54',          name:'Galaxy A54 (mid)',    w:360,  h:800,  dpr:2, chassis:'chassis-android' },
+  { id:'a15',          name:'Galaxy A15 (entrée)', w:360,  h:800,  dpr:2, chassis:'chassis-android' },
+  { id:'pixel-8-pro',  name:'Pixel 8 Pro',         w:448,  h:998,  dpr:3, chassis:'chassis-android' },
+  { id:'pixel-7a',     name:'Pixel 7a',            w:412,  h:892,  dpr:2, chassis:'chassis-android' },
+  { id:'redmi-note',   name:'Redmi Note 13',       w:393,  h:873,  dpr:2, chassis:'chassis-android' },
+  { id:'xiaomi-14',    name:'Xiaomi 14',           w:390,  h:844,  dpr:3, chassis:'chassis-android' },
+  { id:'oneplus-12',   name:'OnePlus 12',          w:412,  h:919,  dpr:3, chassis:'chassis-android' },
+  { id:'oppo-reno',    name:'Oppo Reno 11',        w:360,  h:804,  dpr:3, chassis:'chassis-android' },
+  { id:'tecno',        name:'Tecno Camon (Afr.)',  w:360,  h:760,  dpr:2, chassis:'chassis-android' },
+  { id:'infinix',      name:'Infinix Note (Afr.)', w:360,  h:800,  dpr:2, chassis:'chassis-android' },
+  { id:'itel',         name:'itel (entrée Afr.)',  w:360,  h:640,  dpr:1.5, chassis:'chassis-android' },
+  { id:'ipad-mini',    name:'iPad Mini',           w:768,  h:1024, dpr:2, chassis:'chassis-tablet' },
+  { id:'ipad-pro',     name:'iPad Pro 11"',        w:834,  h:1194, dpr:2, chassis:'chassis-tablet' },
+  { id:'galaxy-tab',   name:'Galaxy Tab S9',       w:800,  h:1280, dpr:2, chassis:'chassis-tablet' },
+  { id:'laptop',       name:'Laptop 1280',         w:1280, h:800,  dpr:1, chassis:'chassis-desktop' },
+  { id:'desktop',      name:'Desktop 1440',        w:1440, h:900,  dpr:1, chassis:'chassis-desktop' },
+];
+
+const Logger = {
+  entries: [],
+  handle: null,      // FileSystemFileHandle
+  enabled: true,
+
+  async pickFile() {
+    if (!window.showSaveFilePicker) {
+      alert('Ton navigateur ne supporte pas l\'écriture directe de fichier (utilise Chrome ou Edge).\nTu peux quand même utiliser « Exporter » pour télécharger le journal.');
+      return;
+    }
+    try {
+      const d = new Date();
+      const stamp = d.toISOString().slice(0,10);
+      this.handle = await window.showSaveFilePicker({
+        suggestedName: `responsive-tester_${stamp}.log`,
+        types: [{ description: 'Fichier log', accept: { 'text/plain': ['.log', '.txt'] } }],
+      });
+      document.getElementById('log-status').innerHTML =
+        '<span style="color:var(--green)">● Lié : ' + this.handle.name + '</span>';
+      this.log('SESSION', 'Fichier de log lié : ' + this.handle.name);
+      await this.flush();
+    } catch (e) {
+      if (e.name !== 'AbortError') this.log('ERREUR', 'Sélection fichier : ' + e.message);
+    }
+  },
+
+  async flush() {
+    if (!this.handle) return;
+    try {
+      const w = await this.handle.createWritable();
+      await w.write(this.entries.map(e => e.line).join('\n') + '\n');
+      await w.close();
+    } catch (e) {
+      document.getElementById('log-status').innerHTML =
+        '<span style="color:var(--amber)">● Écriture impossible (permission perdue)</span>';
+    }
+  },
+
+  log(type, msg) {
+    if (!this.enabled) return;
+    const t = new Date().toLocaleTimeString('fr-FR');
+    const line = `[${t}] ${type.padEnd(9)} ${msg}`;
+    this.entries.push({ line });
+    if (this.entries.length > 500) this.entries.shift();
+    const view = document.getElementById('log-view');
+    if (view) {
+      const div = document.createElement('div');
+      const color = type === 'ERREUR' ? 'var(--red)' : type === 'AUTH' ? 'var(--amber)' : 'var(--text-muted)';
+      div.style.color = color;
+      div.textContent = line;
+      view.appendChild(div);
+      view.scrollTop = view.scrollHeight;
+    }
+    this.flush();
+  },
+
+  toggle() { this.enabled = document.getElementById('tg-logging').checked; },
+
+  note() {
+    const m = prompt('Note à consigner dans le journal :');
+    if (m) this.log('NOTE', m);
+  },
+
+  clear() {
+    this.entries = [];
+    document.getElementById('log-view').innerHTML = '';
+    this.log('SESSION', 'Journal vidé');
+  },
+
+  download() {
+    const blob = new Blob([this.entries.map(e => e.line).join('\n') + '\n'], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `responsive-tester_${new Date().toISOString().slice(0,10)}.log`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  },
+};
+
+const App = {
+  landscape: false,
+  compare: false,
+  custom: { a:null, b:null },
+  keepAliveTimer: null,
+
+  init() {
+    ['a','b'].forEach(k => {
+      const sel = document.getElementById('device-'+k);
+      DEVICES.forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.id; o.textContent = `${d.name}  ·  ${d.w}×${d.h}`;
+        sel.appendChild(o);
+      });
+    });
+    document.getElementById('device-a').value = 's24';
+    document.getElementById('device-b').value = 'iphone-15-pro';
+    this.applyDevice('a');
+    this.applyDevice('b');
+    document.getElementById('url').addEventListener('keypress', e => {
+      if (e.key === 'Enter') this.load();
+    });
+    ['frame-a','frame-b'].forEach(id => {
+      document.getElementById(id).addEventListener('load', () => this.checkBlocked(id));
+    });
+    Logger.log('SESSION', 'Responsive Tester démarré');
+    // Servi par Camille : on charge directement le tableau de bord, avec la
+    // session déjà ouverte dans ce navigateur.
+    const params = new URLSearchParams(location.search);
+    const depart = params.get('url') || (this.memeOrigine() ? location.origin + '/dashboard' : 'https://camille.vps.buyticle.com/dashboard');
+    document.getElementById('url').value = depart;
+    this.majOrigine();
+    this.load();
+    document.addEventListener('fullscreenchange', () => {
+      document.getElementById('btn-full').classList.toggle('active', !!document.fullscreenElement);
+      setTimeout(() => { this.render('a'); if (this.compare) this.render('b'); }, 60);
+    });
+    // Recalcule l'échelle quand la fenêtre change de taille
+    window.addEventListener('resize', () => {
+      this.render('a'); if (this.compare) this.render('b');
+    });
+  },
+
+  dev(k) {
+    if (this.custom[k]) return this.custom[k];
+    const id = document.getElementById('device-'+k).value;
+    return DEVICES.find(d => d.id === id);
+  },
+
+  applyDevice(k) {
+    this.custom[k] = null;
+    const d = this.dev(k);
+    if (k === 'a') {
+      document.getElementById('cw').value = d.w;
+      document.getElementById('ch').value = d.h;
+      document.getElementById('dpr').value = d.dpr;
+      document.getElementById('chassis').value = d.chassis;
+    }
+    this.render(k);
+    Logger.log('APPAREIL', `Écran ${k.toUpperCase()} → ${d.name} (${d.w}×${d.h})`);
+  },
+
+  applyChassis() {
+    const c = document.getElementById('chassis').value;
+    document.getElementById('phone-a').className = 'phone ' + c + (this.landscape ? ' landscape' : '');
+    if (this.compare) document.getElementById('phone-b').className = 'phone ' + c + (this.landscape ? ' landscape' : '');
+  },
+
+  applyCustom() {
+    const w = +document.getElementById('cw').value || 360;
+    const h = +document.getElementById('ch').value || 800;
+    this.custom.a = { w, h, dpr:+document.getElementById('dpr').value, chassis:document.getElementById('chassis').value, name:'Custom' };
+    this.render('a');
+  },
+
+  quickSize(w, h) {
+    document.getElementById('cw').value = w;
+    document.getElementById('ch').value = h;
+    this.applyCustom();
+  },
+
+  effectiveZoom(w, h) {
+    const setting = document.getElementById('zoom').value;
+    // Espace réellement disponible dans la scène (moins le châssis ~26px et un padding de sécurité)
+    const stage = document.getElementById('stage');
+    const slots = this.compare ? 2 : 1;
+    const availH = stage.clientHeight - 90;                 // marge verticale (caption + padding)
+    const availW = (stage.clientWidth / slots) - 60;        // largeur par appareil
+    const fitZoom = Math.min(availH / h, availW / w);
+    if (setting === 'fit') return Math.max(0.2, Math.min(fitZoom, 1)); // auto, jamais > 100%
+    // Zoom manuel choisi, mais plafonné pour ne jamais déborder de l'écran
+    return Math.min(+setting, fitZoom);
+  },
+
+  render(k) {
+    const d = this.dev(k);
+    let w = d.w, h = d.h;
+    if (this.landscape) { [w, h] = [h, w]; }
+    const zoom = this.effectiveZoom(w, h);
+
+    const screen = document.getElementById('screen-'+k);
+    const frame = document.getElementById('frame-'+k);
+
+    screen.style.width = (w * zoom) + 'px';
+    screen.style.height = (h * zoom) + 'px';
+    frame.style.width = w + 'px';
+    frame.style.height = h + 'px';
+    frame.style.transform = `scale(${zoom})`;
+
+    const cap = document.getElementById('cap-'+k);
+    cap.innerHTML = `<b>${d.name}</b> · ${w}×${h} · ${this.landscape?'paysage':'portrait'} · ${Math.round(zoom*100)}%`;
+    this.updateRuler();
+    this.applyChassis();
+  },
+
+  updateRuler() {
+    const d = this.dev('a');
+    let w = d.w, h = d.h;
+    if (this.landscape) [w, h] = [h, w];
+    const dpr = document.getElementById('dpr').value;
+    document.getElementById('ruler').textContent = `${w} × ${h} px  ·  @${dpr}x  ·  ${(w*dpr)}×${(h*dpr)} réels`;
+  },
+
+  applyZoom() { this.render('a'); if (this.compare) this.render('b'); },
+
+  rotate() {
+    this.landscape = !this.landscape;
+    document.getElementById('btn-rotate').classList.toggle('active', this.landscape);
+    this.render('a'); if (this.compare) this.render('b');
+    Logger.log('ACTION', 'Rotation → ' + (this.landscape ? 'paysage' : 'portrait'));
+  },
+
+  toggleCompare() {
+    this.compare = !this.compare;
+    document.getElementById('btn-compare').classList.toggle('active', this.compare);
+    document.getElementById('slot-b').style.display = this.compare ? 'flex' : 'none';
+    document.getElementById('device-b-field').style.display = this.compare ? 'block' : 'none';
+    if (this.compare) { this.applyDevice('b'); this.load(); }
+    Logger.log('ACTION', 'Mode comparaison ' + (this.compare ? 'activé' : 'désactivé'));
+  },
+
+  memeOrigine() { return /^https?:$/.test(location.protocol); },
+
+  normUrl(u) {
+    u = u.trim();
+    if (!u) return '';
+    // Chemin relatif (/dashboard…) : sur le site qui sert cet outil.
+    if (u.startsWith('/') && this.memeOrigine()) return location.origin + u;
+    if (!/^https?:\/\//i.test(u) && !/^localhost/i.test(u)) u = 'https://' + u;
+    else if (/^localhost/i.test(u)) u = 'http://' + u;
+    return u;
+  },
+
+  load() {
+    const u = this.normUrl(document.getElementById('url').value);
+    if (!u) return;
+    document.getElementById('url').value = u;
+    ['a','b'].forEach(k => {
+      if (k === 'b' && !this.compare) return;
+      document.getElementById('block-'+k) && (document.getElementById('block-'+k).classList.remove('show'));
+      document.getElementById('frame-'+k).src = u;
+    });
+    this.majOrigine();
+    Logger.log('CHARGE', 'URL chargée : ' + u);
+  },
+
+  majOrigine() {
+    const el = document.getElementById('origine');
+    const u = this.normUrl(document.getElementById('url').value);
+    let meme = false;
+    try { meme = this.memeOrigine() && new URL(u).origin === location.origin; } catch (e) {}
+    el.className = 'origine ' + (meme ? 'ok' : 'warn');
+    el.textContent = meme ? '● Même origine — session partagée' : '● Autre origine — la connexion ne tiendra pas';
+    el.title = meme ? '' : 'Ouvre cet outil depuis le site testé (ex. /outils/responsive.html) ou utilise « Popup réelle ».';
+  },
+
+  togglePanneau() {
+    const app = document.querySelector('.app');
+    app.classList.toggle('sans-panneau');
+    document.getElementById('btn-panneau').classList.toggle('active', app.classList.contains('sans-panneau'));
+    setTimeout(() => { this.render('a'); if (this.compare) this.render('b'); }, 30);
+  },
+
+  pleinEcran() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  },
+
+  reload() {
+    ['a','b'].forEach(k => {
+      if (k === 'b' && !this.compare) return;
+      const f = document.getElementById('frame-'+k);
+      try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; }
+    });
+  },
+
+  checkBlocked(id) {
+    // Détection best-effort : si le doc de l'iframe est inaccessible ET vide → probablement bloqué
+    const frame = document.getElementById(id);
+    const k = id.split('-')[1];
+    const overlay = document.getElementById('block-'+k);
+    if (!overlay) return;
+    setTimeout(() => {
+      try {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        // same-origin accessible : pas bloqué
+        if (doc && doc.body && doc.body.innerHTML.length > 0) {
+          overlay.classList.remove('show');
+          Logger.log('CHARGE', `Écran ${k.toUpperCase()} : page rendue (same-origin OK)`);
+        }
+      } catch (e) {
+        // cross-origin : on ne peut pas lire — c'est le contexte tiers qui cassera la session au changement de page
+        Logger.log('AUTH', `Écran ${k.toUpperCase()} : contexte cross-origin — cookie SameSite risque de sauter au changement de page`);
+      }
+    }, 800);
+  },
+
+  popup() {
+    const u = this.normUrl(document.getElementById('url').value);
+    if (!u) return;
+    const d = this.dev('a');
+    let w = d.w, h = d.h;
+    if (this.landscape) [w, h] = [h, w];
+    window.open(u, 'realpreview', `width=${w},height=${h},resizable=yes,scrollbars=yes`);
+    Logger.log('ACTION', `Popup réelle ouverte (${w}×${h}) — auth conservée`);
+  },
+
+  keepAlive() {
+    const on = document.getElementById('tg-keepalive').checked;
+    clearInterval(this.keepAliveTimer);
+    if (!on) { Logger.log('AUTH', 'Maintien de session désactivé'); return; }
+    const code = document.getElementById('inject').value.trim();
+    if (!code) { alert('Renseigne d\'abord le token/cookie à ré-injecter dans le champ ci-dessus.'); document.getElementById('tg-keepalive').checked = false; return; }
+    Logger.log('AUTH', 'Maintien de session activé (ré-injection toutes les 5 s)');
+    this.keepAliveTimer = setInterval(() => {
+      const frame = document.getElementById('frame-a');
+      try { new Function(code).call(frame.contentWindow); }
+      catch (e) { Logger.log('AUTH', 'Ré-injection impossible (cross-origin) — passe en même origine ou popup'); }
+    }, 5000);
+  },
+
+  injectSession() {
+    const code = document.getElementById('inject').value.trim();
+    if (!code) return;
+    const frame = document.getElementById('frame-a');
+    try {
+      const win = frame.contentWindow;
+      // eslint-disable-next-line no-new-func
+      new Function(code).call(win);
+      Logger.log('AUTH', 'Session injectée dans l\'iframe (same-origin)');
+      alert('Injecté. Recharge l\'iframe pour appliquer si nécessaire.');
+    } catch (e) {
+      Logger.log('ERREUR', 'Injection refusée : site cross-origin');
+      alert('Injection impossible : le site est cross-origin (protégé par le navigateur).\nUtilise cet outil sur tes sites same-origin / dev local, ou passe par « Popup réelle ».');
+    }
+  },
+
+  applyDevTools() {
+    const dark = document.getElementById('tg-dark').checked;
+    const touch = document.getElementById('tg-touch').checked;
+    const grid = document.getElementById('tg-grid').checked;
+    ['a','b'].forEach(k => {
+      const frame = document.getElementById('frame-'+k);
+      frame.style.cursor = touch ? 'pointer' : '';
+      try {
+        const doc = frame.contentDocument;
+        if (doc) {
+          doc.documentElement.style.filter = dark ? 'invert(1) hue-rotate(180deg)' : '';
+          let g = doc.getElementById('__rt_grid');
+          if (grid && !g) {
+            g = doc.createElement('div');
+            g.id = '__rt_grid';
+            g.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:99999;background-image:linear-gradient(rgba(59,130,246,.15) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.15) 1px,transparent 1px);background-size:8px 8px;';
+            doc.body.appendChild(g);
+          } else if (!grid && g) { g.remove(); }
+        }
+      } catch (e) { /* cross-origin */ }
+    });
+  },
+
+  applyThrottle() {
+    const mode = document.getElementById('throttle').value;
+    if (mode === 'none') return;
+    const frame = document.getElementById('frame-a');
+    const src = frame.src;
+    if (mode === 'offline') { frame.src = 'about:blank'; return; }
+    if (mode === '3g') {
+      frame.src = 'about:blank';
+      setTimeout(() => { frame.src = src; }, 2000);
+    }
+  },
+
+  screenshot() {
+    // Capture native best-effort : on tente html2canvas si dispo, sinon guide l'utilisateur
+    alert('Capture : pour un screenshot fidèle, fais Cmd/Ctrl+Shift+4 (macOS) ou Win+Shift+S (Windows) sur la zone du téléphone.\n\nAstuce : les captures cross-origin ne sont pas lisibles par JS pour raison de sécurité navigateur.');
+  },
+};
+
+App.init();
+</script>
+</body>
+</html>
