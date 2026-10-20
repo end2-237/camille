@@ -71,7 +71,7 @@ import {
   appliquerChoix, creneaux, libelleCreneau, lignesListe, lireChoixTexte, lireHeureDemandee,
   normaliserOptions, ouvertMaintenant, questionsPour, type GroupeOptions,
 } from "./restaurant";
-import { lireHoraires, closedNotice } from "@/lib/horaires";
+import { closedNotice, etatMaintenant, lireSemaine, prochaineOuverture, resumeSemaine } from "@/lib/horaires";
 import { formatVitrine, formatNaturel, noterEnvoi } from "./repetition";
 import {
   articlesPour, libelleVariante, produitParent, retailerAffiche, varianteDemandee,
@@ -976,10 +976,9 @@ async function demanderHeure(ctx: Contexte, intro = "") {
   const { agent, phone } = ctx;
   const ouvert = ouvertMaintenant(agent.business_hours);
   if (ouvert === false || intro) {
-    const ho = lireHoraires(agent.business_hours);
     const corps =
       intro ||
-      `On est fermé pour le moment${ho ? ` (ouvert de ${heureLisible(ho.ouvre)} à ${heureLisible(ho.ferme)})` : ""}.\n` +
+      `On est fermé pour le moment${reouverture(agent.business_hours)}.\n` +
         "Choisis l'heure à laquelle tu veux ta commande, on la prépare pour ce moment-là.";
     return envoyerCreneaux(ctx, corps);
   }
@@ -1001,11 +1000,24 @@ async function envoyerCreneaux(ctx: Contexte, corps: string) {
   await tracer(agent.id, phone, "assistant", "[créneaux proposés]");
 }
 
-/** 8.5 → « 8h30 ». */
-function heureLisible(x: number): string {
-  const h = Math.floor(x);
-  const m = Math.round((x - h) * 60);
-  return `${h}h${m ? String(m).padStart(2, "0") : ""}`;
+/** Les quartiers regroupés par tarif, du moins cher au plus cher. */
+function parTarif(zones: { zone: string; fee: number }[]) {
+  const m = new Map<number, string[]>();
+  for (const z of zones) m.set(z.fee, [...(m.get(z.fee) || []), z.zone]);
+  return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([fee, noms]) => ({ fee, noms }));
+}
+
+/** « ; on rouvre demain à 8h » — vide si les horaires ne se lisent pas. */
+function reouverture(hours: string | null | undefined): string {
+  const s = lireSemaine(hours);
+  const p = s ? prochaineOuverture(s, new Date(), 1) : null;
+  return p ? `, on rouvre ${p.texte}` : "";
+}
+
+/** « (Lun-Sam 8h-19h · Dim fermé) » — vide si les horaires ne se lisent pas. */
+function horairesLisibles(hours: string | null | undefined): string {
+  const s = lireSemaine(hours);
+  return s ? ` (${resumeSemaine(s)})` : "";
 }
 
 /** Le panier devient une commande, avec tout ce qu'il faut pour la préparer. */
@@ -1035,16 +1047,32 @@ async function finaliserPanier(
   if (livraison && agent.delivery_enabled && zones.length && !opts.adresse && !panier.etat?.zone) {
     const etat = { ...panier.etat, pos: opts.lat != null && opts.lng != null ? { lat: opts.lat, lng: opts.lng } : null };
     await garderPanier(agent.id, phone, { ...panier, etat });
+    // Le nom du quartier écrit en réponse doit être lu comme une adresse.
+    await etapePanier(agent.id, phone, "adresse");
     const cur = panier.items[0]?.currency || agent.currency || "XAF";
-    await meta.sendList(phone, "Merci 👍 Dans quel quartier on te livre ? Les frais en dépendent.", "Mon quartier", [
-      {
-        title: "Quartiers",
-        rows: [
-          ...zones.slice(0, 9).map((z, i) => ({ id: `zone:${i}`, title: z.zone, description: `Livraison ${money(z.fee, cur)}` })),
-          { id: "zone:autre", title: "Autre quartier", description: `Livraison ${money(Number(agent.delivery_fee) || 0, cur)}` },
-        ],
-      },
-    ]);
+    // Une liste WhatsApp tient 10 lignes. Au-delà de 9 quartiers, on liste les
+    // tarifs (avec leurs quartiers en description) et le client peut aussi
+    // écrire le nom du sien.
+    const rangees =
+      zones.length <= 9
+        ? zones.map((z, i) => ({ id: `zone:${i}`, title: z.zone.slice(0, 24), description: `Livraison ${money(z.fee, cur)}` }))
+        : parTarif(zones).slice(0, 9).map((t) => ({
+            id: `zone:f${t.fee}`,
+            title: `Livraison ${money(t.fee, cur)}`.slice(0, 24),
+            description: t.noms.join(", ").slice(0, 72),
+          }));
+    const r = await meta.sendList(
+      phone,
+      zones.length <= 9
+        ? "Merci 👍 Dans quel quartier on te livre ? Les frais en dépendent."
+        : "Merci 👍 Dans quel quartier on te livre ? *Écris son nom*, ou choisis ton tarif dans la liste.",
+      "Mon quartier",
+      [{
+        title: zones.length <= 9 ? "Quartiers" : "Tarifs",
+        rows: [...rangees, { id: "zone:autre", title: "Autre quartier", description: `Livraison ${money(Number(agent.delivery_fee) || 0, cur)}` }],
+      }]
+    );
+    if (!r.ok) await meta.sendText(phone, "Merci 👍 Dans quel quartier on te livre ? Écris son nom.");
     return;
   }
   const fraisZone = panier.etat?.zone?.frais ?? (opts.adresse ? zoneDansAdresse(zones, opts.adresse)?.fee : undefined);
@@ -1518,6 +1546,7 @@ function faitsDe(agent: Contexte["agent"]): FaitsCommerce {
     nom: agent.business_name || "la boutique",
     adresse: agent.location,
     horaires: agent.business_hours,
+    etat: etatMaintenant(agent.business_hours, Number((agent as { utc_offset?: number }).utc_offset ?? 1)),
     fraisLivraison: agent.delivery_fee != null ? Number(agent.delivery_fee) : null,
     livraison: Boolean(agent.delivery_enabled),
     devise: agent.currency || "XAF",
@@ -1638,8 +1667,16 @@ export async function repondreBoutique(
       // Le quartier, choisi dans la liste des zones de livraison.
       if (id.startsWith("zone:")) {
         const zones = zonesDe(agent);
-        const z = id === "zone:autre" ? null : zones[Number(id.slice(5))];
-        const etat = { ...enAttente.etat, zone: z ? { nom: z.zone, frais: z.fee } : { nom: "Autre quartier", frais: Number(agent.delivery_fee) || 0 } };
+        const tarif = id.startsWith("zone:f") ? Number(id.slice(6)) : null;
+        const z = id === "zone:autre" || tarif !== null ? null : zones[Number(id.slice(5))];
+        const etat = {
+          ...enAttente.etat,
+          zone: z
+            ? { nom: z.zone, frais: z.fee }
+            : tarif !== null && Number.isFinite(tarif)
+              ? { nom: parTarif(zones).find((t) => t.fee === tarif)?.noms.slice(0, 3).join(" / ") || "Zone", frais: tarif }
+              : { nom: "Autre quartier", frais: Number(agent.delivery_fee) || 0 },
+        };
         const panier = { ...enAttente, etat };
         await garderPanier(agent.id, phone, panier);
         return finaliserPanier(ctx, panier, { mode: "livraison", lat: etat.pos?.lat, lng: etat.pos?.lng });
@@ -1756,10 +1793,9 @@ export async function repondreBoutique(
       }
       const h = lireHeureDemandee(msg.text, agent.business_hours);
       if (h?.hors) {
-        const ho = lireHoraires(agent.business_hours);
         return demanderHeure(
           ctx,
-          `À cette heure-là on est fermé${ho ? ` (ouvert de ${heureLisible(ho.ouvre)} à ${heureLisible(ho.ferme)})` : ""}. Choisis un autre moment :`
+          `À cette heure-là on est fermé${horairesLisibles(agent.business_hours)}. Choisis un autre moment :`
         );
       }
       if (h) return choisirHeure(ctx, enAttente, h.quand, resto);
@@ -1773,8 +1809,11 @@ export async function repondreBoutique(
       return demanderPosition(ctx);
     }
     if (enAttente.etape === "adresse" && msg.text.trim().length >= 4) {
+      // Après une position GPS, le texte est le quartier : on garde la position.
+      const pos = enAttente.etat?.pos;
       return finaliserPanier(ctx, enAttente, {
         mode: "livraison", adresse: msg.text.trim().replace(/\s+/g, " ").slice(0, 200),
+        ...(pos ? { lat: pos.lat, lng: pos.lng } : {}),
       });
     }
   }

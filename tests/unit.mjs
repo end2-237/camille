@@ -650,6 +650,58 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("8h30 s'écrit « 8h30 »", closedNotice("8h30 - 18h", 1, a(1)).includes("8h30"));
 }
 
+// ═══ quartiers — le barème sans rien taper ═════════════════════════════════
+{
+  const { QUARTIERS, lireBareme, ecrireBareme, appliquerTarif } = await import(`${DIST}/quartiers.js`);
+  const { zoneDansAdresse } = await import(`${DIST}/whatsapp/livraison.js`);
+  groupe("quartiers — barème de livraison");
+  chk("Douala a sa liste", QUARTIERS.Douala.length > 80);
+  chk("pas de doublon dans Douala", new Set(QUARTIERS.Douala).size === QUARTIERS.Douala.length);
+  let z = appliquerTarif([], ["Akwa", "Bonanjo"], 500);
+  z = appliquerTarif(z, ["Bonamoussadi"], 1500);
+  z = appliquerTarif(z, ["akwa"], 700);
+  eq("mise à jour sans doublon (casse ignorée)", z.filter((x) => x.zone.toLowerCase() === "akwa").length, 1);
+  eq("aller-retour texte", lireBareme(ecrireBareme(z)), lireBareme("Bonanjo = 500\nakwa = 700\nBonamoussadi = 1500"));
+  eq("« bona moussadi » retrouve Bonamoussadi", zoneDansAdresse(z, "je suis à bona moussadi carrefour")?.fee, 1500);
+  eq("« PK 14 » retrouve PK14", zoneDansAdresse([{ zone: "PK14", fee: 2000 }], "PK 14 entrée")?.fee, 2000);
+}
+
+// ═══ horaires — les jours comptent ═════════════════════════════════════════
+{
+  const { lireSemaine, ouvertA, prochaineOuverture, resumeSemaine, etatMaintenant, closedNotice, HORAIRES_RAPIDES } = await import(`${DIST}/horaires.js`);
+  groupe("horaires — la semaine, pas seulement une plage");
+  // Le 4 octobre 2026 est un dimanche. Heure de Douala = UTC+1.
+  const le = (jour, h, mn = 0) => new Date(Date.UTC(2026, 9, 4 + jour, h - 1, mn));
+  const s1 = lireSemaine("Lun-Ven 9h-18h, Sam 10h-17h");
+  chk("Lun-Ven : ouvert lundi 10h", ouvertA(s1, le(1, 10)));
+  chk("Lun-Ven : fermé dimanche 10h (le bug d'avant)", !ouvertA(s1, le(0, 10)));
+  chk("Sam 10h-17h : fermé samedi 9h30", !ouvertA(s1, le(6, 9, 30)));
+  chk("Sam 10h-17h : ouvert samedi 16h", ouvertA(s1, le(6, 16)));
+  eq("résumé lisible", resumeSemaine(s1), "Lun-Ven 9h-18h · Sam 10h-17h · Dim fermé");
+  eq("samedi 18h → rouvre lundi à 9h", prochaineOuverture(s1, le(6, 18)).texte, "lundi à 9h");
+  eq("vendredi 20h → rouvre demain à 10h", prochaineOuverture(s1, le(5, 20)).texte, "demain à 10h");
+  chk("« 08:00 - 22:00 » se lit", ouvertA(lireSemaine("08:00 - 22:00"), le(2, 21)));
+  const s2 = lireSemaine("du lundi au samedi de 8h à 20h, dimanche fermé");
+  chk("« du lundi au samedi » : mercredi 12h ouvert", ouvertA(s2, le(3, 12)));
+  chk("« dimanche fermé » : fermé", !ouvertA(s2, le(0, 12)));
+  const s3 = lireSemaine("8h-20h, dimanche fermé");
+  chk("plage générale + dimanche fermé : mardi ouvert", ouvertA(s3, le(2, 9)));
+  chk("plage générale + dimanche fermé : dimanche fermé", !ouvertA(s3, le(0, 9)));
+  const s4 = lireSemaine("Tous les jours 11h-15h et 18h-23h");
+  chk("coupure de l'après-midi : fermé à 16h", !ouvertA(s4, le(2, 16)));
+  chk("coupure : ouvert à 19h", ouvertA(s4, le(2, 19)));
+  const s5 = lireSemaine("Ven-Sam 20h-03h");
+  chk("nuit de samedi : ouvert dimanche 2h", ouvertA(s5, le(0, 2)));
+  chk("nuit : fermé jeudi 2h", !ouvertA(s5, le(4, 2)));
+  chk("« mon magasin ouvre 8h-18h » : pas pris pour lundi", ouvertA(lireSemaine("mon magasin ouvre 8h-18h"), le(3, 9)));
+  chk("illisible → null", lireSemaine("sur rendez-vous") === null);
+  chk("24h/24 → toujours ouvert", ouvertA(lireSemaine("24h/24, 7j/7"), le(0, 3)));
+  chk("accusé un dimanche : annonce lundi", closedNotice("Lun-Sam 8h-19h, Dim fermé", 1, le(0, 12)).includes("demain à 8h"));
+  chk("le modèle sait qu'on est fermé", etatMaintenant("Lun-Sam 8h-19h", 1, le(0, 12)).includes("FERMÉ"));
+  chk("le modèle sait le jour", etatMaintenant("Lun-Sam 8h-19h", 1, le(2, 12)).startsWith("Nous sommes mardi"));
+  chk("chaque horaire rapide se lit", HORAIRES_RAPIDES.every((h) => lireSemaine(h.texte)));
+}
+
 // ═══ variantes — montrer LA couleur demandée ═══════════════════════════════
 {
   groupe("variantes — la couleur demandée est celle qu'on montre");

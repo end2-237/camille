@@ -11,7 +11,7 @@
 //
 // Aucune dépendance réseau ni base : tout ici est éprouvé par les tests.
 // ─────────────────────────────────────────────────────────────────────────────
-import { lireHoraires, estOuvert } from "../horaires";
+import { lireSemaine, ouvertA, type Semaine } from "../horaires";
 
 // ── Les options d'un plat ───────────────────────────────────────────────────
 
@@ -155,7 +155,7 @@ export function creneaux(
   pas = 30,
   delai = 30
 ): Date[] {
-  const h = lireHoraires(hours) || { ouvre: 8, ferme: 22 };
+  const s: Semaine = lireSemaine(hours) || Array.from({ length: 7 }, () => [[8, 22]]);
   const sortie: Date[] = [];
   const debut = maintenant.getTime() + delai * 60_000;
   // Arrondi au pas suivant, en minutes locales.
@@ -163,7 +163,7 @@ export function creneaux(
   const fin = maintenant.getTime() + 48 * 3600_000;
   while (sortie.length < n && t <= fin) {
     const d = new Date(t);
-    if (estOuvert(h.ouvre, h.ferme, local(d, offset).heure)) sortie.push(d);
+    if (ouvertA(s, d, offset)) sortie.push(d);
     t += pas * 60_000;
   }
   return sortie;
@@ -171,9 +171,9 @@ export function creneaux(
 
 /** Ouvert en ce moment ? `null` si les horaires ne se lisent pas. */
 export function ouvertMaintenant(hours: string | null | undefined, maintenant: Date = new Date(), offset = 1): boolean | null {
-  const h = lireHoraires(hours);
-  if (!h) return null;
-  return estOuvert(h.ouvre, h.ferme, local(maintenant, offset).heure);
+  const s = lireSemaine(hours);
+  if (!s) return null;
+  return ouvertA(s, maintenant, offset);
 }
 
 /**
@@ -208,8 +208,8 @@ export function lireHeureDemandee(
   let quand = minuitLocal + (h * 60 + m) * 60_000;
   if (/\bdemain\b/.test(t) || quand < maintenant.getTime() + 20 * 60_000) quand += 86400_000;
 
-  const ho = lireHoraires(hours);
-  const hors = ho ? !estOuvert(ho.ouvre, ho.ferme, h + m / 60) : false;
+  const s = lireSemaine(hours);
+  const hors = s ? !ouvertA(s, new Date(quand), offset) : false;
   return { quand: new Date(quand), hors };
 }
 

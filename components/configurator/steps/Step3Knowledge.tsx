@@ -5,6 +5,7 @@
 "use client";
 
 import { useFormContext, useFieldArray } from "react-hook-form";
+import { HorairesRapides } from "@/components/dashboard/HorairesRapides";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import type { AgentFormData } from "@/types/agent";
@@ -12,7 +13,7 @@ import { Field } from "./Step1Business";
 import { cn } from "@/lib/utils";
 
 export function Step3Knowledge() {
-  const { register, control, formState: { errors } } =
+  const { register, control, watch, setValue, formState: { errors } } =
     useFormContext<AgentFormData>();
 
   const {
@@ -59,8 +60,12 @@ export function Step3Knowledge() {
       <Field label="Horaires d'ouverture">
         <input
           {...register("business_hours")}
-          placeholder="Lun-Ven 9h-18h, Sam 10h-17h (CET)"
+          placeholder="Lun-Sam 8h-19h, Dim fermé"
           className="input-midnight"
+        />
+        <HorairesRapides
+          valeur={watch("business_hours") ?? ""}
+          onChoisir={(texte) => setValue("business_hours", texte, { shouldDirty: true })}
         />
       </Field>
 

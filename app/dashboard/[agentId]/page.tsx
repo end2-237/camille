@@ -10,6 +10,7 @@
 
 "use client";
 
+import { HorairesRapides } from "@/components/dashboard/HorairesRapides";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence }          from "framer-motion";
@@ -584,11 +585,14 @@ function KnowledgeTab({ agent, onSave }: { agent: Agent; onSave: (p: Partial<Age
           {[
             { key: "products_services", label: "Produits & Services",  placeholder: "Robe en coton bio 49€, Jean recyclé 89€…" },
             { key: "pricing_info",      label: "Tarifs & Offres",      placeholder: "Livraison gratuite dès 60€, -20% fidélité…" },
-            { key: "business_hours",    label: "Horaires d'ouverture", placeholder: "Lun-Ven 9h-18h, Sam 10h-17h" },
+            { key: "business_hours",    label: "Horaires d'ouverture", placeholder: "Lun-Sam 8h-19h, Dim fermé" },
             { key: "policies",          label: "Politiques",           placeholder: "Retours sous 30 jours, remboursement intégral…" },
           ].map(({ key, label, placeholder }) => (
             <Field key={key} label={label}>
               <FTextarea value={(form as any)[key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} rows={3} />
+              {key === "business_hours" ? (
+                <HorairesRapides valeur={form.business_hours ?? ""} onChoisir={(texte) => setForm((f) => ({ ...f, business_hours: texte }))} />
+              ) : null}
             </Field>
           ))}
         </div>

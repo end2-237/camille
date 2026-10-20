@@ -12,6 +12,7 @@ import { authHeaders } from "@/lib/auth-client";
 import { getMaxLevel } from "@/lib/plans";
 import BonPreview, { MODELES } from "@/components/BonPreview";
 import { Bouton, Filtres, Pastille, Squelettes, StylesUI, apparait } from "@/components/dashboard/ui";
+import { ZonesLivraison } from "@/components/dashboard/ZonesLivraison";
 import { RESSORT } from "@/components/dashboard/coquille/Entete";
 
 /**
@@ -482,21 +483,21 @@ export default function AgentSettingsPage() {
                   onChange={(e) => setCfg({ ...cfg, delivery_fee: e.target.value === "" ? 0 : Number(e.target.value) })} />
               </label>
 
-              <label className="grid min-w-0 gap-1.5">
+              <div className="grid min-w-0 gap-1.5">
                 <span className="flex flex-wrap items-center justify-between gap-2">
-                  <Etiquette>Tarifs par quartier — une ligne par zone</Etiquette>
+                  <Etiquette>Tarifs par quartier</Etiquette>
                   {zones.length > 0 && <Pastille ton="violet">{zones.length} zone{zones.length > 1 ? "s" : ""} reconnue{zones.length > 1 ? "s" : ""}</Pastille>}
                 </span>
-                <textarea className="ui-champ font-mono text-[13px]" rows={5}
-                  value={cfg.delivery_zones_text ?? ""}
-                  onChange={(e) => setCfg({ ...cfg, delivery_zones_text: e.target.value })}
-                  placeholder={"Bonaberi = 2000\nAkwa = 500\nBonamoussadi = 1500"} />
+                <ZonesLivraison
+                  texte={cfg.delivery_zones_text ?? ""}
+                  onChange={(t) => setCfg({ ...cfg, delivery_zones_text: t })} />
                 <Aide>
-                  Le quartier est cherché dans l&apos;adresse du client. Sur WhatsApp, un client qui
-                  envoie sa position choisit son quartier dans la liste. Sans correspondance,
-                  les frais par défaut s&apos;appliquent. Aucun frais sur place ou à emporter.
+                  Cochez les quartiers qui ont le même tarif, puis « Ajouter ». Le quartier est
+                  cherché dans l&apos;adresse du client ; sur WhatsApp, il le choisit dans une liste
+                  ou l&apos;écrit. Sans correspondance, les frais par défaut s&apos;appliquent.
+                  Aucun frais sur place ou à emporter.
                 </Aide>
-              </label>
+              </div>
             </div>
 
             <div className="mt-5 grid gap-5 md:grid-cols-2">

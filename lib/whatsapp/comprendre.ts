@@ -69,6 +69,12 @@ export type FaitsCommerce = {
   nom: string;
   adresse?: string | null;
   horaires?: string | null;
+  /**
+   * Le jour, l'heure et l'état ouvert/fermé, au moment du message. Sans lui
+   * le modèle ne sait pas quel jour on est, et répond « oui, on est ouverts »
+   * à 23 h un dimanche.
+   */
+  etat?: string;
   fraisLivraison?: number | null;
   livraison: boolean;
   devise: string;
@@ -151,6 +157,7 @@ export function faitsNumeriques(
   return [
     messageClient,
     faits.horaires || "",
+    faits.etat || "",
     faits.adresse || "",
     faits.fraisLivraison != null ? String(faits.fraisLivraison) : "",
     ...prods.flatMap((p) => [
@@ -302,7 +309,10 @@ export function cleCache(parties: {
   memoire: string; historique: { role: string; content: string }[];
 }): string {
   const cat = parties.prods.map((p) => `${p.id}:${p.price}:${p.stock}`).join("|");
-  const f = `${parties.faits.nom}|${parties.faits.adresse}|${parties.faits.horaires}|${parties.faits.fraisLivraison}|${parties.faits.livraison}`;
+  // L'état ouvert/fermé entre dans la clé, pas la minute : une réponse « on est
+  // ouverts » mise en cache à 17 h ne doit pas resservir à 23 h.
+  const etat = (parties.faits.etat || "").replace(/il est [^.]*\./, "");
+  const f = `${parties.faits.nom}|${parties.faits.adresse}|${parties.faits.horaires}|${etat}|${parties.faits.fraisLivraison}|${parties.faits.livraison}`;
   const h = parties.historique.map((x) => `${x.role}:${x.content}`).join("|");
   const msg = parties.message.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
   return [
@@ -394,7 +404,7 @@ Tu as une boîte à outils. Chaque outil PRODUIT quelque chose chez le client �
 
 {"faire":"montrer","produits":["id","id"]} → envoie la VRAIE fiche WhatsApp : photo, prix, et le bouton « Ajouter au panier ». C'est le SEUL outil avec lequel le client peut acheter. Dès qu'il parle d'un article qu'on a, utilise-le : décrire un produit par du texte au lieu d'envoyer sa fiche, c'est lui retirer le bouton d'achat.
 {"faire":"vitrine"} → la même chose pour tout le catalogue. Quand il n'a rien visé de précis.
-{"faire":"repondre","texte":"..."} → un simple message. Pour ce qui n'est PAS un produit : livraison, horaires, une confirmation. Une ou deux phrases, tutoiement.
+{"faire":"repondre","texte":"..."} → un simple message. Pour ce qui n'est PAS un produit : livraison, horaires, une confirmation. Une ou deux phrases, tutoiement. « Vous êtes ouverts ? », « vous fermez à quelle heure ? » : réponds d'après la ligne MAINTENANT, jamais d'après ton idée de l'heure.
 {"faire":"infos"} → envoie l'adresse et notre position sur la carte.
 {"faire":"position"} → affiche le bouton natif « Envoyer ma position ». Pour obtenir ou corriger une adresse de livraison.
 {"faire":"retrait"} → il vient chercher sur place.
@@ -494,6 +504,8 @@ export async function comprendre(
       ...(memoire.resume
         ? [{ role: "user" as const, content: `CE CLIENT — ${memoire.resume}` }]
         : []),
+      // L'heure aussi : elle change à chaque minute, elle casserait le préfixe.
+      ...(faits.etat ? [{ role: "system" as const, content: `MAINTENANT — ${faits.etat}` }] : []),
       { role: "user", content: message.slice(0, 1000) },
     ],
   };

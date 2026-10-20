@@ -18,7 +18,11 @@ export function zonesDe(agent: { delivery_zones?: unknown }): { zone: string; fe
 /** Le quartier nommé dans une adresse écrite, s'il est au barème. Le plus long l'emporte (« Bonamoussadi » avant « Bona »). */
 export function zoneDansAdresse(zones: { zone: string; fee: number }[], adresse: string) {
   const a = sansAccent(adresse);
-  return [...zones].sort((x, y) => y.zone.length - x.zone.length).find((z) => a.includes(sansAccent(z.zone))) || null;
+  // Sans espaces ni tirets : « bona moussadi », « Bonamoussadi », « PK 14 » / « PK14 ».
+  const serre = (s: string) => sansAccent(s).replace(/[^a-z0-9]/g, "");
+  const as = serre(adresse);
+  const tries = [...zones].sort((x, y) => y.zone.length - x.zone.length);
+  return tries.find((z) => a.includes(sansAccent(z.zone))) || tries.find((z) => serre(z.zone).length >= 4 && as.includes(serre(z.zone))) || null;
 }
 
 /** Jours de service : 1 = lundi … 7 = dimanche ; liste vide = tous les jours. */
