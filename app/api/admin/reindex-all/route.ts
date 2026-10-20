@@ -13,7 +13,6 @@ import { saveAgentIndex } from "@/lib/vectorStore";
 const ADMIN_KEY = process.env.ADMIN_REINDEX_KEY || "";
 
 export async function POST(req: NextRequest) {
-  // Si ADMIN_REINDEX_KEY est défini → on l'exige. Sinon endpoint ouvert (à sécuriser plus tard).
   // Sans clé configurée, on REFUSE. L'ancienne condition ne s'activait que
   // si la variable existait : une route d'administration restait donc
   // grande ouverte tant que personne ne pensait à la définir, et le code

@@ -41,7 +41,7 @@ export function FournisseurNotifs({ children }: { children: React.ReactNode }) {
     const recu = (e: MessageEvent) => {
       const d = e.data as { camille?: string; data?: Record<string, string> } | null;
       if (d?.camille !== "push") return;
-      if (d.data?.type === "order") sonner(d.data.orderId || d.data.ref || String(Date.now()));
+      if (d.data?.type === "order" && d.data?.nuit !== "1") sonner(d.data.orderId || d.data.ref || String(Date.now()));
       reload();
     };
     navigator.serviceWorker.addEventListener("message", recu);
@@ -57,7 +57,7 @@ export function FournisseurNotifs({ children }: { children: React.ReactNode }) {
     for (const n of list) {
       if (vues.current.has(n.id)) continue;
       vues.current.add(n.id);
-      if (!n.read_at && n.data?.type === "order") sonner(n.data.orderId || n.data.ref || n.id);
+      if (!n.read_at && n.data?.type === "order" && n.data?.nuit !== "1") sonner(n.data.orderId || n.data.ref || n.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list]);

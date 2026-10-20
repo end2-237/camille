@@ -341,6 +341,18 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
   );
   const shop = ag.rows[0] ?? {};
 
+  // Commande passée boutique FERMÉE : marquée « de nuit » pour le commerçant,
+  // et la notification part sans son (elle reste dans la cloche). Le réveiller
+  // à 3 h du matin pour une commande qu'il traitera à l'ouverture n'aide
+  // personne.
+  const deNuit = closedNotice(shop.business_hours as string, Number(shop.utc_offset ?? 1)) !== "";
+  if (deNuit && orderId) {
+    await query(
+      `UPDATE camille.orders SET note = '🌙 Commande de nuit' || COALESCE(' — ' || note, '') WHERE id = $1`,
+      [orderId]
+    ).catch(() => {});
+  }
+
   const lignes = items
     .map((i, k) => `${k + 1}. ${i.name}${i.variant ? ` — ${i.variant}` : ""}  ×${i.qty || 1}`)
     .join("\n");
@@ -399,9 +411,12 @@ export async function createOrder(input: NewOrder): Promise<CreatedOrder | { ok:
   if (shop.user_id) {
     const quoi = items.map((i) => `${i.qty || 1}× ${i.name}`).join(", ");
     notifyUser(shop.user_id, "commande", {
-      title: `Nouvelle commande — ${money(total, currency)}`,
+      title: `${deNuit ? "🌙 Commande de nuit" : "Nouvelle commande"} — ${money(total, currency)}`,
       body: `${customerName ? `${customerName} · ` : ""}${quoi}`.slice(0, 160),
-      data: { type: "order", ref, orderId: String(orderId || ""), agentId: String(input.agentId), source },
+      data: {
+        type: "order", ref, orderId: String(orderId || ""), agentId: String(input.agentId), source,
+        ...(deNuit ? { nuit: "1" } : {}),
+      },
       channel: "commandes",
     }).catch(() => {});
 

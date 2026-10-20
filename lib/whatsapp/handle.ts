@@ -19,7 +19,7 @@ import { sectorProfile, sertDesRepas } from "@/lib/sectorProfiles";
 import * as meta from "./meta";
 import { avecAgent } from "./identifiants";
 import { etatQuota } from "@/lib/quota";
-import { repondreBoutique } from "./boutique";
+import { repondreBoutique, prevenirCommercant } from "./boutique";
 import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
 
 export type IncomingMessage = {
@@ -353,13 +353,21 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
 
       case "services":
       case "media":
-        // Pas encore porté. On le dit plutôt que de laisser le client sans
-        // réponse — un silence est le seul échec impardonnable.
+        // Pas encore de parcours automatique (rendez-vous…). On le dit au
+        // client, et SURTOUT on prévient le commerçant : promettre « un
+        // conseiller vous répond » sans prévenir personne laissait le client
+        // attendre pour rien.
+        await prevenirCommercant(ctx, {
+          titre: `Nouveau message — ${msg.contactName || "+" + phone}`,
+          corps: msg.text || "Un client vous a écrit sur WhatsApp.",
+          contenu: { kind: "service_request", message: msg.text || "", contact: phone, name: msg.contactName || "" },
+        });
         await meta.sendText(
           phone,
           `Bonjour 👋 Je suis l'assistant de ${agent.business_name || "la maison"}. ` +
-            `Dites-moi ce dont vous avez besoin, un conseiller vous répond très vite.`
+            `J'ai transmis votre message, un conseiller vous répond très vite ici même.`
         );
+        await tracer(agent.id, phone, "assistant", "[services] transmis au commerçant");
         break;
     }
   } catch (e) {

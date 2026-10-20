@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { handleIncoming, type IncomingMessage } from "@/lib/whatsapp/handle";
+import { traiterEchecs } from "@/lib/whatsapp/statuts";
 
 // ── Vérification de l'abonnement ────────────────────────────────────────────
 
@@ -221,6 +222,8 @@ export async function POST(req: NextRequest) {
   }
 
   const messages = extraire(body);
+  // Les accusés d'échec : le commerçant doit savoir qu'un message n'est pas parti.
+  traiterEchecs(body).catch(() => {});
 
   // On accuse réception AVANT de traiter. Le traitement part détaché : une
   // erreur dedans ne doit ni retarder l'accusé, ni provoquer un réessai de

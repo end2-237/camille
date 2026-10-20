@@ -46,7 +46,9 @@ const STATUT_META = (() => {
   const partenaire = false;
   return partenaire
     ? { badge: "Partenaire Meta · API officielle", bande: "Partenaire Meta", sous: "Camille est partenaire Meta et passe par l'API officielle WhatsApp Business." }
-    : { badge: "API officielle WhatsApp Business", bande: "Construite sur la plateforme officielle de Meta", sous: "Pas une application détournée : l'API WhatsApp Business de Meta, celle des grandes marques." };
+    // L'application a passé l'examen de Meta (app review) en octobre 2026 :
+    // c'est vrai et vérifiable. Ce n'est pas encore le statut de partenaire.
+    : { badge: "Application validée par Meta", bande: "Application validée par Meta", sous: "Camille a passé l'examen de Meta et utilise l'API officielle WhatsApp Business, celle des grandes marques. Pas une application détournée." };
 })();
 const RESSORT = { type: "spring", stiffness: 320, damping: 30 } as const;
 

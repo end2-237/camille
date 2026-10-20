@@ -165,7 +165,15 @@ export default function LivraisonPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ action: "take" }),
-      }).then(() => charger()).catch(() => {});
+      }).then(async (r) => {
+        // Déjà prise par un autre livreur : on le dit et on arrête le suivi.
+        if (r.status === 409) {
+          const d = await r.json().catch(() => ({}));
+          toast.error(d.error || "Cette course est déjà prise.");
+          arreter();
+        }
+        charger();
+      }).catch(() => {});
     }
   }
 
@@ -285,7 +293,11 @@ export default function LivraisonPage() {
                   >
                     <Ligne label="À livrer à :" valeur={heure(c.scheduled_at)} />
                     <Ligne label="Nombre d'articles :" valeur={`${c.items_count}×`} />
-                    <Ligne label="À encaisser :" valeur={c.payment_method ? "Déjà réglé" : `${Number(c.total).toLocaleString("fr-FR")} ${c.currency}`} />
+                    {/* Toujours le montant : « Déjà réglé » s'affichait dès qu'un moyen de
+                        paiement était ANNONCÉ (même « espèces »), et le livreur repartait
+                        sans l'argent. Le moyen annoncé est une information, pas une preuve. */}
+                    <Ligne label="À encaisser :" valeur={`${Number(c.total).toLocaleString("fr-FR")} ${c.currency}`} />
+                    {c.payment_method && <Ligne label="Paiement annoncé :" valeur={c.payment_method} />}
 
                     <BlocLivraison
                       status={c.status}

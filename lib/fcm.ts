@@ -135,6 +135,10 @@ async function notifierUn(
     // table absente : on continue, l'envoi push reste possible
   }
 
+  // Commande de nuit : enregistrée dans la cloche ci-dessus, mais sans
+  // notification sonore sur les appareils.
+  if (p.data?.nuit === "1") return { sent: 0, skipped: "commande de nuit : pas de son" };
+
   let tous: string[] = [];
   try {
     const r = await query(

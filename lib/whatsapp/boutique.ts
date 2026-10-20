@@ -56,6 +56,7 @@ import { compterTokens } from "./usage";
 import { query } from "@/lib/db";
 import { sectorProfile } from "@/lib/sectorProfiles";
 import { createOrder } from "@/lib/orders";
+import { notifyUser } from "@/lib/fcm";
 import * as meta from "./meta";
 import { tracer, sessionMeta, type Contexte } from "./handle";
 import { contexteCommande, lireIdSuivi, recapCommande, etapesCommande, type ActionSuivi } from "./suivi";
@@ -68,7 +69,7 @@ import {
   appliquerChoix, creneaux, libelleCreneau, lignesListe, lireChoixTexte, lireHeureDemandee,
   normaliserOptions, ouvertMaintenant, questionsPour, type GroupeOptions,
 } from "./restaurant";
-import { lireHoraires } from "@/lib/horaires";
+import { lireHoraires, closedNotice } from "@/lib/horaires";
 import { formatVitrine, formatNaturel, noterEnvoi } from "./repetition";
 import {
   articlesPour, libelleVariante, produitParent, retailerAffiche, varianteDemandee,
@@ -670,6 +671,55 @@ function recapPanier(items: LignePanier[], cur: string): { texte: string; total:
   return { texte: items.map((l) => `• ${l.qty} × ${l.name}${l.variant ? ` (${l.variant})` : ""}`).join("\n"), total };
 }
 
+/**
+ * La dernière vérification avant d'enregistrer la commande : lit le stock
+ * actuel des produits du panier et ajuste (quantité ramenée, ligne retirée),
+ * en le disant au client. Les lignes sans produit suivi passent telles quelles.
+ */
+async function revérifierStock<T extends { productId?: string; name?: string; qty: number }>(
+  ctx: Contexte, lignes: T[]
+): Promise<T[]> {
+  const ids = [...new Set(lignes.map((l) => l.productId).filter(Boolean))] as string[];
+  if (!ids.length) return lignes;
+  let stock = new Map<string, { stock: number | null; actif: boolean }>();
+  try {
+    const r = await query(
+      `SELECT id::text AS id, stock, COALESCE(active, true) AS actif
+         FROM camille.products WHERE agent_id = $1 AND id = ANY($2::uuid[])`,
+      [ctx.agent.id, ids]
+    );
+    stock = new Map(r.rows.map((x: Record<string, unknown>) => [
+      String(x.id), { stock: x.stock != null ? Number(x.stock) : null, actif: x.actif !== false },
+    ]));
+  } catch {
+    return lignes; // lecture impossible : on ne bloque pas la vente
+  }
+  const reste = new Map<string, number>();
+  const sortie: T[] = [];
+  const avis: string[] = [];
+  for (const l of lignes) {
+    const s = l.productId ? stock.get(l.productId) : undefined;
+    if (!s || (s.stock == null && s.actif)) { sortie.push(l); continue; }
+    const dispo = reste.has(l.productId!) ? reste.get(l.productId!)! : s.actif ? Math.max(0, s.stock ?? 0) : 0;
+    if (dispo <= 0) { avis.push(`*${l.name}* vient d'être épuisé, je l'ai retiré.`); continue; }
+    if (l.qty > dispo) {
+      avis.push(`*${l.name}* : il n'en reste que ${dispo}, j'ai ajusté.`);
+      sortie.push({ ...l, qty: dispo });
+      reste.set(l.productId!, 0);
+      continue;
+    }
+    sortie.push(l);
+    reste.set(l.productId!, dispo - l.qty);
+  }
+  if (avis.length && sortie.length) await meta.sendText(ctx.phone, `Petit changement de dernière minute 🙏\n${avis.join("\n")}`);
+  return sortie;
+}
+
+/** La phrase « on est fermé, ce sera traité à l'ouverture », ou "" si ouvert / horaires inconnus. */
+function fermeNotice(agent: Contexte["agent"]): string {
+  return closedNotice(agent.business_hours, Number((agent as { utc_offset?: number }).utc_offset ?? 1));
+}
+
 /** En dessous, on prévient le client que l'article part vite (même seuil que le commerçant). */
 const STOCK_FAIBLE = Number(process.env.LOW_STOCK_THRESHOLD || 5);
 
@@ -742,7 +792,7 @@ async function recevoirPanier(ctx: Contexte, resto: boolean) {
   const prods = await catalogue(agent.id, true);
   const parRetailer = new Map(prods.map((p) => [p.retailerId, p]));
 
-  const trouves = items.map((it) =>
+  const trouves: (Produit | undefined)[] = items.map((it) =>
     // Une commande de VARIATION porte « <produit>:<option> ». C'est le PARENT
     // qui tient le stock : sans ce repli, une commande de variation ne
     // décompterait rien — le défaut d'origine, rouvert par une autre porte.
@@ -750,6 +800,14 @@ async function recevoirPanier(ctx: Contexte, resto: boolean) {
     parRetailer.get(produitParent(it.retailerId)) ||
     prods.find((x) => x.id === produitParent(it.retailerId))
   );
+  // Variation d'un produit IMPORTÉ de Meta : elle porte son propre identifiant
+  // Meta, sans lien visible avec le produit Camille (relié à une seule
+  // variation du groupe). On demande à Meta les autres membres du groupe.
+  for (let k = 0; k < items.length; k++) {
+    if (trouves[k]) continue;
+    const g = await meta.membresDuGroupe(items[k].retailerId).catch(() => ({ ok: false, ids: [] as string[] }));
+    trouves[k] = g.ids.map((id) => parRetailer.get(id)).find(Boolean);
+  }
 
   const toutes: LignePanier[] = items.map((it, k) => {
     const p = trouves[k];
@@ -950,6 +1008,17 @@ async function finaliserPanier(
     return c;
   });
   const quand = panier.etat?.quand || null;
+
+  // Le stock a pu bouger depuis l'arrivée du panier (options, heure, adresse :
+  // plusieurs minutes). On revérifie juste avant d'enregistrer.
+  const ajuste = await revérifierStock(ctx, items);
+  if (!ajuste.length) {
+    await oublierPanier(agent.id, phone);
+    await meta.sendText(phone, "Désolé 😕 entre-temps, les articles de ton panier ont été vendus. Dis-moi ce que tu cherches, je te propose autre chose.");
+    return;
+  }
+  items.splice(0, items.length, ...ajuste);
+
   const res = await createOrder({
     agentId: agent.id,
     items,
@@ -993,7 +1062,10 @@ async function finaliserPanier(
     `Total : *${money(Number(c.total) || 0, cur)}*` +
     (lieu ? `\n${lieu}` : "") +
     (quand ? `\nPour : *${libelleCreneau(new Date(quand))}*` : "") +
-    (livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part." : "\n\nOn te prépare ça, tu es prévenu dès que c'est prêt.");
+    (fermeNotice(agent)
+      // Boutique fermée : on ne promet pas « on s'en occupe » à 3 h du matin.
+      ? fermeNotice(agent)
+      : livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part." : "\n\nOn te prépare ça, tu es prévenu dès que c'est prêt.");
 
   // Le bon de commande part TOUT DE SUITE, la confirmation en légende : un seul
   // message, et le client a sa preuve dès qu'il commande. Le passage « en
@@ -1027,8 +1099,59 @@ async function finaliserPanier(
  * donc aussi, en texte, qu'il suffit d'écrire son adresse. Les deux réponses
  * sont acceptées.
  */
+// ── La position partagée avant la commande ─────────────────────────────────
+//
+// Gardée dans la fiche client (`contacts.addresses`, une entrée « whatsapp »),
+// valable 3 heures : au-delà, le client a pu bouger, on la redemande.
+
+const POSITION_VALIDE = "3 hours";
+
+async function garderPosition(agentId: string, phone: string, lat: number, lng: number): Promise<boolean> {
+  try {
+    const entree = JSON.stringify([{ label: "whatsapp", lat, lng, at: new Date().toISOString() }]);
+    await query(
+      `INSERT INTO camille.contacts (agent_id, phone, addresses, created_at, updated_at)
+       VALUES ($1, $2, $3::jsonb, NOW(), NOW())
+       ON CONFLICT (agent_id, phone) DO UPDATE SET
+         addresses = COALESCE((SELECT jsonb_agg(a) FROM jsonb_array_elements(camille.contacts.addresses) a
+                                WHERE a->>'label' IS DISTINCT FROM 'whatsapp'), '[]'::jsonb) || $3::jsonb,
+         updated_at = NOW()`,
+      [agentId, phone, entree]
+    );
+    return true;
+  } catch (e) {
+    console.warn("[boutique] position non gardée :", (e as Error).message);
+    return false;
+  }
+}
+
+async function positionRecente(agentId: string, phone: string): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const r = await query(
+      `SELECT (a->>'lat')::float8 AS lat, (a->>'lng')::float8 AS lng
+         FROM camille.contacts c, jsonb_array_elements(c.addresses) a
+        WHERE c.agent_id = $1 AND c.phone = $2 AND a->>'label' = 'whatsapp'
+          AND (a->>'at')::timestamptz > NOW() - INTERVAL '${POSITION_VALIDE}'
+        LIMIT 1`,
+      [agentId, phone]
+    );
+    const p = r.rows[0];
+    return p && Number.isFinite(p.lat) && Number.isFinite(p.lng) ? { lat: Number(p.lat), lng: Number(p.lng) } : null;
+  } catch {
+    return null;
+  }
+}
+
 async function demanderPosition(ctx: Contexte) {
   const { agent, phone } = ctx;
+  // Le client a déjà partagé sa position il y a peu : on s'en sert au lieu de
+  // la redemander.
+  const deja = await positionRecente(agent.id, phone);
+  const panier = deja ? await lirePanier(agent.id, phone) : null;
+  if (deja && panier) {
+    await meta.sendText(phone, "📍 Je livre à la position que tu m'as envoyée tout à l'heure.");
+    return finaliserPanier(ctx, panier, { mode: "livraison", lat: deja.lat, lng: deja.lng });
+  }
   // Un panier en attente passe à l'étape « adresse » : la prochaine position
   // ou adresse écrite le complétera. Sans panier, la requête ne touche rien.
   await etapePanier(agent.id, phone, "adresse");
@@ -1390,9 +1513,16 @@ export async function repondreBoutique(
       // Aucune commande à rattacher : le client a partagé sa position sans
       // avoir commandé. On ne fait pas semblant de l'avoir enregistrée.
       if (!r.rows.length) {
+        // Rien à compléter pour l'instant : on GARDE la position (3 h) pour la
+        // prochaine commande en livraison. Si elle ne peut pas être gardée, on
+        // le dit — promettre de la garder sans le faire obligeait le client à
+        // la renvoyer sans savoir pourquoi.
+        const garde = await garderPosition(agent.id, phone, msg.location.lat, msg.location.lng);
         await meta.sendText(
           phone,
-          "Merci 📍 Je garde ça de côté. Compose ton panier et envoie-le, je rattache l'adresse à ta commande 🛒"
+          garde
+            ? "Merci 📍 C'est noté. Compose ton panier et envoie-le : je livrerai à cette position 🛒"
+            : "Merci 📍 Compose d'abord ton panier et envoie-le, puis repartage ta position : je la rattacherai à ta commande 🛒"
         );
         return;
       }
@@ -1766,6 +1896,46 @@ async function alerterSansSeTaire(ctx: Contexte, sujet: string) {
  * client écrit déjà. On l'y renvoyait vers lui-même — le bug avait été signalé
  * en production. Le client est au bon endroit ; c'est l'humain qui vient à lui.
  */
+/**
+ * Prévenir le commerçant qu'un client attend un humain : une tâche dans le
+ * tableau de bord ET une notification sur son téléphone. La tâche seule ne
+ * suffisait pas — personne ne la voyait avant d'ouvrir le tableau de bord, et
+ * le client attendait un « conseiller » qui ne venait jamais.
+ *
+ * Une seule alerte par client toutes les 6 h : un client qui écrit dix
+ * messages ne doit pas produire dix tâches.
+ */
+export async function prevenirCommercant(
+  ctx: Contexte,
+  alerte: { titre: string; corps: string; contenu: Record<string, unknown> }
+): Promise<void> {
+  const { agent, phone } = ctx;
+  try {
+    const recent = await query(
+      `SELECT 1 FROM camille.owner_tasks
+        WHERE agent_id = $1 AND phone = $2 AND created_at > NOW() - INTERVAL '6 hours'
+        LIMIT 1`,
+      [agent.id, phone]
+    );
+    if (recent.rows.length) return;
+    await query(
+      `INSERT INTO camille.owner_tasks (agent_id, phone, type, title, content)
+       VALUES ($1, $2, 'complaint', $3, $4::jsonb)`,
+      [agent.id, phone, alerte.titre, JSON.stringify(alerte.contenu)]
+    );
+  } catch (e) {
+    console.error("[boutique] tâche commerçant non créée :", (e as Error).message);
+  }
+  if (agent.user_id) {
+    await notifyUser(agent.user_id, "alerte", {
+      title: alerte.titre.slice(0, 90),
+      body: alerte.corps.slice(0, 160),
+      data: { type: "complaint", agentId: agent.id, phone },
+      channel: "alertes",
+    }).catch(() => {});
+  }
+}
+
 async function passerLaMain(
   ctx: Contexte,
   /** Pour un souci sur une commande : le titre et le contenu de la tâche du commerçant. */
@@ -1793,6 +1963,16 @@ async function passerLaMain(
     );
   } catch (e) {
     console.error("[boutique] passage de main incomplet :", (e as Error).message);
+  }
+  // Le commerçant doit le savoir TOUT DE SUITE : Camille vient de se taire, et
+  // le client attend une réponse humaine.
+  if (agent.user_id) {
+    await notifyUser(agent.user_id, "alerte", {
+      title: (dossier?.titre || `Un client veut parler à quelqu'un`).slice(0, 90),
+      body: `${msg.contactName || "+" + phone} : ${msg.text || "demande un conseiller"}`.slice(0, 160),
+      data: { type: "complaint", agentId: agent.id, phone },
+      channel: "alertes",
+    }).catch(() => {});
   }
 
   await meta.sendText(

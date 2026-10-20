@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const { action } = (await req.json().catch(() => ({}))) as { action?: string };
 
   const o = await query(
-    "SELECT id, agent_id, ref, status, courier_id FROM camille.orders WHERE id = $1",
+    "SELECT id, agent_id, ref, status, courier_id, courier_name FROM camille.orders WHERE id = $1",
     [orderId]
   );
   const order = o.rows[0];
@@ -44,13 +44,21 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   if (action === "take") {
+    // Une course ne se prend qu'une fois : sans cette condition, un second
+    // livreur écrasait le premier, et deux motos partaient pour un seul colis.
     const r = await query(
       `UPDATE camille.orders
           SET courier_id = $1, courier_name = $2,
               picked_up_at = COALESCE(picked_up_at, NOW()), updated_at = NOW()
-        WHERE id = $3 RETURNING *`,
+        WHERE id = $3 AND (courier_id IS NULL OR courier_id = $1) RETURNING *`,
       [courier.id, courier.display_name || user.full_name || user.email, orderId]
     );
+    if (!r.rows.length) {
+      return NextResponse.json(
+        { error: `Cette course est déjà prise par ${order.courier_name || "un autre livreur"}.` },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ order: r.rows[0] });
   }
 
