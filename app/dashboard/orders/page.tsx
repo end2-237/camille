@@ -84,6 +84,7 @@ export default function OrdersPage() {
   // La commande ouverte en fiche détaillée.
   const [detail, setDetail] = useState<Order | null>(null);
   const [photos, setPhotos] = useState<Record<string, string>>({});
+  const [plus, setPlus] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true); setErr("");
@@ -92,10 +93,37 @@ export default function OrdersPage() {
       const d = await r.json();
       if (d.error) setErr(d.error);
       setOrders(Array.isArray(d.orders) ? d.orders : []);
+      setPlus(Boolean(d.plus));
     } catch (e) {
       setErr((e as Error).message); setOrders([]);
     } finally { setBusy(false); }
   }, [agentId]);
+
+  // Les plus anciennes, par lots de 200.
+  async function chargerPlus() {
+    const dernier = orders?.[orders.length - 1]?.created_at;
+    if (!dernier) return;
+    setBusy(true);
+    try {
+      const q = new URLSearchParams({ avant: dernier, ...(agentId ? { agentId } : {}) });
+      const d = await (await fetch(`/api/orders?${q}`, { headers: { ...authHeaders() } })).json();
+      setOrders((l) => [...(l ?? []), ...(Array.isArray(d.orders) ? d.orders : [])]);
+      setPlus(Boolean(d.plus));
+    } finally { setBusy(false); }
+  }
+
+  // L'export : le fichier passe par fetch (le jeton est dans l'en-tête).
+  async function exporter() {
+    const q = new URLSearchParams({ format: "csv", ...(agentId ? { agentId } : {}) });
+    const r = await fetch(`/api/orders?${q}`, { headers: { ...authHeaders() } });
+    if (!r.ok) return setErr("Export impossible pour le moment.");
+    const url = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `commandes-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -207,6 +235,7 @@ export default function OrdersPage() {
             <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90" style={{ color: "var(--cl-ink-faint)" }} />
           </label>
           <BoutonRond icone={RefreshCw} label="Actualiser" onClick={load} disabled={busy} tourne={busy} />
+          <Bouton variante="doux" onClick={exporter}>Exporter (Excel)</Bouton>
           <Bouton variante="doux" icone={FileCheck2}
             onClick={() => {
               setDiag(null);
@@ -258,13 +287,24 @@ export default function OrdersPage() {
             </AnimatePresence>
           </motion.div>
         )}
+        {plus && (
+          <div className="mt-5 flex justify-center">
+            <Bouton variante="doux" onClick={chargerPlus} disabled={busy}>Voir les commandes plus anciennes</Bouton>
+          </div>
+        )}
       </div>
 
       {detail && (
         <OrderDetail
           order={detail}
           onClose={() => setDetail(null)}
-          onChange={(o, status) => change(o as Order, status)}
+          onChange={(o, status) => {
+            // Même statut : c'est une correction ou un livreur confié, déjà
+            // enregistrés par la fiche. On met juste la liste à jour.
+            const avant = orders?.find((x) => x.id === o.id)?.status;
+            if (avant === status) setOrders((p) => (p || []).map((x) => (x.id === o.id ? { ...x, ...(o as Order) } : x)));
+            else change(o as Order, status);
+          }}
         />
       )}
     </div>

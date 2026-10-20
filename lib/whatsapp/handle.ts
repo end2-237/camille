@@ -22,6 +22,7 @@ import { avecAgent } from "./identifiants";
 import { etatQuota } from "@/lib/quota";
 import { compterConversation } from "./usage";
 import { repondreBoutique, prevenirCommercant } from "./boutique";
+import { garderMedia } from "./photo";
 import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
 
 export type IncomingMessage = {
@@ -62,6 +63,12 @@ export type Agent = {
   website_url: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Barème par quartier : [{ zone, fee }]. */
+  delivery_zones?: unknown;
+  /** Délai annoncé au client (« 1 h à 2 h »). */
+  delivery_delay?: string | null;
+  /** Montant minimum d'une commande (articles, hors livraison). */
+  min_order?: number | null;
 };
 
 /** Ce qu'une réponse sectorielle reçoit pour travailler. */
@@ -94,7 +101,10 @@ async function trouverAgent(phoneNumberId: string): Promise<Agent | null> {
     COALESCE(to_jsonb(a)->>'currency', 'XAF')                   AS currency,
     to_jsonb(a)->>'business_hours'                              AS business_hours,
     (to_jsonb(a)->>'delivery_fee')::numeric                     AS delivery_fee,
-    COALESCE((to_jsonb(a)->>'delivery_enabled')::boolean, true)  AS delivery_enabled`;
+    COALESCE((to_jsonb(a)->>'delivery_enabled')::boolean, true)  AS delivery_enabled,
+    to_jsonb(a)->'delivery_zones'                               AS delivery_zones,
+    to_jsonb(a)->>'delivery_delay'                              AS delivery_delay,
+    (to_jsonb(a)->>'min_order')::numeric                        AS min_order`;
 
   // Un agent ne répond par Meta que s'il est ACTIF et marqué `transport='meta'`.
   // Sans ce second filtre, un agent resté sur camille-core mais qui garde un
@@ -337,6 +347,11 @@ export async function handleIncoming(msg: IncomingMessage): Promise<void> {
   return avecAgent(agent.id, () => traiterPourAgent(msg, agent, phone));
 }
 
+/** Comment on nomme au client ce qu'il a envoyé. */
+const LIBELLES_MEDIA: Record<string, string> = {
+  video: "ta vidéo", document: "ton document", contacts: "ce contact", image: "ta photo",
+};
+
 /** Clients déjà prévenus que l'agent est indisponible (agent:téléphone → instant). */
 const PREVENUS = new Map<string, number>();
 /** Dernière alerte « un client vous a écrit » pendant une reprise en main (agent:téléphone → instant). */
@@ -420,6 +435,23 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
 
   const ctx: Contexte = { agent, msg, phone };
   const mode = modeDeVente(agent);
+
+  // Vidéo, document, contact… : Camille ne sait pas les lire. Le média est
+  // gardé pour le commerçant, prévenu, et le client sait que c'est transmis.
+  // Les réactions (👍 sur un message) et les autocollants n'appellent rien.
+  if (msg.type === "unsupported") {
+    if (["reaction", "sticker", "unknown", "system", "ephemeral"].includes(String(msg.rawType))) return;
+    const nature = LIBELLES_MEDIA[String(msg.rawType)] || "ton message";
+    const url = msg.mediaId ? await garderMedia(agent.id, msg.mediaId, String(msg.rawType)) : null;
+    if (url) await tracer(agent.id, phone, "user", `[${msg.rawType}] ${url}`);
+    await prevenirCommercant(ctx, {
+      titre: `${msg.contactName || "+" + phone} a envoyé ${nature}`,
+      corps: msg.text || "À voir dans la boîte de réception.",
+      contenu: { kind: "media", type: msg.rawType, url, message: msg.text || "", contact: phone },
+    });
+    await meta.sendText(phone, `J'ai bien reçu ${nature} 👍 Je le transmets à l'équipe, qui te répond ici très vite.`);
+    return;
+  }
 
   try {
     switch (mode) {

@@ -166,16 +166,18 @@ function extraire(body: Record<string, unknown>): IncomingMessage[] {
           });
           continue;
         } else {
-          // vidéo, document, contact… non traités pour l'instant, mais
-          // on les fait remonter pour qu'un « je n'ai pas compris » reste poli
-          // plutôt qu'un silence.
+          // vidéo, document, contact… : Camille ne les lit pas, mais les
+          // garde pour le commerçant (identifiant du média) et répond poliment.
+          const md = (m[type] || {}) as { id?: string; caption?: string; mime_type?: string };
           out.push({
+            mediaId: md.id || undefined,
+            mime: md.mime_type || undefined,
             messageId: String(m.id || ""),
             from: String(m.from || ""),
             phoneNumberId: meta.phone_number_id || "",
             contactName: nom,
             type: "unsupported",
-            text: "",
+            text: md.caption || "",
             rawType: type,
             timestamp: Number(m.timestamp || 0),
           });

@@ -63,6 +63,8 @@ export default function LivraisonPage() {
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [missions, setMissions] = useState<{ agent_id: string; shop: string }[]>([]);
   const [code, setCode] = useState<string | null>(null);
+  // La preuve de remise : une photo facultative, réduite avant l'envoi.
+  const [photo, setPhoto] = useState<string | null>(null);
   const [copie, setCopie] = useState(false);
   const [warning, setWarning] = useState("");
   const [ouvert, setOuvert] = useState<string | null>(null);
@@ -192,11 +194,12 @@ export default function LivraisonPage() {
       const r = await fetch(`/api/courier/orders/${c.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ action: "delivered" }),
+        body: JSON.stringify({ action: "delivered", photo, ...(moi ? { lat: moi.lat, lng: moi.lng } : await positionUnique()) }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Impossible de marquer la livraison");
       toast.success(`Commande ${c.ref} livrée.`);
+      setPhoto(null);
       arreter();
       setCourses((l) => (l ?? []).filter((x) => x.id !== c.id));
       setOuvert(null);
@@ -361,6 +364,13 @@ export default function LivraisonPage() {
                             )}
                           </div>
 
+                          <label className="flex h-[40px] cursor-pointer items-center justify-center gap-2 rounded-[9px] text-[12.5px] font-semibold"
+                            style={{ border: "1px dashed #CFCFD8", color: photo ? "#1A7F4B" : "#101012" }}>
+                            <input type="file" accept="image/*" capture="environment" className="hidden"
+                              onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await reduirePhoto(f)); }} />
+                            {photo ? "✓ Photo de remise prête" : "📷 Photo de remise (facultatif)"}
+                          </label>
+
                           <button
                             onClick={() => livrer(c)}
                             disabled={busy}
@@ -403,4 +413,34 @@ export default function LivraisonPage() {
       }
     />
   );
+}
+
+/** La position du moment, si le téléphone la donne en 5 s ; sinon rien. */
+function positionUnique(): Promise<{ lat?: number; lng?: number }> {
+  return new Promise((ok) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return ok({});
+    navigator.geolocation.getCurrentPosition(
+      (p) => ok({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => ok({}),
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 },
+    );
+  });
+}
+
+/** Réduit une photo à 1280 px en JPEG : un colis se reconnaît très bien ainsi, et ça passe en 3G. */
+function reduirePhoto(f: File): Promise<string | null> {
+  return new Promise((ok) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      ok(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = () => ok(null);
+    img.src = URL.createObjectURL(f);
+  });
 }

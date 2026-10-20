@@ -261,6 +261,21 @@ async function reconcilierPour(
 
   const aRetirer: string[] = [];
   const raisons = { doublons: 0, perimes: 0, supprimes: 0 };
+
+  // Les articles importés puis supprimés dans Camille : on retente leur
+  // retrait, et l'import ci-dessous les ignore.
+  const retraits = new Set<string>();
+  try {
+    const r = await query(`SELECT retailer_id FROM camille.meta_retraits WHERE agent_id = $1`, [agentId]);
+    for (const x of r.rows) retraits.add(String(x.retailer_id));
+  } catch { /* table absente : comportement d'avant */ }
+  const presentsMeta = new Set(chezMeta.items.map((it) => it.retailer_id));
+  for (const rid of retraits) if (presentsMeta.has(rid)) { aRetirer.push(rid); raisons.supprimes++; }
+  // Disparus de Meta : plus rien à retenir.
+  const disparus = [...retraits].filter((rid) => !presentsMeta.has(rid));
+  if (disparus.length && chezMeta.items.length) {
+    await query(`DELETE FROM camille.meta_retraits WHERE agent_id = $1 AND retailer_id = ANY($2::text[])`, [agentId, disparus]).catch(() => {});
+  }
   for (const it of chezMeta.items) {
     const rid = it.retailer_id;
     if (!ecritParCamille(rid)) continue;
@@ -331,6 +346,8 @@ async function reconcilierPour(
     // plus haut). Jamais un import.
     if (g.membres.some((m) => ecritParCamille(m) || idsCamille.has(produitParent(m)))) continue;
     if (g.membres.some((m) => liesAilleurs.has(m))) continue;
+    // Supprimé dans Camille : jamais réimporté.
+    if (g.membres.some((m) => retraits.has(m))) continue;
 
     // L'appariement travaille sur le représentant du groupe, pas sur chaque
     // variation : c'est UN produit qu'on relie ou qu'on crée.

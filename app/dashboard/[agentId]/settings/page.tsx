@@ -49,6 +49,8 @@ interface Cfg {
   delivery_fee: number;
   /** Barème saisi en texte : "Bonaberi = 2000" par ligne. */
   delivery_zones_text: string;
+  delivery_delay: string;
+  min_order: number | null;
   menu_image_url: string | null;
   doc: DocSettings;
 }
@@ -132,6 +134,8 @@ export default function AgentSettingsPage() {
         // Le barème est stocké en JSON mais s'édite en texte : une ligne par
         // quartier est plus rapide à saisir qu'un tableau de champs.
         delivery_zones_text: zonesToText(ag.delivery_zones),
+        delivery_delay: ag.delivery_delay ?? "",
+        min_order: ag.min_order ?? null,
         menu_image_url: ag.menu_image_url ?? "",
         // Préremplissage : ce que le vendeur a déjà renseigné pour son agent
         // vaut mieux qu'un formulaire vide qu'il faudrait ressaisir.
@@ -218,6 +222,8 @@ export default function AgentSettingsPage() {
           delivery_enabled: cfg.delivery_enabled !== false,
           delivery_fee: Number(cfg.delivery_fee ?? 1000) || 0,
           delivery_zones: parseZones(cfg.delivery_zones_text ?? ""),
+          delivery_delay: (cfg.delivery_delay ?? "").trim() || null,
+          min_order: cfg.min_order ? Number(cfg.min_order) : null,
           menu_image_url: (cfg.menu_image_url ?? "").trim() || null,
           // Les champs vides ne sont pas enregistrés. Pour l'habillage, une clé
           // absente retombe sur le modèle choisi ; pour l'identité, elle ne
@@ -486,9 +492,27 @@ export default function AgentSettingsPage() {
                   onChange={(e) => setCfg({ ...cfg, delivery_zones_text: e.target.value })}
                   placeholder={"Bonaberi = 2000\nAkwa = 500\nBonamoussadi = 1500"} />
                 <Aide>
-                  Le quartier est cherché dans l&apos;adresse du client. Sans correspondance,
+                  Le quartier est cherché dans l&apos;adresse du client. Sur WhatsApp, un client qui
+                  envoie sa position choisit son quartier dans la liste. Sans correspondance,
                   les frais par défaut s&apos;appliquent. Aucun frais sur place ou à emporter.
                 </Aide>
+              </label>
+            </div>
+
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <label className="grid content-start gap-1.5">
+                <Etiquette>Délai annoncé au client</Etiquette>
+                <input className="ui-champ" maxLength={60} placeholder="1 h à 2 h"
+                  value={cfg.delivery_delay ?? ""}
+                  onChange={(e) => setCfg({ ...cfg, delivery_delay: e.target.value })} />
+                <Aide>Ajouté à la confirmation de commande.</Aide>
+              </label>
+              <label className="grid content-start gap-1.5">
+                <Etiquette>Commande minimum (XAF)</Etiquette>
+                <input className="ui-champ" type="number" min="0" step="100" placeholder="Aucun"
+                  value={cfg.min_order ?? ""}
+                  onChange={(e) => setCfg({ ...cfg, min_order: e.target.value === "" ? null : Number(e.target.value) })} />
+                <Aide>Articles seuls, hors livraison. Le client est prévenu avant d&apos;enregistrer.</Aide>
               </label>
             </div>
           </Bloc>

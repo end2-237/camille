@@ -67,8 +67,16 @@ export async function GET(req: NextRequest) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const agentId = req.nextUrl.searchParams.get("agentId");
-  const status = req.nextUrl.searchParams.get("status");
+  const sp = req.nextUrl.searchParams;
+  const agentId = sp.get("agentId");
+  const status = sp.get("status");
+  // Plus de 200 commandes : on pagine par date (« avant »), et l'export
+  // CSV prend toute une période d'un coup.
+  const csv = sp.get("format") === "csv";
+  const avant = sp.get("avant");
+  const du = sp.get("du");
+  const au = sp.get("au");
+  const limite = csv ? 10_000 : Math.min(500, Math.max(1, Number(sp.get("limit")) || 200));
 
   // Déclarés hors du try : le repli du catch en a besoin.
   const params: any[] = [user.id];
@@ -85,10 +93,16 @@ export async function GET(req: NextRequest) {
                 WHERE ${await sqlAgentAccessible("a", "$1")}`;
     if (agentId) { params.push(agentId); sql += ` AND o.agent_id = $${params.length}`; }
     if (status)  { params.push(status);  sql += ` AND o.status = $${params.length}`; }
-    sql += " ORDER BY o.created_at DESC LIMIT 200";
+    if (avant && !Number.isNaN(Date.parse(avant))) { params.push(avant); sql += ` AND o.created_at < $${params.length}`; }
+    if (du && !Number.isNaN(Date.parse(du))) { params.push(du); sql += ` AND o.created_at >= $${params.length}`; }
+    if (au && !Number.isNaN(Date.parse(au))) { params.push(au); sql += ` AND o.created_at < ($${params.length}::date + 1)`; }
+    sql += ` ORDER BY o.created_at DESC LIMIT ${limite + 1}`;
 
     const r = await query(sql, params);
-    return NextResponse.json({ orders: r.rows });
+    const plus = r.rows.length > limite;
+    const rows = r.rows.slice(0, limite);
+    if (csv) return enCsv(rows);
+    return NextResponse.json({ orders: rows, plus });
   } catch (e) {
     // 42703 = colonne absente : ce sont les coordonnées de la boutique qui
     // manquent, pas les commandes. On réessaie sans elles plutôt que de
@@ -108,4 +122,30 @@ export async function GET(req: NextRequest) {
       detail: (e as Error).message,
     });
   }
+}
+
+/** L'export comptable : une ligne par commande, lisible par Excel (séparateur « ; », BOM UTF-8). */
+function enCsv(rows: any[]): NextResponse {
+  const cell = (v: unknown) => {
+    const t = v == null ? "" : String(v);
+    return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const articles = (v: unknown) => {
+    const its: any[] = Array.isArray(v) ? v : (() => { try { return JSON.parse(String(v || "[]")); } catch { return []; } })();
+    return its.map((i) => `${i.qty || 1}x ${i.name}${i.variant ? ` (${i.variant})` : ""}`).join(" | ");
+  };
+  const tete = ["Référence", "Date", "Statut", "Client", "Téléphone", "Articles", "Livraison", "Total", "Devise", "Mode", "Adresse", "Paiement annoncé", "Livreur", "Livrée le", "Source"];
+  const lignes = rows.map((o) => [
+    o.ref, new Date(o.created_at).toISOString().replace("T", " ").slice(0, 16), o.status, o.customer_name,
+    String(o.contact_phone || "").replace(/@.*$/, ""), articles(o.items), o.delivery_fee ?? 0, o.total, o.currency,
+    o.fulfillment || "", o.address || o.place_label || "", o.payment_method || "", o.courier_name || "",
+    o.delivered_at ? new Date(o.delivered_at).toISOString().replace("T", " ").slice(0, 16) : "", o.source || "",
+  ].map(cell).join(";"));
+  const corps = "\uFEFF" + [tete.join(";"), ...lignes].join("\r\n");
+  return new NextResponse(corps, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="commandes-${new Date().toISOString().slice(0, 10)}.csv"`,
+    },
+  });
 }

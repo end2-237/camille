@@ -23,7 +23,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { orderId } = await params;
-  const { action } = (await req.json().catch(() => ({}))) as { action?: string };
+  const { action, photo, lat, lng } = (await req.json().catch(() => ({}))) as {
+    action?: string; photo?: string | null; lat?: number; lng?: number;
+  };
 
   const o = await query(
     "SELECT id, agent_id, ref, status, courier_id, courier_name FROM camille.orders WHERE id = $1",
@@ -75,6 +77,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     );
     const livree = r.rows[0];
 
+    // La preuve de remise : où, et (si le livreur l'a prise) la photo. En cas
+    // de litige « je n'ai rien reçu », c'est elle qui tranche.
+    const preuve = await enregistrerPreuve(String(orderId), String(order.agent_id), photo, lat, lng);
+    if (preuve) Object.assign(livree, preuve);
+
     // Le site du marchand est prévenu comme si le commerçant avait cliqué :
     // qui a fait avancer la commande ne change rien pour lui.
     notify(order.agent_id, "order.status", {
@@ -92,4 +99,46 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   return NextResponse.json({ error: "Action inconnue." }, { status: 400 });
+}
+
+const coreUrl = () => (process.env.CAMILLE_CORE_URL ?? "https://camille-core.vps.buyticle.com").replace(/\/$/, "");
+
+async function enregistrerPreuve(
+  orderId: string, agentId: string, photo?: string | null, lat?: number, lng?: number
+): Promise<{ proof_url?: string | null; delivered_lat?: number | null; delivered_lng?: number | null } | null> {
+  let url: string | null = null;
+  const m = String(photo || "").match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+  if (m && m[2].length < 7_000_000) {
+    try {
+      const res = await fetch(`${coreUrl()}/api/media/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Api-Key": process.env.CAMILLE_CORE_API_KEY ?? "" },
+        body: JSON.stringify({
+          name: `${agentId.replace(/-/g, "")}_preuve_${orderId.slice(0, 8)}_${Date.now()}.jpg`,
+          data: m[2],
+          mimeType: m[1],
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.ok) url = ((await res.json()) as { url?: string }).url || null;
+    } catch (e) {
+      console.error("[livraison] photo de remise non enregistrée :", (e as Error).message);
+    }
+  }
+  const okLat = Number.isFinite(Number(lat)) ? Number(lat) : null;
+  const okLng = Number.isFinite(Number(lng)) ? Number(lng) : null;
+  if (!url && okLat == null) return null;
+  try {
+    await query(
+      `UPDATE camille.orders
+          SET proof_url = COALESCE($2, proof_url), delivered_lat = COALESCE($3, delivered_lat), delivered_lng = COALESCE($4, delivered_lng)
+        WHERE id = $1`,
+      [orderId, url, okLat, okLng]
+    );
+  } catch (e) {
+    // Colonnes absentes (migration_livraison.sql) : la livraison reste valide.
+    console.warn("[livraison] preuve non enregistrée :", (e as Error).message);
+    return null;
+  }
+  return { proof_url: url, delivered_lat: okLat, delivered_lng: okLng };
 }

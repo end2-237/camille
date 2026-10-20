@@ -881,6 +881,24 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("URL vide → rien", fichierDeLAgent("", A), null);
 }
 
+// ═══ livraison — zones, jours de service ════════════════════════════════════
+{
+  groupe("livraison — barème par quartier, jours de service");
+  const { zonesDe, zoneDansAdresse, servieAujourdhui } = await import(`${DIST}/whatsapp/livraison.js`);
+  const zones = zonesDe({ delivery_zones: '[{"zone":"Bona","fee":800},{"zone":"Bonamoussadi","fee":1500},{"name":"Akwa","price":500}]' });
+  eq("barème lu en texte JSON, ancien format compris", zones.map((z) => z.fee), [800, 1500, 500]);
+  eq("le quartier le plus précis l'emporte", zoneDansAdresse(zones, "Bonamoussadi, carrefour Kotto")?.fee, 1500);
+  eq("accents et casse ignorés", zoneDansAdresse(zones, "près de la pharmacie d'AKWÀ")?.fee, 500);
+  eq("quartier inconnu → rien", zoneDansAdresse(zones, "Logpom"), null);
+  eq("barème vide → aucune zone", zonesDe({ delivery_zones: null }), []);
+  // Mercredi 21 octobre 2026, midi à Douala.
+  const mercredi = new Date("2026-10-21T11:00:00Z");
+  chk("aucun jour coché → servi tous les jours", servieAujourdhui([], mercredi));
+  chk("servi le mercredi (3)", servieAujourdhui([1, 3, 5], mercredi));
+  chk("pas servi le mercredi", !servieAujourdhui([1, 2], mercredi));
+  chk("dimanche noté 0 ou 7", servieAujourdhui([0], new Date("2026-10-25T11:00:00Z")) && servieAujourdhui([7], new Date("2026-10-25T11:00:00Z")));
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log(`\n${"═".repeat(66)}`);
 if (echecs.length) {

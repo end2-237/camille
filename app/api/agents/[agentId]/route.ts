@@ -84,6 +84,7 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "media",
   // ── Livraison & carte du menu ──
   "delivery_enabled", "delivery_fee", "delivery_zones", "menu_image_url",
+  "delivery_delay", "min_order",
   // ── Identité imprimée sur les bons de commande ──
   "doc_settings",
 ]);
@@ -124,6 +125,14 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         // Identité imprimée sur les bons de commande, pour préremplir l'écran
         // de personnalisation.
         doc_settings: parseJ(row.doc_settings) ?? {},
+        // La livraison : sans ces champs, l'écran de réglages repartait des
+        // valeurs par défaut et les écrasait à la sauvegarde.
+        delivery_enabled: row.delivery_enabled !== false,
+        delivery_fee: row.delivery_fee != null ? Number(row.delivery_fee) : null,
+        delivery_zones: parseJ(row.delivery_zones) ?? [],
+        delivery_delay: row.delivery_delay ?? null,
+        min_order: row.min_order != null ? Number(row.min_order) : null,
+        menu_image_url: row.menu_image_url ?? null,
       },
     });
   } catch (err) {

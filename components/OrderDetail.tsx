@@ -39,6 +39,8 @@ export type OrderRow = {
   dispatched_at?: string | null; delivered_at?: string | null;
   doc_number?: string | null; doc_url?: string | null;
   shop_lat?: number | null; shop_lng?: number | null; shop_name?: string | null;
+  courier_id?: string | null; courier_name?: string | null;
+  proof_url?: string | null; delivered_lat?: number | null; delivered_lng?: number | null;
   created_at: string;
 };
 type Contact = {
@@ -106,6 +108,40 @@ export default function OrderDetail({
   const [customer, setCustomer] = useState<Contact | null>(null);
   const [itinerary, setItinerary] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Correction de la commande (avant départ) et livreurs de la boutique.
+  const [edition, setEdition] = useState<{ qty: number[]; fee: string; note: string } | null>(null);
+  const [livreurs, setLivreurs] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [occupe, setOccupe] = useState(false);
+  const [erreur, setErreur] = useState("");
+
+  useEffect(() => {
+    if (!base.agent_id) return;
+    fetch(`/api/agents/${base.agent_id}/couriers`, { headers: { ...authHeaders() } })
+      .then((r) => r.json())
+      .then((d) => setLivreurs(Array.isArray(d.couriers) ? d.couriers.filter((c: { status: string }) => c.status === "active") : []))
+      .catch(() => {});
+  }, [base.agent_id]);
+
+  async function patcher(corps: Record<string, unknown>) {
+    setOccupe(true); setErreur("");
+    try {
+      const r = await fetch(`/api/orders/${base.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(corps),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(d.error || "Modification refusée");
+      setOrder((prev) => ({ ...prev, ...d.order }));
+      onChange({ ...order, ...d.order }, d.order.status);
+      return true;
+    } catch (e) {
+      setErreur((e as Error).message);
+      return false;
+    } finally {
+      setOccupe(false);
+    }
+  }
 
   // La liste est déjà à l'écran : on l'affiche tout de suite, puis on complète
   // avec ce que seule la fiche détaillée connaît.
@@ -148,6 +184,7 @@ export default function OrderDetail({
     { label: "Livrée", at: order.delivered_at, Icone: PackageCheck },
   ];
   const annulee = order.status === "annulee";
+  const modifiable = ["nouvelle", "en_traitement", "traitee"].includes(order.status);
 
   // Rendu à la racine du document : dans la feuille du tableau de bord, la
   // fiche passerait sous la barre de navigation.
@@ -196,6 +233,40 @@ export default function OrderDetail({
 
             {/* Articles */}
             <Bloc titre={`Articles · ${items.length}`} Icone={ShoppingBag}>
+              {modifiable && !edition && (
+                <button onClick={() => setEdition({ qty: items.map((i) => Number(i.qty) || 1), fee: String(fee), note: order.note || "" })}
+                  className="mb-2 rounded-full px-3.5 py-1.5 text-[12.5px]" style={{ background: "#F4F2F7", color: "var(--cl-ink)" }}>
+                  Modifier la commande
+                </button>
+              )}
+              {edition && (
+                <div className="mb-3 space-y-2 rounded-[18px] p-3" style={{ background: "#FFF8EC" }}>
+                  <p className="text-[12.5px]" style={{ color: "#7A5418" }}>Baissez une quantité ou retirez un article ; le stock est rendu. Pour ajouter, créez une nouvelle commande.</p>
+                  {items.map((it, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13.5px]">
+                      <span className="min-w-0 flex-1 truncate" style={{ color: "var(--cl-ink)" }}>{it.name}</span>
+                      <button className="od-rond h-8 w-8 rounded-full" aria-label="Moins"
+                        onClick={() => setEdition({ ...edition, qty: edition.qty.map((q, j) => (j === i ? Math.max(0, q - 1) : q)) })}>−</button>
+                      <span className="w-6 text-center tabular-nums">{edition.qty[i]}</span>
+                      <button className="od-rond h-8 w-8 rounded-full" aria-label="Plus" disabled={edition.qty[i] >= (Number(it.qty) || 1)}
+                        onClick={() => setEdition({ ...edition, qty: edition.qty.map((q, j) => (j === i ? Math.min(Number(it.qty) || 1, q + 1) : q)) })}>+</button>
+                    </div>
+                  ))}
+                  <label className="flex items-center gap-2 text-[13px]">
+                    <span className="flex-1">Frais de livraison</span>
+                    <input className="ui-champ w-28" type="number" min="0" value={edition.fee} onChange={(e) => setEdition({ ...edition, fee: e.target.value })} />
+                  </label>
+                  <textarea className="ui-champ w-full" rows={2} placeholder="Note interne" value={edition.note} onChange={(e) => setEdition({ ...edition, note: e.target.value })} />
+                  <div className="flex gap-2">
+                    <button disabled={occupe} className="rounded-full px-4 py-2 text-[13px] font-medium text-white" style={{ background: "var(--cl-ink)" }}
+                      onClick={async () => {
+                        if (await patcher({ edit: { items: edition.qty.map((qty) => ({ qty })), delivery_fee: Number(edition.fee) || 0, note: edition.note } })) setEdition(null);
+                      }}>{occupe ? "…" : "Enregistrer"}</button>
+                    <button className="rounded-full px-4 py-2 text-[13px]" style={{ background: "#F4F2F7" }} onClick={() => setEdition(null)}>Annuler</button>
+                  </div>
+                </div>
+              )}
+              {erreur && <p className="mb-2 text-[12.5px]" style={{ color: "#A63D28" }}>{erreur}</p>}
               <ul className="space-y-2">
                 {items.map((it, i) => {
                   const q = Number(it.qty) || 1;
@@ -301,6 +372,39 @@ export default function OrderDetail({
                     <Navigation className="h-4 w-4" /> Lancer l&apos;itinéraire
                   </button>
                 </>
+              )}
+              {!retrait && !annulee && order.status !== "livree" && (
+                <label className="mt-3 flex items-center gap-2 text-[13.5px]">
+                  <Bike className="h-4 w-4 flex-shrink-0" style={{ color: "var(--cl-accent-deep)" }} />
+                  <span className="flex-1" style={{ color: "var(--cl-ink)" }}>Livreur</span>
+                  {livreurs.length ? (
+                    <select className="ui-champ max-w-[220px]" disabled={occupe} value={order.courier_id || ""}
+                      onChange={(e) => patcher({ courier_id: e.target.value || null })}>
+                      <option value="">Au premier qui la prend</option>
+                      {livreurs.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                  ) : (
+                    <span className="text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>Aucun livreur rattaché</span>
+                  )}
+                </label>
+              )}
+              {order.courier_name && (order.status === "livree" || !livreurs.length) && (
+                <Ligne label="Livreur" valeur={order.courier_name} compact />
+              )}
+              {order.status === "livree" && (order.proof_url || order.delivered_lat != null) && (
+                <div className="mt-3 rounded-[18px] p-3" style={{ background: "#E4F6EA" }}>
+                  <p className="text-[12.5px] font-medium" style={{ color: "#1E6A37" }}>Preuve de remise</p>
+                  {order.proof_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <a href={order.proof_url} target="_blank" rel="noreferrer"><img src={order.proof_url} alt="Photo de remise" className="mt-2 max-h-48 rounded-[14px] object-cover" /></a>
+                  )}
+                  {order.delivered_lat != null && order.delivered_lng != null && (
+                    <a className="mt-2 block text-[12.5px] underline" style={{ color: "#1E6A37" }} target="_blank" rel="noreferrer"
+                      href={`https://www.google.com/maps?q=${order.delivered_lat},${order.delivered_lng}`}>
+                      Position du livreur à la remise
+                    </a>
+                  )}
+                </div>
               )}
             </Bloc>
 

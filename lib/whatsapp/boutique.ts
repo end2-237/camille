@@ -55,11 +55,13 @@
 import { compterTokens } from "./usage";
 import { query } from "@/lib/db";
 import { sectorProfile } from "@/lib/sectorProfiles";
-import { createOrder } from "@/lib/orders";
+import { createOrder, restoreStock } from "@/lib/orders";
+import { garderMedia, produitsSemblables } from "./photo";
+import { servieAujourdhui, zoneDansAdresse, zonesDe } from "./livraison";
 import { notifyUser } from "@/lib/fcm";
 import * as meta from "./meta";
 import { tracer, sessionMeta, type Contexte } from "./handle";
-import { contexteCommande, lireIdSuivi, recapCommande, etapesCommande, type ActionSuivi } from "./suivi";
+import { contexteCommande, idSuivi, lireIdSuivi, recapCommande, etapesCommande, type ActionSuivi } from "./suivi";
 import { chargerCommande, commandeEnCours, envoyerAnimation, reglerAnimations } from "./suivi-envoi";
 import { sendOrderDocument } from "@/lib/facturation";
 import { notify } from "@/lib/webhooks";
@@ -140,6 +142,8 @@ export type Produit = {
   deCamille?: boolean;
   /** Désactivé par le commerçant (lu seulement pour vérifier un panier). */
   actif?: boolean;
+  /** Restaurant : au menu du jour. */
+  menuDuJour?: boolean;
 };
 
 /**
@@ -205,7 +209,9 @@ async function catalogue(agentId: string, tous = false): Promise<Produit[]> {
               COALESCE(active, true) AS actif,
               to_jsonb(p)->>'meta_retailer_id' AS retailer,
               COALESCE(to_jsonb(p)->'variants', '[]'::jsonb) AS variants,
-              COALESCE(to_jsonb(p)->'options', '[]'::jsonb) AS options
+              COALESCE(to_jsonb(p)->'options', '[]'::jsonb) AS options,
+              COALESCE((to_jsonb(p)->>'daily_menu')::boolean, false) AS menu_du_jour,
+              COALESCE(to_jsonb(p)->'available_days', '[]'::jsonb) AS jours
          FROM camille.products p
         WHERE agent_id = $1 AND (COALESCE(active, true) = true OR $2::boolean)
         ORDER BY sort_order ASC, created_at DESC
@@ -224,6 +230,10 @@ async function catalogue(agentId: string, tous = false): Promise<Produit[]> {
         image_url: (x.image_url as string) || null,
         deCamille: true,
         actif: x.actif !== false,
+        menuDuJour: x.menu_du_jour === true,
+        // Un plat servi certains jours seulement : hors de ces jours, il n'est
+        // pas proposé (mais reste reconnu dans un panier, `tous`).
+        servi: servieAujourdhui(x.jours),
         variants: Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null,
         groupes: normaliserOptions(x.options),
         ...optionsDe(Array.isArray(x.variants) ? (x.variants as AxeVariante[]) : null),
@@ -247,7 +257,10 @@ async function catalogue(agentId: string, tous = false): Promise<Produit[]> {
               )
             : String(x.retailer),
       }))
-      .filter((p) => tous || p.stock == null || p.stock > 0);
+      .filter((p) => tous || ((p.stock == null || p.stock > 0) && p.servi))
+      .map(({ servi: _servi, ...p }) => p)
+      // Le menu du jour d'abord : c'est ce que le client demande en premier.
+      .sort((a, b) => Number(Boolean(b.menuDuJour)) - Number(Boolean(a.menuDuJour)));
     if (mappes.length) return mappes;
   } catch { /* colonne absente ou base non migrée : on lit chez Meta */ }
 
@@ -589,6 +602,10 @@ type EtatPanier = {
   /** L'heure de commande : ISO, ou null pour « dès que possible ». */
   quand?: string | null;
   quandChoisi?: boolean;
+  /** Le quartier choisi dans la liste (barème par zone). */
+  zone?: { nom: string; frais: number } | null;
+  /** La position reçue en attendant le quartier. */
+  pos?: { lat: number; lng: number } | null;
 };
 type PanierEnAttente = {
   etape: EtapePanier; items: LignePanier[]; note: string; contactName: string; etat: EtatPanier;
@@ -999,6 +1016,39 @@ async function finaliserPanier(
 ) {
   const { agent, phone } = ctx;
   const livraison = opts.mode === "livraison";
+
+  // Le minimum de commande (articles seuls) : on le dit avant d'enregistrer.
+  const minimum = Number(agent.min_order) || 0;
+  const sousTotalPanier = panier.items.reduce((t, l) => t + (l.price || 0) * (l.qty || 1), 0);
+  if (minimum > 0 && sousTotalPanier < minimum) {
+    const cur = panier.items[0]?.currency || agent.currency || "XAF";
+    await meta.sendText(
+      phone,
+      `La commande minimum est de *${money(minimum, cur)}* (ton panier : ${money(sousTotalPanier, cur)}). ` +
+        `Ajoute encore ${money(minimum - sousTotalPanier, cur)} depuis le catalogue, puis renvoie ton panier 🙏`
+    );
+    return;
+  }
+
+  // Un barème par quartier et une simple position GPS : on demande le quartier.
+  const zones = zonesDe(agent);
+  if (livraison && agent.delivery_enabled && zones.length && !opts.adresse && !panier.etat?.zone) {
+    const etat = { ...panier.etat, pos: opts.lat != null && opts.lng != null ? { lat: opts.lat, lng: opts.lng } : null };
+    await garderPanier(agent.id, phone, { ...panier, etat });
+    const cur = panier.items[0]?.currency || agent.currency || "XAF";
+    await meta.sendList(phone, "Merci 👍 Dans quel quartier on te livre ? Les frais en dépendent.", "Mon quartier", [
+      {
+        title: "Quartiers",
+        rows: [
+          ...zones.slice(0, 9).map((z, i) => ({ id: `zone:${i}`, title: z.zone, description: `Livraison ${money(z.fee, cur)}` })),
+          { id: "zone:autre", title: "Autre quartier", description: `Livraison ${money(Number(agent.delivery_fee) || 0, cur)}` },
+        ],
+      },
+    ]);
+    return;
+  }
+  const fraisZone = panier.etat?.zone?.frais ?? (opts.adresse ? zoneDansAdresse(zones, opts.adresse)?.fee : undefined);
+
   // Les options ont servi : la commande garde le choix (dans `variant`) et le
   // prix, pas la carte des possibles.
   const items = panier.items.map((l) => {
@@ -1029,8 +1079,8 @@ async function finaliserPanier(
     source: "whatsapp",
     session: sessionMeta(agent.id),
     fulfillment: opts.mode,
-    deliveryFee: livraison && agent.delivery_enabled ? Number(agent.delivery_fee) || 0 : 0,
-    address: opts.adresse,
+    deliveryFee: livraison && agent.delivery_enabled ? (fraisZone ?? (Number(agent.delivery_fee) || 0)) : 0,
+    address: opts.adresse || (panier.etat?.zone && panier.etat.zone.nom !== "Autre quartier" ? panier.etat.zone.nom : undefined),
     lat: opts.lat,
     lng: opts.lng,
   });
@@ -1062,10 +1112,12 @@ async function finaliserPanier(
     `Total : *${money(Number(c.total) || 0, cur)}*` +
     (lieu ? `\n${lieu}` : "") +
     (quand ? `\nPour : *${libelleCreneau(new Date(quand))}*` : "") +
+    (livraison && !quand && agent.delivery_delay ? `\nDélai de livraison : ${agent.delivery_delay}` : "") +
     (fermeNotice(agent)
       // Boutique fermée : on ne promet pas « on s'en occupe » à 3 h du matin.
       ? fermeNotice(agent)
-      : livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part." : "\n\nOn te prépare ça, tu es prévenu dès que c'est prêt.");
+      : livraison ? "\n\nOn s'en occupe, tu es prévenu dès que ça part." : "\n\nOn te prépare ça, tu es prévenu dès que c'est prêt.") +
+    "\nUn changement d'avis ? Écris *annuler*.";
 
   // Le bon de commande part TOUT DE SUITE, la confirmation en légende : un seul
   // message, et le client a sa preuve dès qu'il commande. Le passage « en
@@ -1485,6 +1537,29 @@ export async function repondreBoutique(
   // 1. Un panier natif : c'est une commande, pas une phrase à comprendre.
   if (msg.type === "order") return recevoirPanier(ctx, resto);
 
+  // 1 bis. Une photo : on cherche l'article qui lui ressemble dans le catalogue.
+  if (msg.type === "image" && msg.mediaId) {
+    const url = await garderMedia(agent.id, msg.mediaId, "photo");
+    if (url) await tracer(agent.id, phone, "user", `[photo] ${url}`);
+    const ids = url ? await produitsSemblables(agent.id, url) : [];
+    if (ids.length) {
+      const prods = await catalogue(agent.id);
+      const trouves = ids.map((id) => prods.find((p) => p.id === id)).filter((p): p is Produit => Boolean(p));
+      if (trouves.length) {
+        return montrerVitrine(ctx, trouves.slice(0, 5), "", trouves.length > 1 ? "Voici ce qui ressemble à ta photo 👇" : "C'est bien ça ? 👇");
+      }
+    }
+    // Rien de ressemblant : la légende, s'il y en a une, est lue comme une
+    // phrase ; sinon on demande des mots.
+    if (!msg.text.trim()) {
+      await meta.sendText(
+        phone,
+        "Je ne retrouve pas cet article dans notre catalogue 🤔 Dis-moi ce que tu cherches (nom, couleur, taille…) ou écris *conseiller*."
+      );
+      return;
+    }
+  }
+
   // Un panier attend-il son mode de réception ou son adresse ?
   const enAttente = await lirePanier(agent.id, phone);
 
@@ -1560,6 +1635,15 @@ export async function repondreBoutique(
       if (id.startsWith(B.heure)) {
         return choisirHeure(ctx, enAttente, new Date(Number(id.slice(B.heure.length))), resto);
       }
+      // Le quartier, choisi dans la liste des zones de livraison.
+      if (id.startsWith("zone:")) {
+        const zones = zonesDe(agent);
+        const z = id === "zone:autre" ? null : zones[Number(id.slice(5))];
+        const etat = { ...enAttente.etat, zone: z ? { nom: z.zone, frais: z.fee } : { nom: "Autre quartier", frais: Number(agent.delivery_fee) || 0 } };
+        const panier = { ...enAttente, etat };
+        await garderPanier(agent.id, phone, panier);
+        return finaliserPanier(ctx, panier, { mode: "livraison", lat: etat.pos?.lat, lng: etat.pos?.lng });
+      }
     }
 
     if (id === B.catalogue) {
@@ -1628,6 +1712,20 @@ export async function repondreBoutique(
   }
 
   const t = sansAccent(msg.text);
+
+  // 3 quater. Restaurant : « le menu du jour », « le plat du jour ».
+  if (resto && /\b(menu|plats?) du jour\b|qu est ce qu il y a aujourd hui|on mange quoi/.test(t)) {
+    const prods = await catalogue(agent.id);
+    const duJour = prods.filter((p) => p.menuDuJour);
+    if (duJour.length) return montrerVitrine(ctx, duJour, "Menu du jour", "Voici le menu du jour 🍽️", true);
+  }
+
+  // 3 ter. Pas de panier, mais une commande en cours et « annuler » : on
+  // demande confirmation avant de toucher à quoi que ce soit.
+  if (!enAttente && /\bannule|\bannuler|annulation|je ne veux plus|j en veux plus/.test(t)) {
+    const enCours = await commandeEnCours(agent.id, phone);
+    if (enCours) return repondreSuivi(ctx, "annuler", enCours.ref, resto);
+  }
 
   // 3 bis. Un panier attend : les réponses courtes à « livraison ou retrait ? »
   // et l'adresse écrite (le seul moyen sur ordinateur) passent AVANT la
@@ -2088,5 +2186,77 @@ async function repondreSuivi(ctx: Contexte, action: ActionSuivi, ref: string, re
 
     case "adresse":
       return montrerOuNousSommes(ctx);
+
+    case "annuler": {
+      if (o.status === "annulee") {
+        await meta.sendText(phone, `La commande *${o.ref}* est déjà annulée 👍`);
+        return;
+      }
+      if (o.status === "livree") {
+        await meta.sendButtons(phone, `La commande *${o.ref}* est déjà livrée. Un souci avec ce que tu as reçu ?`, [
+          { id: idSuivi("souci", o.ref), title: "J'ai un souci" },
+        ]);
+        return;
+      }
+      await meta.sendButtons(
+        phone,
+        `Tu veux vraiment annuler la commande *${o.ref}* ?` +
+          (o.status === "nouvelle" ? "" : "\n\nElle est déjà en route vers toi ou en préparation : je demande à l'équipe si c'est encore possible."),
+        [
+          { id: idSuivi("annulerok", o.ref), title: "Oui, annuler" },
+          { id: idSuivi("garder", o.ref), title: "Non, je la garde" },
+        ]
+      );
+      return;
+    }
+
+    case "garder":
+      await meta.sendText(phone, `Parfait, la commande *${o.ref}* suit son cours 👍`);
+      return;
+
+    case "annulerok": {
+      // Pas encore prise en charge : on annule tout de suite, et le stock
+      // retourne en rayon. Au-delà, c'est au commerçant de trancher.
+      let annulee = false;
+      if (o.status === "nouvelle") {
+        try {
+          const r = await query(
+            `UPDATE camille.orders SET status = 'annulee', updated_at = NOW()
+              WHERE id = $1 AND status = 'nouvelle' RETURNING items`,
+            [o.id]
+          );
+          if (r.rows[0]) {
+            annulee = true;
+            const its = Array.isArray(r.rows[0].items)
+              ? r.rows[0].items
+              : (() => { try { return JSON.parse(String(r.rows[0].items || "[]")); } catch { return []; } })();
+            await restoreStock(agent.id, its).catch(() => {});
+          }
+        } catch (e) {
+          console.error("[boutique] annulation impossible :", (e as Error).message);
+        }
+      }
+      if (annulee) {
+        await meta.sendButtons(phone, `C'est fait, la commande *${o.ref}* est annulée. Je reste là si tu changes d'avis.`, [
+          { id: idSuivi("boutique", o.ref), title: "Voir la boutique" },
+        ]);
+        if (agent.user_id) {
+          notifyUser(agent.user_id, "commande", {
+            title: `Commande ${o.ref} annulée par le client`,
+            body: `+${phone} a annulé sa commande avant sa prise en charge. Le stock est remis.`,
+            data: { type: "order", ref: o.ref, orderId: String(o.id), agentId: agent.id },
+            channel: "commandes",
+          }).catch(() => {});
+        }
+        return;
+      }
+      return passerLaMain(ctx, {
+        titre: `Demande d'annulation — commande ${o.ref}`,
+        contenu: { kind: "order_cancel", ref: o.ref, contact: phone, status: o.status },
+        message:
+          `J'ai transmis ta demande d'annulation de la commande *${o.ref}* à l'équipe. ` +
+          "Elle est déjà en préparation : quelqu'un te répond ici très vite.",
+      });
+    }
   }
 }

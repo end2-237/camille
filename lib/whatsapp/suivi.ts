@@ -22,6 +22,7 @@ export const PREFIXE_SUIVI = "cmd:";
 
 export const ACTIONS_SUIVI = [
   "recap", "etapes", "livreur", "aide", "parfait", "souci", "encore", "boutique", "adresse",
+  "annuler", "annulerok", "garder",
 ] as const;
 export type ActionSuivi = (typeof ACTIONS_SUIVI)[number];
 

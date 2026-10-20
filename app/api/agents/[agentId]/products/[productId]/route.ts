@@ -116,6 +116,16 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
   } catch { /* lecture impossible : l'identifiant Camille sert de repli */ aRetirer.push(productId); }
 
   await query("DELETE FROM camille.products WHERE id = $1 AND agent_id = $2", [productId, agentId]);
+  // Les articles venus de Meta sont notés : si leur retrait chez Meta échoue,
+  // la prochaine synchronisation ne doit pas les réimporter.
+  const importes = [...new Set(aRetirer)].filter((r) => r !== productId && !r.startsWith(`${productId}:`));
+  if (importes.length) {
+    await query(
+      `INSERT INTO camille.meta_retraits (agent_id, retailer_id)
+       SELECT $1, unnest($2::text[]) ON CONFLICT DO NOTHING`,
+      [agentId, importes]
+    ).catch(() => { /* table absente (migration_ouverture.sql) */ });
+  }
   retirerUn([...new Set(aRetirer)], agentId).catch(() => {});
   return NextResponse.json({ success: true });
 }

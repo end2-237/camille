@@ -33,6 +33,18 @@ const nomDe = (c: { nom: string | null; phone: string }) => c.nom || `+${c.phone
 /** Les traces internes (« [carrousel] 4 articles ») se lisent mieux en clair. */
 const lisible = (t: string) => t.replace(/^\[([^\]]+)\]\s*/, (_, k) => `${k.charAt(0).toUpperCase()}${k.slice(1)} · `);
 
+/** Un média du client (photo, vidéo, document) s'affiche, le reste se lit. */
+function Contenu({ texte }: { texte: string }) {
+  const m = texte.match(/^\[(photo|image|video|document)\]\s+(https?:\/\/\S+)$/);
+  if (!m) return <>{lisible(texte)}</>;
+  if (m[1] === "photo" || m[1] === "image") {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <a href={m[2]} target="_blank" rel="noreferrer"><img src={m[2]} alt="Photo du client" className="max-h-60 rounded-[12px] object-cover" /></a>;
+  }
+  if (m[1] === "video") return <video src={m[2]} controls className="max-h-60 rounded-[12px]" />;
+  return <a href={m[2]} target="_blank" rel="noreferrer" className="underline">📄 Ouvrir le document</a>;
+}
+
 export default function ConversationsPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const recherche = useSearchParams();
@@ -206,7 +218,7 @@ export default function ConversationsPage() {
                         whiteSpace: "pre-wrap",
                       }}>
                       {!client && <span className="mb-0.5 block text-[10.5px] font-medium opacity-70">{m.role === "humain" ? "Vous" : "Camille"}</span>}
-                      {lisible(m.texte)}
+                      <Contenu texte={m.texte} />
                       <span className="mt-1 block text-right text-[10.5px] opacity-60">{heure(m.le)}</span>
                     </motion.div>
                   );
