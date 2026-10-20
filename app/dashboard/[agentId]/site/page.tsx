@@ -32,12 +32,14 @@ export default function SitePage() {
   const [domaine, setDomaine] = useState("");
   const [occupe, setOccupe] = useState(false);
   const [payeJusquau, setPayeJusquau] = useState<string | null>(null);
+  const [prix, setPrix] = useState(PRIX_OPTION_SITE_XAF);
 
   const charger = useCallback(async () => {
     const d = await (await fetch(`/api/agents/${agentId}/site`, { headers: { ...authHeaders() } })).json().catch(() => ({}));
     setDemande(d.demande ?? null);
     setBrief(d.brief || "");
     setPayeJusquau(d.site_expires_at ?? null);
+    if (Number.isFinite(Number(d.prix_option_site))) setPrix(Number(d.prix_option_site));
   }, [agentId]);
   useEffect(() => { charger(); }, [charger]);
 
@@ -74,7 +76,7 @@ export default function SitePage() {
             les commandes arrivent ici, avec celles de WhatsApp.
           </p>
           <p className="mt-4 text-[22px] font-semibold" style={{ color: "var(--cl-ink)" }}>
-            +{PRIX_OPTION_SITE_XAF.toLocaleString("fr-FR")} FCFA <span className="text-[13px] font-normal" style={{ color: "var(--cl-ink-faint)" }}>/ mois, en plus de votre forfait</span>
+            +{prix.toLocaleString("fr-FR")} FCFA <span className="text-[13px] font-normal" style={{ color: "var(--cl-ink-faint)" }}>/ mois, en plus de votre forfait</span>
           </p>
         </div>
 
@@ -96,7 +98,7 @@ export default function SitePage() {
                   ? `Option payée jusqu'au ${new Date(payeJusquau).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}. Vous pouvez prolonger d'un mois.`
                   : "Activez l'option pour un mois :"}
               </p>
-              <PaiementMobileMoney agentId={agentId} kind="site" montant={PRIX_OPTION_SITE_XAF} libelle="Option Site, 1 mois" onPaye={charger} />
+              <PaiementMobileMoney agentId={agentId} kind="site" montant={prix} libelle="Option Site, 1 mois" onPaye={charger} />
             </div>
           </div>
         ) : (

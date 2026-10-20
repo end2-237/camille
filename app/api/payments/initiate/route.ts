@@ -2,8 +2,7 @@ import { NextRequest, NextResponse }   from "next/server";
 import crypto                          from "crypto";
 import { query }                       from "@/lib/db";
 import { getUserFromRequest }          from "@/lib/auth-server";
-import { isPurchasableDB, getPlanPriceXafDB } from "@/lib/plans-db";
-import { PRIX_OPTION_SITE_XAF } from "@/lib/plans";
+import { isPurchasableDB, getPlanPriceXafDB, prixOptionSitePour } from "@/lib/plans-db";
 import { buyfacturationActive, lancerCollecte, msisdn, operateurDe, type Operateur } from "@/lib/paiement";
 
 const MONETBIL_SERVICE_KEY = process.env.MONETBIL_SERVICE_KEY!;
@@ -59,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     // ── Verify agent ownership ────────────────────────────────────────────────
     const agentResult = await query(
-      `SELECT id, owner_email FROM camille.agents
+      `SELECT id, owner_email, plan FROM camille.agents
        WHERE id = $1 AND user_id = $2 AND status != 'archived'`,
       [agentId, user.id]
     );
@@ -71,9 +70,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const agent = agentResult.rows[0] as { id: string; owner_email: string };
+    const agent = agentResult.rows[0] as { id: string; owner_email: string; plan: string | null };
     // Prix depuis la DB (jamais depuis le client)
-    const amount = kind === "site" ? PRIX_OPTION_SITE_XAF : await getPlanPriceXafDB(planId);
+    // L'option Site : le supplément du forfait de l'agent, sinon le prix par défaut.
+    const amount = kind === "site" ? await prixOptionSitePour(agent.plan) : await getPlanPriceXafDB(planId);
 
     // ── buyfacturation : la demande arrive sur le téléphone ───────────────────
     // Pas de page de paiement : le commerçant valide avec son code Mobile Money

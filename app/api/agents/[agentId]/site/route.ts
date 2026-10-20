@@ -13,6 +13,7 @@ import { query } from "@/lib/db";
 import { peut } from "@/lib/equipe";
 import { notifyUser } from "@/lib/fcm";
 import { composerBrief } from "@/lib/site-brief";
+import { prixOptionSitePour } from "@/lib/plans-db";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
@@ -30,10 +31,18 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     )).rows[0] ?? null;
   } catch { /* table absente : migration_ouverture.sql */ }
   let siteExpiresAt: string | null = null;
+  let plan: string | null = null;
   try {
-    siteExpiresAt = (await query(`SELECT to_jsonb(a)->>'site_expires_at' AS fin FROM camille.agents a WHERE id = $1`, [agentId])).rows[0]?.fin ?? null;
+    const a = (await query(`SELECT plan, to_jsonb(a)->>'site_expires_at' AS fin FROM camille.agents a WHERE id = $1`, [agentId])).rows[0];
+    siteExpiresAt = a?.fin ?? null;
+    plan = a?.plan ?? null;
   } catch { /* migration_paiement_buyfacturation.sql absente */ }
-  return NextResponse.json({ demande, brief: await composerBrief(agentId), site_expires_at: siteExpiresAt });
+  return NextResponse.json({
+    demande,
+    brief: await composerBrief(agentId),
+    site_expires_at: siteExpiresAt,
+    prix_option_site: await prixOptionSitePour(plan),
+  });
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {

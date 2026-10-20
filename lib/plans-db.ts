@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { query } from "@/lib/db";
+import { PRIX_OPTION_SITE_XAF } from "@/lib/plans";
 
 // ── Types exportés ────────────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ export interface DbPlan {
   sort_order:     number;
   is_active:      boolean;
   features:       Array<{ label: string; included: boolean }>;
+  /** Le supplément de l'option Site pour ce forfait ; null = le prix par défaut. */
+  site_addon_xaf: number | null;
 }
 
 export interface DbCapability {
@@ -51,28 +54,28 @@ const FALLBACK_PLANS: DbPlan[] = [
     description: "Pour tester la plateforme.", tokens_label: "50 000 tokens / mois",
     conv_estimate: "~80 conversations", highlight: false, badge: null,
     cta_label: "Commencer gratuitement", cta_href: "/configure",
-    is_purchasable: false, sort_order: 1, is_active: true, features: [],
+    is_purchasable: false, sort_order: 1, is_active: true, features: [], site_addon_xaf: null,
   },
   {
     id: "starter", label: "Starter", monthly_tokens: 500_000, price_xaf: 9_900, price_eur: 29,
     description: "Bot professionnel.", tokens_label: "500 000 tokens / mois",
     conv_estimate: "~700 conversations", highlight: false, badge: null,
     cta_label: "Passer au Starter", cta_href: "/dashboard/billing",
-    is_purchasable: true, sort_order: 2, is_active: true, features: [],
+    is_purchasable: true, sort_order: 2, is_active: true, features: [], site_addon_xaf: null,
   },
   {
     id: "pro", label: "Pro", monthly_tokens: 2_000_000, price_xaf: 24_900, price_eur: 79,
     description: "Automatisation complète.", tokens_label: "2 000 000 tokens / mois",
     conv_estimate: "~3 000 conversations", highlight: true, badge: "Populaire",
     cta_label: "Passer au Pro", cta_href: "/dashboard/billing",
-    is_purchasable: true, sort_order: 3, is_active: true, features: [],
+    is_purchasable: true, sort_order: 3, is_active: true, features: [], site_addon_xaf: null,
   },
   {
     id: "enterprise", label: "Enterprise", monthly_tokens: -1, price_xaf: -1, price_eur: 199,
     description: "Fort volume.", tokens_label: "Tokens illimités",
     conv_estimate: "Illimité", highlight: false, badge: null,
     cta_label: "Contacter l'équipe", cta_href: "mailto:hello@buyticle.com",
-    is_purchasable: false, sort_order: 4, is_active: true, features: [],
+    is_purchasable: false, sort_order: 4, is_active: true, features: [], site_addon_xaf: null,
   },
 ];
 
@@ -87,9 +90,12 @@ interface Cache {
 let _cache: Cache | null = null;
 const TTL = 5 * 60 * 1000; // 5 minutes
 
+let _prixSite: { valeur: number; ts: number } | null = null;
+
 // Invalide le cache (appeler après une mise à jour en DB si besoin)
 export function invalidatePlansCache(): void {
   _cache = null;
+  _prixSite = null;
 }
 
 // ── Fetch depuis DB ───────────────────────────────────────────────────────────
@@ -118,6 +124,7 @@ export async function getPlansFromDB(): Promise<{ plans: DbPlan[]; capabilities:
     price_xaf:      Number(r.price_xaf),
     price_eur:      Number(r.price_eur),
     features:       typeof r.features === "string" ? JSON.parse(r.features) : (r.features ?? []),
+    site_addon_xaf: r.site_addon_xaf == null ? null : Number(r.site_addon_xaf),
   }));
 
   const capabilities: DbCapability[] = capsRes.rows.map((r) => ({
@@ -166,4 +173,25 @@ export function isUnlimitedTokens(monthlyTokens: number): boolean {
 export async function isPurchasableDB(planId: string): Promise<boolean> {
   const plan = await getPlanByIdDB(planId);
   return plan?.is_purchasable ?? false;
+}
+
+// ── L'option Site ─────────────────────────────────────────────────────────────
+
+/** Le prix par défaut de l'option Site, réglé par l'administration (camille.parametres). */
+export async function getPrixOptionSiteDB(): Promise<number> {
+  if (_prixSite && Date.now() - _prixSite.ts < TTL) return _prixSite.valeur;
+  let valeur = PRIX_OPTION_SITE_XAF;
+  try {
+    const r = await query(`SELECT valeur FROM camille.parametres WHERE cle = 'prix_option_site'`);
+    const n = Number(r.rows[0]?.valeur);
+    if (Number.isFinite(n) && n >= 0) valeur = n;
+  } catch { /* migration_option_site_prix.sql absente : le prix du code */ }
+  _prixSite = { valeur, ts: Date.now() };
+  return valeur;
+}
+
+/** Ce que paie un agent pour l'option Site : le supplément de son forfait, sinon le prix par défaut. */
+export async function prixOptionSitePour(planId: string | null | undefined): Promise<number> {
+  const plan = await getPlanByIdDB(planId || "free");
+  return plan?.site_addon_xaf ?? (await getPrixOptionSiteDB());
 }

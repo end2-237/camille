@@ -5,16 +5,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextResponse }    from "next/server";
-import { getPlansFromDB }  from "@/lib/plans-db";
+import { getPlansFromDB, getPrixOptionSiteDB } from "@/lib/plans-db";
 
 export const revalidate = 300; // ISR Next.js 15 — régénère toutes les 5 min
 
 export async function GET() {
   try {
-    const { plans, capabilities } = await getPlansFromDB();
+    const [{ plans, capabilities }, optionSite] = await Promise.all([getPlansFromDB(), getPrixOptionSiteDB()]);
 
     return NextResponse.json(
-      { plans, capabilities },
+      { plans, capabilities, option_site_xaf: optionSite },
       {
         headers: {
           "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",

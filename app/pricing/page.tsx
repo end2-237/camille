@@ -28,9 +28,9 @@ function CapIcon({ name, className, style }: { name: string; className?: string;
   return <Icon className={className} style={style} />;
 }
 
-// ── FAQ (statique — pas besoin de DB) ────────────────────────────────────────
+// ── FAQ — le prix de l'option Site vient de la base, le reste est fixe ───────
 
-const FAQ = [
+const faq = (optionSite: string) => [
   {
     q: "Qu'est-ce qu'une conversation ?",
     a: "Un client qui écrit à votre boutique et que Camille sert : questions, photos des produits, panier, commande. Les nombres indiqués sont des moyennes : un échange très long compte un peu plus, une simple question un peu moins.",
@@ -49,7 +49,7 @@ const FAQ = [
   },
   {
     q: "Qu'est-ce que l'option « Site » ?",
-    a: `Un site à votre image, unique, branché sur votre catalogue : prix, stock et horaires se mettent à jour tout seuls, et les commandes arrivent dans le même tableau de bord. ${PRIX_OPTION_SITE_XAF.toLocaleString("fr-FR")} FCFA de plus par mois, en plus de votre forfait.`,
+    a: `Un site à votre image, unique, branché sur votre catalogue : prix, stock et horaires se mettent à jour tout seuls, et les commandes arrivent dans le même tableau de bord. ${optionSite} de plus par mois, en plus de votre forfait.`,
   },
   {
     q: "Puis-je changer de forfait à tout moment ?",
@@ -224,13 +224,15 @@ export default function PricingPage() {
   const [capabilities, setCapabilities] = useState<DbCapability[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
+  const [optionSite,   setOptionSite]   = useState(PRIX_OPTION_SITE_XAF);
 
   useEffect(() => {
     fetch("/api/plans")
       .then((r) => r.ok ? r.json() : Promise.reject(r.statusText))
-      .then(({ plans: p, capabilities: c }: { plans: DbPlan[]; capabilities: DbCapability[] }) => {
+      .then(({ plans: p, capabilities: c, option_site_xaf: o }: { plans: DbPlan[]; capabilities: DbCapability[]; option_site_xaf?: number }) => {
         setPlans(p);
         setCapabilities(c);
+        if (Number.isFinite(Number(o))) setOptionSite(Number(o));
         setLoading(false);
       })
       .catch((err) => {
@@ -241,6 +243,11 @@ export default function PricingPage() {
   }, []);
 
   const planIds = plans.map((p) => p.id);
+  // Un forfait peut avoir son propre supplément Site : on annonce le moins cher.
+  const prixSite = [optionSite, ...plans.filter((p) => p.is_purchasable && p.site_addon_xaf != null).map((p) => p.site_addon_xaf as number)];
+  const siteMin = Math.min(...prixSite);
+  const siteVarie = new Set(prixSite).size > 1;
+  const siteTexte = `${siteVarie ? "à partir de " : ""}${siteMin.toLocaleString("fr-FR")} FCFA`;
 
   return (
     <main className="relative overflow-hidden">
@@ -317,7 +324,8 @@ export default function PricingPage() {
               </p>
             </div>
             <p className="text-2xl font-bold tabular-nums whitespace-nowrap" style={{ color: "var(--color-gold)" }}>
-              +{PRIX_OPTION_SITE_XAF.toLocaleString("fr-FR")}
+              {siteVarie ? <span className="text-xs font-normal mr-1" style={{ color: "var(--text-disabled)" }}>dès</span> : null}
+              +{siteMin.toLocaleString("fr-FR")}
               <span className="text-xs font-normal ml-1" style={{ color: "var(--text-disabled)" }}>FCFA / mois</span>
             </p>
           </div>
@@ -332,7 +340,7 @@ export default function PricingPage() {
             className="font-good-timing text-2xl font-bold text-center mb-8" style={{ color: "var(--text-primary)" }}>
             Questions fréquentes
           </motion.h2>
-          {FAQ.map((item, i) => (
+          {faq(siteTexte).map((item, i) => (
             <FaqItem key={i} q={item.q} a={item.a} index={i} />
           ))}
         </div>

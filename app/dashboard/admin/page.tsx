@@ -676,6 +676,7 @@ type ForfaitAdmin = {
   id: string; label: string; price_xaf: number; price_eur: number; monthly_tokens: number;
   description: string; badge: string | null; highlight: boolean; is_purchasable: boolean; is_active: boolean;
   features: { label: string; included: boolean }[];
+  site_addon_xaf: number | null;
 };
 
 /**
@@ -686,10 +687,35 @@ type ForfaitAdmin = {
 function Forfaits() {
   const [liste, setListe] = useState<ForfaitAdmin[] | null>(null);
   const [ouvert, setOuvert] = useState<string | null>(null);
+  const [prixSite, setPrixSite] = useState("");
+  const [occupeSite, setOccupeSite] = useState(false);
   const charger = useCallback(() => {
     fetch("/api/admin/plans", { headers: { ...authHeaders() }, cache: "no-store" })
-      .then((r) => r.json()).then((d) => setListe(Array.isArray(d.plans) ? d.plans : [])).catch(() => setListe([]));
+      .then((r) => r.json())
+      .then((d) => {
+        setListe(Array.isArray(d.plans) ? d.plans : []);
+        if (d.option_site_xaf != null) setPrixSite(String(d.option_site_xaf));
+      })
+      .catch(() => setListe([]));
   }, []);
+
+  async function enregistrerPrixSite() {
+    setOccupeSite(true);
+    try {
+      const r = await fetch("/api/admin/plans", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ option_site_xaf: Number(prixSite || 0) }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Enregistrement refusé");
+      toast.success("Prix de l'option Site enregistré");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOccupeSite(false);
+    }
+  }
   useEffect(() => { charger(); }, [charger]);
   if (!liste?.length) return null;
 
@@ -699,6 +725,14 @@ function Forfaits() {
       <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
         Prix et volumes valent pour les prochains paiements et pour les limites de ce mois ; les mois déjà payés ne changent pas.
       </p>
+      {/* L'option Site : un prix par défaut, que chaque forfait peut remplacer par son propre supplément. */}
+      <div className="mt-3 flex flex-wrap items-end gap-2 rounded-[16px] p-3" style={{ background: "#FAF9FC" }}>
+        <ChampForfait libelle="Option Site · prix par défaut (FCFA / mois)">
+          <input className="ui-champ w-[180px]" type="number" min="0" step="500" value={prixSite} onChange={(e) => setPrixSite(e.target.value)} />
+        </ChampForfait>
+        <Bouton variante="clair" icone={Check} occupe={occupeSite} disabled={occupeSite} onClick={enregistrerPrixSite}>Enregistrer</Bouton>
+        <span className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Un forfait peut avoir son propre supplément Site (ouvrir le forfait).</span>
+      </div>
       <ul className="mt-3 space-y-2">
         {liste.map((p) => (
           <li key={p.id} className="rounded-[16px] p-3" style={{ background: "#FAF9FC" }}>
@@ -706,6 +740,7 @@ function Forfaits() {
               <span className="flex-1 text-[14px] font-medium">{p.label} <span className="font-normal" style={{ color: "var(--cl-ink-faint)" }}>· {p.id}</span></span>
               <span className="text-[13px]">{p.price_xaf === -1 ? "Sur devis" : `${p.price_xaf.toLocaleString("fr-FR")} FCFA`}</span>
               <span className="text-[12.5px]" style={{ color: "var(--cl-ink-soft)" }}>{libelleConversations(p.monthly_tokens)}</span>
+              {p.site_addon_xaf != null ? <span className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Site +{p.site_addon_xaf.toLocaleString("fr-FR")}</span> : null}
               {!p.is_active ? <Pastille ton="gris">masqué</Pastille> : p.is_purchasable ? <Pastille ton="vert">en vente</Pastille> : <Pastille ton="ambre">hors vente</Pastille>}
               <ChevronDown className="h-4 w-4" style={{ transform: ouvert === p.id ? "rotate(180deg)" : undefined }} />
             </button>
@@ -731,6 +766,7 @@ function EditeurForfait({ p, onFait }: { p: ForfaitAdmin; onFait: () => void }) 
     vente: p.is_purchasable,
     visible: p.is_active,
     avantages: p.features.map((x) => (x.included ? x.label : `- ${x.label}`)).join("\n"),
+    site: p.site_addon_xaf == null ? "" : String(p.site_addon_xaf),
   });
   const [occupe, setOccupe] = useState(false);
   const maj = (k: keyof typeof f, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
@@ -751,6 +787,7 @@ function EditeurForfait({ p, onFait }: { p: ForfaitAdmin; onFait: () => void }) 
           highlight: f.highlight,
           is_purchasable: f.vente,
           is_active: f.visible,
+          site_addon_xaf: f.site.trim() === "" ? null : Number(f.site),
           // Une ligne par avantage ; « - » devant = non compris dans ce forfait.
           features: f.avantages.split("\n").map((l) => l.trim()).filter(Boolean)
             .map((l) => (l.startsWith("-") ? { label: l.replace(/^-\s*/, ""), included: false } : { label: l, included: true })),
@@ -784,6 +821,9 @@ function EditeurForfait({ p, onFait }: { p: ForfaitAdmin; onFait: () => void }) 
       <ChampForfait libelle="Conversations par mois">
         <input className="ui-champ" type="number" min="1" step="10" disabled={f.illimite} value={f.conversations} onChange={(e) => maj("conversations", e.target.value)} />
         {case_("illimite", "Illimité")}
+      </ChampForfait>
+      <ChampForfait libelle="Supplément option Site (FCFA / mois) · vide = prix par défaut">
+        <input className="ui-champ" type="number" min="0" step="500" value={f.site} placeholder="prix par défaut" onChange={(e) => maj("site", e.target.value)} />
       </ChampForfait>
       <div className="sm:col-span-2">
         <ChampForfait libelle="Description"><input className="ui-champ" value={f.description} onChange={(e) => maj("description", e.target.value)} /></ChampForfait>
