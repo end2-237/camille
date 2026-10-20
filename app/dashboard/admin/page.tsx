@@ -19,7 +19,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { RefreshCw, ShieldAlert, RotateCw, Check, X, Radio, TrendingUp, Bot, Siren, Eye, HeartPulse, ChevronDown, CalendarPlus } from "lucide-react";
-import { getPlanPriceXAF } from "@/lib/plans";
+import { TOKENS_PAR_CONVERSATION, enConversations, libelleConversations } from "@/lib/plans";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
 import { Bandeau, Bouton, Pastille, Squelettes, StylesUI, TONS, Tuile, Vide, apparait, type Ton } from "@/components/dashboard/ui";
@@ -287,6 +287,7 @@ export default function AdminPage() {
 
       {/* Les sites à fabriquer (option « Site ») */}
       <DemandesSite />
+      <Forfaits />
 
       <div className="mt-6">
         {/* ── Les agents ────────────────────────────────────────────────────── */}
@@ -487,7 +488,15 @@ function FenetreAbonnement({ ligne, onFermer, onFait }: { ligne: Ligne; onFermer
   const [occupe, setOccupe] = useState(false);
 
   const sansTerme = plan === "enterprise" || plan === "free";
-  const prixMois = Math.max(0, getPlanPriceXAF(plan));
+  // Le prix du mois vient des forfaits tels que l'administration les a réglés.
+  const [prix, setPrix] = useState<Record<string, number>>({});
+  useEffect(() => {
+    fetch("/api/admin/plans", { headers: { ...authHeaders() }, cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setPrix(Object.fromEntries((d.plans ?? []).map((p: { id: string; price_xaf: number }) => [p.id, Number(p.price_xaf)]))))
+      .catch(() => {});
+  }, []);
+  const prixMois = Math.max(0, prix[plan] ?? 0);
   useEffect(() => { setMontant(prixMois > 0 ? String(prixMois * mois) : ""); }, [plan, mois, prixMois]);
 
   // Nouvelle échéance : depuis la fin en cours si elle est encore devant.
@@ -660,3 +669,148 @@ function DemandesSite() {
   );
 }
 
+
+// ── Les forfaits ─────────────────────────────────────────────────────────────
+
+type ForfaitAdmin = {
+  id: string; label: string; price_xaf: number; price_eur: number; monthly_tokens: number;
+  description: string; badge: string | null; highlight: boolean; is_purchasable: boolean; is_active: boolean;
+  features: { label: string; included: boolean }[];
+};
+
+/**
+ * Les forfaits, modifiables : prix, volume en conversations, textes, mise en
+ * avant, vente. Le changement vaut tout de suite pour la page des tarifs, la
+ * facturation et les limites ; les mois déjà payés ne bougent pas.
+ */
+function Forfaits() {
+  const [liste, setListe] = useState<ForfaitAdmin[] | null>(null);
+  const [ouvert, setOuvert] = useState<string | null>(null);
+  const charger = useCallback(() => {
+    fetch("/api/admin/plans", { headers: { ...authHeaders() }, cache: "no-store" })
+      .then((r) => r.json()).then((d) => setListe(Array.isArray(d.plans) ? d.plans : [])).catch(() => setListe([]));
+  }, []);
+  useEffect(() => { charger(); }, [charger]);
+  if (!liste?.length) return null;
+
+  return (
+    <section className="ui-carte mt-5 rounded-[24px] p-5">
+      <p className="text-[16px] font-medium" style={{ color: "var(--cl-ink)" }}>Forfaits</p>
+      <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
+        Prix et volumes valent pour les prochains paiements et pour les limites de ce mois ; les mois déjà payés ne changent pas.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {liste.map((p) => (
+          <li key={p.id} className="rounded-[16px] p-3" style={{ background: "#FAF9FC" }}>
+            <button type="button" className="flex w-full flex-wrap items-center gap-2 text-left" onClick={() => setOuvert(ouvert === p.id ? null : p.id)}>
+              <span className="flex-1 text-[14px] font-medium">{p.label} <span className="font-normal" style={{ color: "var(--cl-ink-faint)" }}>· {p.id}</span></span>
+              <span className="text-[13px]">{p.price_xaf === -1 ? "Sur devis" : `${p.price_xaf.toLocaleString("fr-FR")} FCFA`}</span>
+              <span className="text-[12.5px]" style={{ color: "var(--cl-ink-soft)" }}>{libelleConversations(p.monthly_tokens)}</span>
+              {!p.is_active ? <Pastille ton="gris">masqué</Pastille> : p.is_purchasable ? <Pastille ton="vert">en vente</Pastille> : <Pastille ton="ambre">hors vente</Pastille>}
+              <ChevronDown className="h-4 w-4" style={{ transform: ouvert === p.id ? "rotate(180deg)" : undefined }} />
+            </button>
+            {ouvert === p.id ? <EditeurForfait p={p} onFait={() => { charger(); setOuvert(null); }} /> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function EditeurForfait({ p, onFait }: { p: ForfaitAdmin; onFait: () => void }) {
+  const illimite = p.monthly_tokens === -1;
+  const [f, setF] = useState({
+    label: p.label,
+    prix: p.price_xaf === -1 ? "" : String(p.price_xaf),
+    surDevis: p.price_xaf === -1,
+    conversations: illimite ? "" : String(enConversations(p.monthly_tokens)),
+    illimite,
+    description: p.description,
+    badge: p.badge ?? "",
+    highlight: p.highlight,
+    vente: p.is_purchasable,
+    visible: p.is_active,
+    avantages: p.features.map((x) => (x.included ? x.label : `- ${x.label}`)).join("\n"),
+  });
+  const [occupe, setOccupe] = useState(false);
+  const maj = (k: keyof typeof f, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
+
+  async function enregistrer() {
+    setOccupe(true);
+    try {
+      const r = await fetch("/api/admin/plans", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          id: p.id,
+          label: f.label,
+          price_xaf: f.surDevis ? -1 : Number(f.prix || 0),
+          monthly_tokens: f.illimite ? -1 : Math.max(1, Number(f.conversations || 0)) * TOKENS_PAR_CONVERSATION,
+          description: f.description,
+          badge: f.badge,
+          highlight: f.highlight,
+          is_purchasable: f.vente,
+          is_active: f.visible,
+          // Une ligne par avantage ; « - » devant = non compris dans ce forfait.
+          features: f.avantages.split("\n").map((l) => l.trim()).filter(Boolean)
+            .map((l) => (l.startsWith("-") ? { label: l.replace(/^-\s*/, ""), included: false } : { label: l, included: true })),
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Enregistrement refusé");
+      toast.success(`Forfait ${f.label} enregistré`);
+      onFait();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOccupe(false);
+    }
+  }
+
+  const case_ = (k: "surDevis" | "illimite" | "highlight" | "vente" | "visible", libelle: string) => (
+    <label className="flex items-center gap-2 text-[13px]">
+      <input type="checkbox" checked={f[k]} onChange={(e) => maj(k, e.target.checked)} /> {libelle}
+    </label>
+  );
+
+  return (
+    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <ChampForfait libelle="Nom affiché"><input className="ui-champ" value={f.label} onChange={(e) => maj("label", e.target.value)} /></ChampForfait>
+      <ChampForfait libelle="Badge (facultatif)"><input className="ui-champ" value={f.badge} placeholder="Populaire" onChange={(e) => maj("badge", e.target.value)} /></ChampForfait>
+      <ChampForfait libelle="Prix par mois (FCFA)">
+        <input className="ui-champ" type="number" min="0" step="100" disabled={f.surDevis} value={f.prix} onChange={(e) => maj("prix", e.target.value)} />
+        {case_("surDevis", "Sur devis")}
+      </ChampForfait>
+      <ChampForfait libelle="Conversations par mois">
+        <input className="ui-champ" type="number" min="1" step="10" disabled={f.illimite} value={f.conversations} onChange={(e) => maj("conversations", e.target.value)} />
+        {case_("illimite", "Illimité")}
+      </ChampForfait>
+      <div className="sm:col-span-2">
+        <ChampForfait libelle="Description"><input className="ui-champ" value={f.description} onChange={(e) => maj("description", e.target.value)} /></ChampForfait>
+      </div>
+      <div className="sm:col-span-2">
+        <ChampForfait libelle="Avantages · une ligne chacun, « - » devant pour « non compris »">
+          <textarea className="ui-champ" rows={5} value={f.avantages} onChange={(e) => maj("avantages", e.target.value)} />
+        </ChampForfait>
+      </div>
+      <div className="flex flex-wrap gap-4 sm:col-span-2">
+        {case_("vente", "En vente (payable)")}
+        {case_("highlight", "Mis en avant")}
+        {case_("visible", "Visible sur la page des tarifs")}
+      </div>
+      <div className="sm:col-span-2">
+        <Bouton variante="encre" icone={Check} occupe={occupe} disabled={occupe} onClick={enregistrer}>Enregistrer</Bouton>
+      </div>
+    </div>
+  );
+}
+
+/** Comme `Champ`, mais le libellé reste visible sur grand écran : ici il n'y a pas de colonne pour le porter. */
+function ChampForfait({ libelle, children }: { libelle: string; children: React.ReactNode }) {
+  return (
+    <div className="grid min-w-0 gap-1">
+      <p className="px-1 text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>{libelle}</p>
+      {children}
+    </div>
+  );
+}
