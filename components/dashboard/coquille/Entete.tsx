@@ -29,6 +29,9 @@ function MenuHaut() {
   const { user } = useAuth();
   const { agent } = useAgentCourant();
   const [ouvert, setOuvert] = useState<Famille | null>(null);
+  // Où poser le déroulant : centré sous sa pastille, mais toujours DANS
+  // l'écran. Sur téléphone, les pastilles de droite le faisaient déborder.
+  const [place, setPlace] = useState<{ left: number; largeur: number; origine: number }>({ left: 0, largeur: 240, origine: 120 });
   const [monte, setMonte] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -74,7 +77,18 @@ function MenuHaut() {
         const l = liens(f);
         return (
           <div key={f} className="relative">
-            <button onClick={() => setOuvert(ouvert === f ? null : f)} title={FAMILLES[f]} aria-label={FAMILLES[f]}
+            <button onClick={(e) => {
+                if (ouvert !== f) {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const marge = 12;
+                  const largeur = Math.min(240, window.innerWidth - 2 * marge);
+                  const centre = r.left + r.width / 2;
+                  const gauche = Math.max(marge, Math.min(centre - largeur / 2, window.innerWidth - marge - largeur));
+                  // Relatif à la pastille (le conteneur positionné).
+                  setPlace({ left: gauche - r.left, largeur, origine: centre - gauche });
+                }
+                setOuvert(ouvert === f ? null : f);
+              }} title={FAMILLES[f]} aria-label={FAMILLES[f]}
               aria-expanded={ouvert === f} className={classe} style={style}>
               <Icone className="h-[18px] w-[18px]" strokeWidth={2} />
             </button>
@@ -83,8 +97,8 @@ function MenuHaut() {
                 <motion.div
                   initial={{ opacity: 0, y: -6, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -4, scale: 0.97 }} transition={RESSORT}
-                  style={{ transformOrigin: "top center" }}
-                  className="coq-deroulant absolute left-1/2 top-[calc(100%+12px)] z-50 w-60 -translate-x-1/2 rounded-[22px] p-1.5">
+                  style={{ transformOrigin: `${place.origine}px top`, left: place.left, width: place.largeur }}
+                  className="coq-deroulant absolute top-[calc(100%+12px)] z-50 rounded-[22px] p-1.5">
                   <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--cl-ink-faint)" }}>{FAMILLES[f]}</p>
                   {l.length === 0 && (
                     <p className="px-3 py-2 text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>Créez d&apos;abord un agent.</p>
