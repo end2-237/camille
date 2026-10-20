@@ -20,6 +20,7 @@ import { sectorProfile, sertDesRepas } from "@/lib/sectorProfiles";
 import * as meta from "./meta";
 import { avecAgent } from "./identifiants";
 import { etatQuota } from "@/lib/quota";
+import { compterConversation } from "./usage";
 import { repondreBoutique, prevenirCommercant } from "./boutique";
 import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
 
@@ -368,14 +369,29 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
   const droit = await etatQuota(agent.id);
   if (!droit.allowed) {
     console.log(`[meta] agent ${agent.id} muet : ${droit.reason}`);
+    // Le message reste visible dans la boîte de réception : le commerçant
+    // peut toujours répondre lui-même.
+    await tracer(agent.id, phone, "user", msg.text || `(${msg.rawType || msg.type})`);
     const cle = `${agent.id}:${phone}`;
     const dernier = PREVENUS.get(cle) || 0;
-    if (Date.now() - dernier > 6 * 3600_000 && droit.message) {
+    if (Date.now() - dernier > 6 * 3600_000) {
       PREVENUS.set(cle, Date.now());
-      await meta.sendText(phone, droit.message).catch(() => {});
+      if (droit.message) await meta.sendText(phone, droit.message).catch(() => {});
+      if (agent.user_id) {
+        notifyUser(agent.user_id, "alerte", {
+          title: droit.reason === "subscription_expired" ? "Abonnement expiré — Camille ne répond plus" : "Forfait épuisé — Camille ne répond plus",
+          body: `+${phone} vous a écrit. Répondez depuis la boîte de réception, ou changez de forfait.`.slice(0, 160),
+          data: { type: "message", agentId: agent.id, phone },
+          channel: "alertes",
+        }).catch(() => {});
+      }
     }
     return;
   }
+
+  // Ce message ouvre-t-il une conversation ? Elle est décomptée du forfait
+  // (avant la trace : c'est l'absence de message récent qui la définit).
+  await compterConversation(agent.id, sessionMeta(agent.id), phone);
 
   // Accusé de lecture et indicateur de frappe : le client voit qu'on s'occupe
   // de lui avant même la réponse.
