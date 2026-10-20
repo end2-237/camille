@@ -22,6 +22,7 @@ import { query } from "@/lib/db";
 import * as meta from "@/lib/whatsapp/meta";
 import { avecIdentifiants, identifiantsEnv } from "@/lib/whatsapp/contexte-meta";
 import { identifiantsAgent } from "@/lib/whatsapp/identifiants";
+import { MODELE_INFO } from "@/lib/whatsapp/modeles";
 
 const SANS_COMPTE =
   "Connectez le WhatsApp officiel d'un de vos agents pour gérer vos propres modèles de message.";
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
   const category = String(b.category || "UTILITY").toUpperCase();
 
   if (!name) return NextResponse.json({ error: "Donne un nom au modèle." }, { status: 400 });
-  if (!body) return NextResponse.json({ error: "Écris le message du modèle." }, { status: 400 });
+  if (!body && category !== "AUTHENTICATION") return NextResponse.json({ error: "Écris le message du modèle." }, { status: 400 });
   if (!["UTILITY", "MARKETING", "AUTHENTICATION"].includes(category)) {
     return NextResponse.json({ error: "Catégorie inconnue." }, { status: 400 });
   }
@@ -98,14 +99,37 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const r = await surSonCompte(req, user, () => meta.createTemplate({
-    name,
-    category: category as "UTILITY" | "MARKETING" | "AUTHENTICATION",
-    language: String(b.language || "fr"),
-    body,
-    examples,
-    footer: b.footer ? String(b.footer) : undefined,
-  }));
+  // En-tête : un texte, ou une image dont Meta veut un exemple téléversé.
+  const enTete = (b.header || {}) as { type?: string; text?: string; url?: string };
+  const boutons = (Array.isArray(b.buttons) ? b.buttons : []) as meta.BoutonModele[];
+  for (const bt of boutons) {
+    if (bt.type === "URL" && !/^https:\/\//.test(String(bt.url || ""))) {
+      return NextResponse.json({ error: `Le bouton « ${bt.text} » doit mener à une adresse en https://.` }, { status: 400 });
+    }
+    if (bt.type === "PHONE_NUMBER" && String(bt.phone || "").replace(/\D/g, "").length < 8) {
+      return NextResponse.json({ error: `Le bouton « ${bt.text} » doit porter un numéro complet, avec l'indicatif.` }, { status: 400 });
+    }
+  }
+
+  const r = await surSonCompte(req, user, async () => {
+    let header: Parameters<typeof meta.createTemplate>[0]["header"];
+    if (enTete.type === "TEXT" && enTete.text?.trim()) header = { type: "TEXT", text: enTete.text };
+    if (enTete.type === "IMAGE" && enTete.url) {
+      const up = await meta.televerserExemple(String(enTete.url));
+      if (!up.ok || !up.handle) return { ok: false, error: `Image d'en-tête : ${up.error}` };
+      header = { type: "IMAGE", handle: up.handle };
+    }
+    return meta.createTemplate({
+      name,
+      category: category as "UTILITY" | "MARKETING" | "AUTHENTICATION",
+      language: String(b.language || "fr"),
+      body,
+      examples,
+      footer: b.footer ? String(b.footer) : undefined,
+      header,
+      buttons: boutons,
+    });
+  });
   if (!r) return NextResponse.json({ error: SANS_COMPTE }, { status: 403 });
 
   if (!r.ok) {
@@ -126,6 +150,9 @@ export async function DELETE(req: NextRequest) {
 
   const name = (req.nextUrl.searchParams.get("name") || "").trim();
   if (!name) return NextResponse.json({ error: "name requis" }, { status: 400 });
+  if (name === MODELE_INFO) {
+    return NextResponse.json({ error: "Ce modèle sert à Camille pour écrire à vos clients au-delà de 24 h : il ne peut pas être supprimé." }, { status: 400 });
+  }
 
   const r = await surSonCompte(req, user, () => meta.deleteTemplate(name));
   if (!r) return NextResponse.json({ error: SANS_COMPTE }, { status: 403 });

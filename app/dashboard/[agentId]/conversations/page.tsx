@@ -16,7 +16,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Bot, Hand, RefreshCw, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
-import { Bouton, BoutonRond, Pastille, Squelettes, StylesUI, Vide, Bandeau } from "@/components/dashboard/ui";
+import { Bouton, BoutonRond, Pastille, Squelettes, StylesUI, Vide } from "@/components/dashboard/ui";
 
 type Resume = { phone: string; nom: string | null; dernier: string; role: string; le: string; dernierClient: string | null; takeover: boolean };
 type Message = { role: "client" | "camille" | "humain"; texte: string; le: string };
@@ -215,21 +215,20 @@ export default function ConversationsPage() {
               </div>
 
               <div className="border-t p-3" style={{ borderColor: "var(--cl-line-soft)" }}>
-                {!fil.fenetreOuverte ? (
-                  <Bandeau ton="ambre" titre="Plus de 24 h sans message de ce client">
-                    WhatsApp n&apos;autorise un message libre que dans les 24 h qui suivent le dernier message du client.
-                    Il faudra un modèle de message approuvé, ou attendre qu&apos;il vous réécrive.
-                  </Bandeau>
-                ) : (
-                  <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); envoyer(); }}>
-                    <textarea className="ui-champ min-h-[48px] flex-1" rows={2} maxLength={4000}
-                      placeholder="Votre réponse, envoyée depuis le numéro de la boutique…"
-                      value={texte} onChange={(e) => setTexte(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); } }} />
-                    <Bouton type="submit" variante="encre" icone={Send} occupe={envoi} disabled={envoi || !texte.trim()}>Envoyer</Bouton>
-                  </form>
+                {!fil.fenetreOuverte && (
+                  <p className="mb-2 rounded-[14px] px-3 py-2 text-[12px] leading-relaxed" style={{ background: "#FBF3E4", color: "#7A5418" }}>
+                    Plus de 24 h sans message de ce client : votre réponse partira dans le modèle approuvé
+                    « Voici un message de votre boutique… ». Il pourra vous répondre normalement.
+                  </p>
                 )}
-                {!fil.takeover && fil.fenetreOuverte && (
+                <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); envoyer(); }}>
+                  <textarea className="ui-champ min-h-[48px] flex-1" rows={2} maxLength={fil.fenetreOuverte ? 4000 : 900}
+                    placeholder="Votre réponse, envoyée depuis le numéro de la boutique…"
+                    value={texte} onChange={(e) => setTexte(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); } }} />
+                  <Bouton type="submit" variante="encre" icone={Send} occupe={envoi} disabled={envoi || !texte.trim()}>Envoyer</Bouton>
+                </form>
+                {!fil.takeover && (
                   <p className="mt-2 px-2 text-[11.5px]" style={{ color: "var(--cl-ink-faint)" }}>
                     Dès votre premier message, Camille se met en pause pour ce client.
                   </p>

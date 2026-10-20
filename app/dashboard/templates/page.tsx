@@ -65,6 +65,8 @@ const MODELES = [
   },
 ];
 
+type Bouton_ = { type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER"; text: string; url?: string; phone?: string };
+
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [err, setErr] = useState("");
@@ -74,6 +76,10 @@ export default function TemplatesPage() {
   const [category, setCategory] = useState("UTILITY");
   const [body, setBody] = useState("");
   const [footer, setFooter] = useState("");
+  const [enTete, setEnTete] = useState<"" | "TEXT" | "IMAGE">("");
+  const [enTeteTexte, setEnTeteTexte] = useState("");
+  const [enTeteImage, setEnTeteImage] = useState("");
+  const [boutons, setBoutons] = useState<Bouton_[]>([]);
   const [examples, setExamples] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -101,6 +107,10 @@ export default function TemplatesPage() {
   // refuse un modèle dont il ne peut pas juger le rendu réel.
   const variables = (body.match(/\{\{\s*\d+\s*\}\}/g) || []).length;
 
+  function majBouton(i: number, maj: Partial<Bouton_>) {
+    setBoutons(boutons.map((b, j) => (j === i ? { ...b, ...maj } : b)));
+  }
+
   function prendreModele(m: (typeof MODELES)[number]) {
     setName(m.name);
     setBody(m.body);
@@ -116,12 +126,17 @@ export default function TemplatesPage() {
       const r = await fetch("/api/whatsapp/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ name, category, body, footer, examples, language: "fr" }),
+        body: JSON.stringify({
+          name, category, body, footer, examples, language: "fr",
+          header: enTete === "TEXT" ? { type: "TEXT", text: enTeteTexte } : enTete === "IMAGE" ? { type: "IMAGE", url: enTeteImage } : undefined,
+          buttons: boutons,
+        }),
       });
       const d = await r.json();
       if (!r.ok || d.error) { setMsg(d.error || "Soumission refusée"); return; }
       setMsg(`Soumis à Meta — statut ${d.status}. L'examen prend jusqu'à 24 h.`);
       setName(""); setBody(""); setFooter(""); setExamples([]);
+      setEnTete(""); setEnTeteTexte(""); setEnTeteImage(""); setBoutons([]);
       await load();
     } catch (e) {
       setMsg((e as Error).message);
@@ -160,8 +175,9 @@ export default function TemplatesPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section className="min-w-0">
           <Bandeau ton="violet" titre="Pourquoi des modèles ?">
-            Passé 24 h sans nouvelle du client, WhatsApp n&apos;accepte que des messages approuvés à l&apos;avance :
-            l&apos;accusé envoyé le lendemain, le suivi de livraison, la réponse à une réclamation.
+            Passé 24 h sans nouvelle du client, WhatsApp n&apos;accepte que des messages approuvés à l&apos;avance.
+            Camille s&apos;en charge seule pour le suivi, les réclamations et vos réponses (modèle « camille_info »).
+            Créez les vôtres pour relancer vos clients ou annoncer une nouveauté.
           </Bandeau>
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
@@ -199,14 +215,16 @@ export default function TemplatesPage() {
                             <FileText className="h-[18px] w-[18px]" />
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[14.5px] font-medium" style={{ color: "var(--cl-ink)" }}>{t.name}</p>
+                            <p className="truncate text-[14.5px] font-medium" style={{ color: "var(--cl-ink)" }}>
+                              {t.name}{t.name === "camille_info" && <span className="font-normal" style={{ color: "var(--cl-ink-faint)" }}> · automatique</span>}
+                            </p>
                             <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
                               {t.category === "UTILITY" ? "Utilitaire" : t.category === "MARKETING" ? "Marketing" : t.category}
                               {t.language ? ` · ${t.language}` : ""}
                             </p>
                           </div>
                           <Pastille ton={e.ton} point>{e.texte}</Pastille>
-                          {!confirme && (
+                          {!confirme && t.name !== "camille_info" && (
                             <BoutonRond icone={Trash2} label="Supprimer ce modèle" onClick={() => { setASupprimer(t.name); setNote(""); }} />
                           )}
                         </div>
@@ -310,6 +328,51 @@ export default function TemplatesPage() {
                     </div>
                   )}
 
+                  <div className="grid gap-1.5">
+                    <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>En-tête <span className="font-normal" style={{ color: "var(--cl-ink-faint)" }}>· facultatif</span></span>
+                    <div className="flex flex-wrap gap-2">
+                      {([["", "Aucun"], ["TEXT", "Un titre"], ["IMAGE", "Une image"]] as const).map(([v, l]) => (
+                        <button key={v} type="button" onClick={() => setEnTete(v)} className="rounded-full px-4 py-2 text-[13px]"
+                          style={enTete === v ? { background: "var(--cl-ink)", color: "#fff" } : { background: "#F4F2F7", color: "var(--cl-ink)" }}>{l}</button>
+                      ))}
+                    </div>
+                    {enTete === "TEXT" && (
+                      <input value={enTeteTexte} maxLength={60} onChange={(e) => setEnTeteTexte(e.target.value)} placeholder="Nouvelle collection 🎉" className="ui-champ" />
+                    )}
+                    {enTete === "IMAGE" && (
+                      <>
+                        <input value={enTeteImage} onChange={(e) => setEnTeteImage(e.target.value)} placeholder="https://… (photo JPEG ou PNG, 5 Mo au plus)" className="ui-champ" />
+                        <span className="px-1 text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Collez le lien d&apos;une photo de votre catalogue : Meta s&apos;en sert d&apos;exemple.</span>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="grid gap-1.5">
+                    <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Boutons <span className="font-normal" style={{ color: "var(--cl-ink-faint)" }}>· 3 au plus</span></span>
+                    {boutons.map((b, i) => (
+                      <div key={i} className="grid gap-2 sm:grid-cols-[140px_1fr_1fr_auto]">
+                        <select className="ui-champ" value={b.type} onChange={(e) => majBouton(i, { type: e.target.value as Bouton_["type"] })}>
+                          <option value="QUICK_REPLY">Réponse</option>
+                          <option value="URL">Lien</option>
+                          <option value="PHONE_NUMBER">Appel</option>
+                        </select>
+                        <input className="ui-champ" maxLength={25} value={b.text} placeholder="Texte du bouton" onChange={(e) => majBouton(i, { text: e.target.value })} />
+                        {b.type === "URL" ? (
+                          <input className="ui-champ" value={b.url || ""} placeholder="https://…" onChange={(e) => majBouton(i, { url: e.target.value })} />
+                        ) : b.type === "PHONE_NUMBER" ? (
+                          <input className="ui-champ" value={b.phone || ""} placeholder="+237 6…" onChange={(e) => majBouton(i, { phone: e.target.value })} />
+                        ) : <span className="hidden sm:block" />}
+                        <BoutonRond icone={X} label="Retirer ce bouton" onClick={() => setBoutons(boutons.filter((_, j) => j !== i))} />
+                      </div>
+                    ))}
+                    {boutons.length < 3 && (
+                      <button type="button" onClick={() => setBoutons([...boutons, { type: "QUICK_REPLY", text: "" }])}
+                        className="w-fit rounded-full px-4 py-2 text-[13px]" style={{ background: "#F4F2F7", color: "var(--cl-ink)" }}>
+                        + Ajouter un bouton
+                      </button>
+                    )}
+                  </div>
+
                   <label className="grid gap-1.5">
                     <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Pied de page <span className="font-normal" style={{ color: "var(--cl-ink-faint)" }}>· facultatif</span></span>
                     <input id="tpl-footer" value={footer} onChange={(e) => setFooter(e.target.value)} placeholder="BUYTICLE · Douala" className="ui-champ" />
@@ -343,6 +406,11 @@ export default function TemplatesPage() {
               <AnimatePresence mode="wait">
                 <motion.div key={apercu ? "plein" : "vide"} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={RESSORT}
                   className="max-w-[88%] rounded-[18px] rounded-tl-[6px] bg-white px-4 py-3 shadow-sm">
+                  {enTete === "IMAGE" && enTeteImage && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={enTeteImage} alt="" className="mb-2 max-h-40 w-full rounded-[12px] object-cover" />
+                  )}
+                  {enTete === "TEXT" && enTeteTexte && <p className="mb-1 text-[14.5px] font-semibold" style={{ color: "#111" }}>{enTeteTexte}</p>}
                   <p className="whitespace-pre-wrap text-[14px] leading-relaxed" style={{ color: "#111" }}>
                     {apercu || "Votre message apparaîtra ici, avec les exemples à la place de {{1}}, {{2}}…"}
                   </p>
@@ -350,6 +418,9 @@ export default function TemplatesPage() {
                   <p className="mt-1 flex items-center justify-end gap-1 text-[11px]" style={{ color: "#8A8A8A" }}>
                     12:04 <CheckCheck className="h-3.5 w-3.5" style={{ color: "#53BDEB" }} />
                   </p>
+                  {boutons.filter((b) => b.text.trim()).map((b, i) => (
+                    <p key={i} className="mt-1 border-t pt-2 text-center text-[13.5px]" style={{ borderColor: "#EEE", color: "#1C8AD9" }}>{b.text}</p>
+                  ))}
                 </motion.div>
               </AnimatePresence>
             </div>

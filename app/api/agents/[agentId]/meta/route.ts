@@ -6,6 +6,7 @@
 //
 // Réservé au propriétaire de l'agent : c'est la parole de son commerce.
 // ─────────────────────────────────────────────────────────────────────────────
+import { installerModeles } from "@/lib/whatsapp/modeles";
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
@@ -141,6 +142,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
   oublierIdentifiants(agentId);
 
+  // Les modèles de Camille (messages au-delà de 24 h), soumis tout de suite :
+  // Meta met de quelques minutes à quelques heures à les approuver.
+  await installerModeles(agentId).catch(() => {});
+  // Le rafraîchissement du catalogue (PUT) les réinstalle aussi au besoin.
+
   return NextResponse.json({
     ok: true,
     numero: c.displayPhone,
@@ -164,6 +170,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   const catalogId = await catalogueRelie(r.rows[0].waba_id, token);
   await query("UPDATE camille.agents SET meta_catalog_id = $2 WHERE id = $1", [agentId, catalogId]);
   oublierIdentifiants(agentId);
+  await installerModeles(agentId).catch(() => {});
   return NextResponse.json({ ok: true, catalogue: catalogId });
 }
 

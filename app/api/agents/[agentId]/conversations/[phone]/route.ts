@@ -13,9 +13,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { peut } from "@/lib/equipe";
-import * as meta from "@/lib/whatsapp/meta";
-import { avecAgent } from "@/lib/whatsapp/identifiants";
 import { tracer } from "@/lib/whatsapp/handle";
+import { envoyerMeta } from "@/lib/whatsapp/modeles";
 
 type RouteContext = { params: Promise<{ agentId: string; phone: string }> };
 
@@ -89,19 +88,12 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const texte = String(b.texte || "").trim().slice(0, 4000);
   if (!texte) return NextResponse.json({ error: "Message vide" }, { status: 400 });
 
-  const r = await avecAgent(agentId, () => meta.sendText(p, texte));
+  // Fenêtre de 24 h fermée : le message part dans le modèle de relais.
+  const r = await envoyerMeta(agentId, p, texte);
   if (!r.ok) {
-    const fenetre = /131047|24 ?h|re-?engagement/i.test(String(r.error || ""));
-    return NextResponse.json(
-      {
-        error: fenetre
-          ? "Le client n'a pas écrit depuis plus de 24 h : WhatsApp n'autorise plus de message libre. Il faut un modèle de message approuvé."
-          : `Message non envoyé : ${r.error || "erreur WhatsApp"}`,
-      },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: `Message non envoyé : ${r.error || "erreur WhatsApp"}` }, { status: 502 });
   }
   await tracer(agentId, p, "humain", texte);
   await mettreEnPause(agentId, p, true).catch(() => {});
-  return NextResponse.json({ ok: true, takeover: true });
+  return NextResponse.json({ ok: true, takeover: true, modele: Boolean(r.modele) });
 }

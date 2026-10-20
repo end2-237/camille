@@ -597,6 +597,10 @@ export async function createTemplate(
     body: string;
     examples?: string[];
     footer?: string;
+    /** En-tête : un texte court, ou une image (poignée obtenue par televerserExemple). */
+    header?: { type: "TEXT"; text: string } | { type: "IMAGE"; handle: string };
+    /** Jusqu'à 3 boutons (réponse rapide, lien, appel). */
+    buttons?: BoutonModele[];
   },
   wabaId = waba()
 ): Promise<{ ok: boolean; id?: string; status?: string; error?: string }> {
@@ -606,7 +610,29 @@ export async function createTemplate(
   const name = input.name.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 512);
   const variables = (input.body.match(/\{\{\s*\d+\s*\}\}/g) || []).length;
 
-  const components: Record<string, unknown>[] = [
+  // L'authentification ne se compose pas : Meta fixe le texte (« … est votre
+  // code de vérification ») et exige un bouton « copier le code ». Le corps
+  // libre qu'on envoyait était refusé à coup sûr.
+  if (input.category === "AUTHENTICATION") {
+    return soumettreModele(wabaId, {
+      name,
+      language: input.language || "fr",
+      category: "AUTHENTICATION",
+      components: [
+        { type: "BODY", add_security_recommendation: true },
+        { type: "FOOTER", code_expiration_minutes: 10 },
+        { type: "BUTTONS", buttons: [{ type: "OTP", otp_type: "COPY_CODE", text: "Copier le code" }] },
+      ],
+    });
+  }
+
+  const components: Record<string, unknown>[] = [];
+  if (input.header?.type === "TEXT" && input.header.text.trim()) {
+    components.push({ type: "HEADER", format: "TEXT", text: input.header.text.trim().slice(0, 60) });
+  } else if (input.header?.type === "IMAGE" && input.header.handle) {
+    components.push({ type: "HEADER", format: "IMAGE", example: { header_handle: [input.header.handle] } });
+  }
+  components.push(
     {
       type: "BODY",
       text: input.body,
@@ -620,14 +646,34 @@ export async function createTemplate(
           }
         : {}),
     },
-  ];
+  );
   if (input.footer?.trim()) components.push({ type: "FOOTER", text: input.footer.trim().slice(0, 60) });
+  const boutons = (input.buttons || [])
+    .filter((b) => b.text.trim())
+    .slice(0, 3)
+    .map((b) =>
+      b.type === "URL"
+        ? { type: "URL", text: b.text.trim().slice(0, 25), url: String(b.url || "").trim() }
+        : b.type === "PHONE_NUMBER"
+          ? { type: "PHONE_NUMBER", text: b.text.trim().slice(0, 25), phone_number: String(b.phone || "").replace(/[^\d+]/g, "") }
+          : { type: "QUICK_REPLY", text: b.text.trim().slice(0, 25) }
+    );
+  if (boutons.length) components.push({ type: "BUTTONS", buttons: boutons });
 
+  return soumettreModele(wabaId, { name, language: input.language || "fr", category: input.category, components });
+}
+
+export type BoutonModele = { type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER"; text: string; url?: string; phone?: string };
+
+async function soumettreModele(
+  wabaId: string,
+  corps: Record<string, unknown>
+): Promise<{ ok: boolean; id?: string; status?: string; error?: string }> {
   try {
     const res = await fetch(`https://graph.facebook.com/${GRAPH}/${wabaId}/message_templates`, {
       method: "POST",
       headers: { Authorization: `Bearer ${jeton()}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ name, language: input.language || "fr", category: input.category, components }),
+      body: JSON.stringify(corps),
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -642,6 +688,41 @@ export async function createTemplate(
       };
     }
     return { ok: true, id: j.id, status: j.status };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Téléverse l'image d'exemple d'un en-tête de modèle (API d'envoi par morceaux
+ * de Meta) et rend la poignée à citer dans `header_handle`.
+ */
+export async function televerserExemple(url: string): Promise<{ ok: boolean; handle?: string; error?: string }> {
+  const app = process.env.META_APP_ID || process.env.NEXT_PUBLIC_META_APP_ID || "";
+  if (!jeton() || !app) return { ok: false, error: "META_APP_ID ou jeton absent" };
+  try {
+    const img = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    if (!img.ok) return { ok: false, error: `image injoignable (${img.status})` };
+    const type = (img.headers.get("content-type") || "").split(";")[0].trim();
+    if (!/^image\/(jpeg|png)$/.test(type)) return { ok: false, error: "l'image doit être en JPEG ou PNG" };
+    const octets = Buffer.from(await img.arrayBuffer());
+    if (octets.length > 5 * 1024 * 1024) return { ok: false, error: "image trop lourde (5 Mo au plus)" };
+
+    const s = await fetch(
+      `https://graph.facebook.com/${GRAPH}/${app}/uploads?file_length=${octets.length}&file_type=${encodeURIComponent(type)}`,
+      { method: "POST", headers: { Authorization: `Bearer ${jeton()}` } }
+    );
+    const sj = await s.json().catch(() => ({}));
+    if (!s.ok || !sj.id) return { ok: false, error: sj.error?.message || "session d'envoi refusée" };
+
+    const u = await fetch(`https://graph.facebook.com/${GRAPH}/${sj.id}`, {
+      method: "POST",
+      headers: { Authorization: `OAuth ${jeton()}`, file_offset: "0" },
+      body: octets,
+    });
+    const uj = await u.json().catch(() => ({}));
+    if (!u.ok || !uj.h) return { ok: false, error: uj.error?.message || "envoi de l'image refusé" };
+    return { ok: true, handle: String(uj.h) };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

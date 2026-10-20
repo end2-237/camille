@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { query } from "@/lib/db";
 import * as meta from "./meta";
+import { envoyerMeta, fenetreOuverte } from "./modeles";
 import { transportDe, type EnvoiResult } from "./envoi";
 import { avecAgent } from "./identifiants";
 import { annonce, urlAnimation, type CommandeSuivie } from "./suivi";
@@ -100,22 +101,15 @@ async function annoncerPour(o: CommandeComplete): Promise<EnvoiResult> {
   const a = annonce(o, { boutique: o.business_name || undefined, avecLivreur: Boolean(o.courier_name) });
   if (!a) return { ok: false, transport, skipped: true };
 
-  // Une petite animation de réussite à la livraison, si le commerçant en a
-  // fourni une. Best-effort : sans elle, le message part quand même.
-  if (o.status === "livree") await envoyerAnimation(phone, "livree", String(o.agent_id));
+  // Plus de 24 h sans message du client : ni boutons ni animation, le texte
+  // part dans le modèle de relais (approuvé), et le client peut répondre.
+  const ouverte = await fenetreOuverte(String(o.agent_id), phone);
+  if (ouverte && o.status === "livree") await envoyerAnimation(phone, "livree", String(o.agent_id));
 
-  const r = await meta.sendButtons(phone, a.texte, a.boutons);
-  if (!r.ok) {
-    // 131047 : plus de 24 h sans message du client. Meta n'accepte alors
-    // qu'un modèle approuvé — on le dit clairement au commerçant.
-    const horsFenetre = /131047|24 ?h|re-?engagement/i.test(String(r.error || ""));
-    return {
-      ok: false, transport,
-      error: horsFenetre
-        ? "Le client n'a pas écrit depuis plus de 24 h : WhatsApp n'autorise qu'un message modèle approuvé."
-        : r.error,
-    };
-  }
+  const r = ouverte
+    ? await meta.sendButtons(phone, a.texte, a.boutons)
+    : await envoyerMeta(String(o.agent_id), phone, a.texte.replace(/\*/g, ""));
+  if (!r.ok) return { ok: false, transport, error: r.error };
   try {
     await query(
       `INSERT INTO camille.agent_conversations (session_name, contact_phone, role, content, created_at)
