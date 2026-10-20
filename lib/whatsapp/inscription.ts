@@ -61,7 +61,12 @@ export type Connexion = {
 };
 
 /** Tout le parcours. Lève une Error au message lisible si une étape bloquante échoue. */
-export async function connecter(code: string, indices: { wabaId?: string; phoneId?: string }): Promise<Connexion> {
+export async function connecter(
+  code: string,
+  indices: { wabaId?: string; phoneId?: string },
+  /** Coexistence : le numéro reste dans l'application WhatsApp Business du commerçant. */
+  opts: { coexistence?: boolean } = {}
+): Promise<Connexion> {
   if (!appId() || !appSecret()) {
     throw new Error("META_APP_ID (ou NEXT_PUBLIC_META_APP_ID) et WHATSAPP_APP_SECRET doivent être renseignés.");
   }
@@ -94,10 +99,24 @@ export async function connecter(code: string, indices: { wabaId?: string; phoneI
   const abo = await graph(`${wabaId}/subscribed_apps`, { token, method: "POST" });
   if (!abo.ok) throw new Error(`Impossible de relier le compte à Camille (webhook) : ${erreurMeta(abo)}`);
 
+  // 3 bis. Un AUTRE outil écoute-t-il ce compte ? Ancien chatbot, outil du
+  // prestataire… Il recevrait les mêmes messages, et le client aurait deux
+  // réponses à chaque question.
+  const autres = await autresApplications(wabaId, token);
+  if (autres.length) {
+    avertissements.push(
+      `Attention : ${autres.join(", ")} reçoit aussi les messages de ce numéro. Déconnectez cet outil, sinon vos clients recevront deux réponses.`
+    );
+  }
+
   // 4. Le numéro sur l'API Cloud. Déjà enregistré n'est pas une erreur.
-  const pin = String(crypto.randomInt(100000, 1000000));
-  const reg = await graph(`${phoneId}/register`, { token, method: "POST", body: { messaging_product: "whatsapp", pin } });
-  if (!reg.ok) avertissements.push(`Enregistrement du numéro : ${erreurMeta(reg)}`);
+  //    En coexistence, SURTOUT pas : le numéro vit dans l'application du
+  //    commerçant, et l'enregistrer l'en sortirait.
+  const pin = opts.coexistence ? "" : String(crypto.randomInt(100000, 1000000));
+  if (!opts.coexistence) {
+    const reg = await graph(`${phoneId}/register`, { token, method: "POST", body: { messaging_product: "whatsapp", pin } });
+    if (!reg.ok) avertissements.push(`Enregistrement du numéro : ${erreurMeta(reg)}`);
+  }
 
   // 5. Ce qu'on affiche, et le catalogue.
   const info = await graph(`${phoneId}?fields=display_phone_number,verified_name`, { token });
@@ -116,6 +135,16 @@ export async function connecter(code: string, indices: { wabaId?: string; phoneI
     catalogId,
     avertissements,
   };
+}
+
+/** Les autres applications abonnées aux messages de ce compte (sans la nôtre). */
+export async function autresApplications(wabaId: string, token: string): Promise<string[]> {
+  const r = await graph(`${wabaId}/subscribed_apps`, { token });
+  if (!r.ok) return [];
+  return ((r.json.data || []) as { whatsapp_business_api_data?: { id?: string; name?: string } }[])
+    .map((x) => x.whatsapp_business_api_data || {})
+    .filter((a) => a.id && String(a.id) !== appId())
+    .map((a) => a.name || `l'application ${a.id}`);
 }
 
 /** Le catalogue actuellement relié au compte (après coup, une fois créé par le commerçant). */

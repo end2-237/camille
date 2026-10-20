@@ -53,6 +53,26 @@ export function isUnlimited(plan: string): boolean {
   return getPlanLimit(plan) === -1;
 }
 
+// ── Conversations ────────────────────────────────────────────────────────────
+// Le commerçant compte en clients servis, pas en tokens. Une conversation
+// (un client servi, du premier message à la commande) consomme en moyenne
+// ~650 tokens : c'est le ratio des grilles (50 000 → ~80, 500 000 → ~700…).
+export const TOKENS_PAR_CONVERSATION = 650;
+
+/** Nombre de conversations (estimé) que représente un volume de tokens. */
+export function enConversations(tokens: number): number {
+  return Math.max(0, Math.round(tokens / TOKENS_PAR_CONVERSATION));
+}
+
+/** « ~700 conversations » — pour l'affichage. */
+export function libelleConversations(tokens: number): string {
+  const n = enConversations(tokens);
+  return `~${n.toLocaleString("fr-FR")} conversation${n > 1 ? "s" : ""}`;
+}
+
+/** Prix mensuel de l'option « Site » (site unique du commerçant). */
+export const PRIX_OPTION_SITE_XAF = 10_000;
+
 /** Période courante au format YYYY-MM */
 export function currentPeriod(): string {
   return new Date().toISOString().slice(0, 7);

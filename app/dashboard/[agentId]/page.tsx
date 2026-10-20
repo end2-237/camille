@@ -31,6 +31,7 @@ import { generateSystemPrompt } from "@/lib/generateSystemPrompt";
 import { cn }                      from "@/lib/utils";
 import type { Agent, AgentModel, FAQEntry } from "@/types/agent";
 import type { DbCapability } from "@/lib/plans-db";
+import { enConversations } from "@/lib/plans";
 import {
   Bandeau, Bouton, BoutonRond, Filtres, Pastille, Squelettes, StylesUI, Tuile, Vide, apparait, type Ton,
 } from "@/components/dashboard/ui";
@@ -246,14 +247,14 @@ function UsageSection({ agentId, token }: { agentId: string; token: string | nul
       <div>
         <div className="mb-2 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
           <span className="text-[26px] font-light leading-none tracking-[-0.02em] tabular-nums" style={{ color: "var(--cl-ink)" }}>
-            {current.total_tokens.toLocaleString("fr-FR")}
-            <span className="ml-1.5 text-[13px] font-normal tracking-normal" style={{ color: "var(--cl-ink-faint)" }}>tokens</span>
+            ~{enConversations(current.total_tokens).toLocaleString("fr-FR")}
+            <span className="ml-1.5 text-[13px] font-normal tracking-normal" style={{ color: "var(--cl-ink-faint)" }}>conversations</span>
           </span>
           {plan.unlimited ? (
             <span className="text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>Illimité</span>
           ) : (
             <span className="text-[13px] tabular-nums" style={{ color: "var(--cl-ink-faint)" }}>
-              / {plan.limit.toLocaleString("fr-FR")} · {pct}%
+              / ~{enConversations(plan.limit).toLocaleString("fr-FR")} · {pct}%
             </span>
           )}
         </div>
@@ -284,7 +285,7 @@ function UsageSection({ agentId, token }: { agentId: string; token: string | nul
           <div className="col-span-2 rounded-[18px] p-3.5 sm:col-span-1" style={{ background: FOND_DOUX }}>
             <p className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>Restant</p>
             <p className="mt-0.5 text-[15px] font-medium tabular-nums" style={{ color: pct >= 90 ? "#A63D28" : "var(--cl-ink)" }}>
-              {current.remaining.toLocaleString("fr-FR")}
+              ~{enConversations(current.remaining).toLocaleString("fr-FR")} conv.
             </p>
           </div>
         )}

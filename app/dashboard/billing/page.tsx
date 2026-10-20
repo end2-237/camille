@@ -18,6 +18,7 @@ import { useAgents }   from "@/hooks/useAgents";
 import { cn }          from "@/lib/utils";
 import type { Agent }  from "@/types/agent";
 import type { DbPlan, DbCapability } from "@/lib/plans-db";
+import { enConversations, libelleConversations } from "@/lib/plans";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -399,7 +400,7 @@ function PlanCard({
           </p>
         )}
         <p className="text-2xs mt-1" style={{ color: "var(--text-disabled)" }}>
-          {unlimited ? "Tokens illimités" : `${plan.monthly_tokens.toLocaleString("fr-FR")} tokens / mois`}
+          {unlimited ? "Conversations illimitées" : `${libelleConversations(plan.monthly_tokens)} / mois`}
         </p>
       </div>
 
@@ -633,7 +634,7 @@ function BillingContent() {
         <div>
           <h1 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Plans & Facturation</h1>
           <p className="text-xs mt-1" style={{ color: "var(--text-disabled)" }}>
-            Gérez vos abonnements et suivez votre consommation de tokens.
+            Gérez vos abonnements et suivez les conversations du mois.
           </p>
         </div>
 
@@ -766,9 +767,9 @@ function BillingContent() {
 
             <div className="grid grid-cols-3 gap-4">
               {[
-                { label: "Total tokens", value: usage.current.total_tokens.toLocaleString("fr-FR") },
-                { label: "Restant", value: usage.plan.unlimited ? "∞" : usage.current.remaining.toLocaleString("fr-FR") },
-                { label: "Limite mensuelle", value: usage.plan.unlimited ? "Illimitée" : usage.plan.limit.toLocaleString("fr-FR") },
+                { label: "Conversations", value: `~${enConversations(usage.current.total_tokens).toLocaleString("fr-FR")}` },
+                { label: "Restant", value: usage.plan.unlimited ? "∞" : `~${enConversations(usage.current.remaining).toLocaleString("fr-FR")}` },
+                { label: "Par mois", value: usage.plan.unlimited ? "Illimité" : `~${enConversations(usage.plan.limit).toLocaleString("fr-FR")}` },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <p className="text-2xs mb-0.5" style={{ color: "var(--text-disabled)" }}>{label}</p>

@@ -103,7 +103,12 @@ export default function WhatsappOfficielPage() {
     return () => window.removeEventListener("message", ecoute);
   }, []);
 
-  const connecter = async () => {
+  /**
+   * `garder` : coexistence — le commerçant garde son application WhatsApp
+   * Business sur son téléphone, et scanne un QR code. `transferer` : le numéro
+   * passe entièrement sur l'API (il quitte l'application).
+   */
+  const connecter = async (mode: "garder" | "transferer") => {
     setMsg(null);
     setOccupe(true);
     session.current = {};
@@ -116,7 +121,11 @@ export default function WhatsappOfficielPage() {
             config_id: CONFIG_ID,
             response_type: "code",
             override_default_response_type: true,
-            extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+            extras: {
+              setup: {},
+              featureType: mode === "garder" ? "whatsapp_business_app_onboarding" : "",
+              sessionInfoVersion: "3",
+            },
           }
         );
       });
@@ -125,7 +134,7 @@ export default function WhatsappOfficielPage() {
       const r = await fetch(`/api/agents/${agentId}/meta`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ code, ...session.current }),
+        body: JSON.stringify({ code, ...session.current, coexistence: mode === "garder" }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Connexion refusée");
@@ -291,11 +300,11 @@ const ATOUTS = [
 
 const ETAPES: { titre: string; texte: string; doodle: NomDoodle }[] = [
   { titre: "Ouvrez la fenêtre Meta", texte: "Connectez-vous avec le compte Facebook de votre entreprise.", doodle: "reading" },
-  { titre: "Choisissez votre numéro", texte: "Sélectionnez ou créez votre compte WhatsApp Business et le numéro à relier.", doodle: "sitting-reading" },
-  { titre: "Validez le code", texte: "Recevez le code par SMS ou appel, validez : Camille répond en votre nom.", doodle: "meditating" },
+  { titre: "Choisissez votre compte", texte: "Sélectionnez votre compte WhatsApp Business, ou laissez Meta le créer pour vous.", doodle: "sitting-reading" },
+  { titre: "Scannez le QR code", texte: "Avec l'application WhatsApp Business de votre téléphone : Camille répond, et vous gardez la main.", doodle: "meditating" },
 ];
 
-function AConnecter({ test, occupe, bloque, onConnecter }: { test: boolean; occupe: boolean; bloque: boolean; onConnecter: () => void }) {
+function AConnecter({ test, occupe, bloque, onConnecter }: { test: boolean; occupe: boolean; bloque: boolean; onConnecter: (mode: "garder" | "transferer") => void }) {
   return (
     <>
       <motion.section {...apparait(0)} className="wa-hero relative grid items-center gap-6 overflow-hidden rounded-[32px] p-6 sm:p-8 lg:grid-cols-[1.2fr_1fr] lg:p-10">
@@ -318,17 +327,30 @@ function AConnecter({ test, occupe, bloque, onConnecter }: { test: boolean; occu
             ))}
           </div>
           <div className="mt-7 flex flex-wrap items-center gap-4">
-            <motion.button onClick={onConnecter} disabled={occupe || bloque} whileHover={{ scale: occupe || bloque ? 1 : 1.03 }} whileTap={{ scale: 0.97 }}
-              className="wa-cta flex items-center gap-3 rounded-full py-2 pl-2 pr-6 text-[15px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "#25D366" }}>
+            <motion.button onClick={() => onConnecter("garder")} disabled={occupe || bloque} whileHover={{ scale: occupe || bloque ? 1 : 1.03 }} whileTap={{ scale: 0.97 }}
+              className="wa-cta flex items-center gap-3 rounded-full py-2 pl-2 pr-6 text-left text-[15px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+              <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "#25D366" }}>
                 {occupe ? <Loader2 className="h-5 w-5 animate-spin" /> : <IconeWhatsapp className="h-5 w-5" />}
               </span>
-              {occupe ? "Connexion en cours…" : "Connecter mon WhatsApp"}
+              <span className="leading-tight">
+                {occupe ? "Connexion en cours…" : "Connecter mon WhatsApp Business"}
+                {!occupe && <span className="block text-[11.5px] font-normal text-white/75">Je garde l&apos;application sur mon téléphone · recommandé</span>}
+              </span>
             </motion.button>
             <span className="flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--cl-ink-faint)" }}>
               <ShieldCheck className="h-4 w-4" /> Fenêtre officielle Meta · accès chiffré
             </span>
           </div>
+          <p className="mt-4 max-w-[56ch] text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
+            Vous scannerez un QR code avec l&apos;application WhatsApp Business (version à jour) : vos discussions,
+            vos contacts et votre catalogue restent en place, et vous pouvez toujours répondre depuis votre téléphone.
+            Pas d&apos;application WhatsApp Business, ou vous voulez tout gérer depuis Camille ?{" "}
+            <button type="button" onClick={() => onConnecter("transferer")} disabled={occupe || bloque}
+              className="font-medium underline underline-offset-2 disabled:opacity-50" style={{ color: "var(--cl-accent-deep)" }}>
+              Connecter un numéro sans l&apos;application
+            </button>
+            {" "}(le numéro quittera l&apos;application WhatsApp Business).
+          </p>
         </div>
         <motion.div initial={{ opacity: 0, scale: 0.92, rotate: -3 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ delay: 0.15, type: "spring", stiffness: 200, damping: 18 }}
           className="relative hidden justify-center lg:flex">
@@ -349,10 +371,31 @@ function AConnecter({ test, occupe, bloque, onConnecter }: { test: boolean; occu
           </motion.article>
         ))}
       </div>
+      <motion.section {...apparait(4)} className="mt-4 rounded-[28px] bg-white p-5 sm:p-6">
+        <h3 className="text-[16px] font-medium" style={{ color: "var(--cl-ink)" }}>Avant de commencer</h3>
+        <ul className="mt-3 grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+          {AVANT.map((a) => (
+            <li key={a} className="flex gap-2.5 text-[13.5px] leading-relaxed" style={{ color: "var(--cl-ink-soft)" }}>
+              <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: "var(--cl-accent)" }} />
+              {a}
+            </li>
+          ))}
+        </ul>
+      </motion.section>
       <Styles />
     </>
   );
 }
+
+/** Le guide du commerçant, là où il en a besoin : juste sous le bouton. */
+const AVANT = [
+  "Mettez à jour WhatsApp Business sur votre téléphone, et gardez-le près de vous : vous scannerez un QR code.",
+  "Un compte Facebook suffit. Si votre entreprise n'a pas encore de page, Meta la crée pendant la connexion.",
+  "Un autre outil (robot, autre plateforme) répond déjà sur ce numéro ? Débranchez-le d'abord, sinon vos clients recevront deux réponses.",
+  "Vos clients, votre catalogue et vos discussions restent dans l'application. Les messages que vous envoyez depuis le téléphone apparaissent dans Camille.",
+  "Quand vous répondez vous-même à un client, Camille se tait pour lui pendant 4 heures, puis reprend.",
+  "Ouvrez l'application WhatsApp Business au moins une fois toutes les deux semaines : sinon Meta coupe la connexion.",
+];
 
 function Connecte({ etat, occupe, onActualiser, onDeconnecter }: { etat: Etat; occupe: boolean; onActualiser: () => void; onDeconnecter: () => void }) {
   const tuiles = [

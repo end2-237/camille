@@ -140,13 +140,60 @@ async function trouverAgent(phoneNumberId: string): Promise<Agent | null> {
 async function humainEnCours(agentId: string, phone: string): Promise<boolean> {
   try {
     const r = await query(
-      `SELECT COALESCE(human_takeover, false) AS h
-         FROM camille.contacts WHERE agent_id = $1 AND phone = $2 LIMIT 1`,
+      `SELECT COALESCE(c.human_takeover, false) AS h,
+              (SELECT MAX(created_at) FROM camille.agent_conversations x
+                WHERE x.session_name = 'meta:' || $1::text AND x.contact_phone = $2 AND x.role = 'humain') AS dernier_humain
+         FROM camille.contacts c WHERE c.agent_id = $1 AND c.phone = $2 LIMIT 1`,
       [agentId, phone]
     );
-    return Boolean(r.rows[0]?.h);
+    const row = r.rows[0];
+    if (!row?.h) return false;
+    // Le commerçant a répondu, puis plus rien depuis longtemps : Camille
+    // reprend d'elle-même. Sans ça, un commerçant qui répond depuis son
+    // téléphone (coexistence) et n'ouvre jamais le tableau de bord laissait
+    // Camille muette pour ce client à jamais. Une main prise sans réponse
+    // (réclamation en attente) reste prise : le client attend un humain.
+    if (row.dernier_humain && Date.now() - new Date(row.dernier_humain).getTime() > REPRISE_AUTO_MS) {
+      await query(
+        `UPDATE camille.contacts SET human_takeover = false, updated_at = NOW() WHERE agent_id = $1 AND phone = $2`,
+        [agentId, phone]
+      ).catch(() => {});
+      return false;
+    }
+    return true;
   } catch {
     return false; // colonne ou table absente : on ne bâillonne pas l'agent
+  }
+}
+
+/** Après ce délai sans message du commerçant, Camille reprend la conversation. */
+const REPRISE_AUTO_MS = 4 * 3600_000;
+
+/**
+ * Coexistence : le commerçant a répondu DEPUIS SON TÉLÉPHONE (application
+ * WhatsApp Business). Meta nous en envoie une copie (« echo »). On la range
+ * dans la boîte de réception et Camille se tait pour ce client : parler
+ * par-dessus le commerçant est pire que se taire.
+ */
+export async function recevoirEcho(e: { phoneNumberId: string; client: string; texte: string }): Promise<void> {
+  const client = e.client.replace(/[^0-9]/g, "");
+  if (!client) return;
+  try {
+    const r = await query(
+      `SELECT id FROM camille.agents WHERE to_jsonb(agents)->>'meta_phone_number_id' = $1 LIMIT 1`,
+      [e.phoneNumberId]
+    );
+    const agentId = r.rows[0]?.id as string | undefined;
+    if (!agentId) return;
+    await tracer(agentId, client, "humain", e.texte || "(message envoyé depuis le téléphone)");
+    await query(
+      `INSERT INTO camille.contacts (agent_id, phone, human_takeover, created_at, updated_at)
+       VALUES ($1, $2, true, NOW(), NOW())
+       ON CONFLICT (agent_id, phone) DO UPDATE SET human_takeover = true, updated_at = NOW()`,
+      [agentId, client]
+    );
+  } catch (err) {
+    console.error("[meta] echo non traité :", (err as Error).message);
   }
 }
 

@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { handleIncoming, type IncomingMessage } from "@/lib/whatsapp/handle";
 import { traiterEchecs } from "@/lib/whatsapp/statuts";
+import { recevoirEcho } from "@/lib/whatsapp/handle";
 
 // ── Vérification de l'abonnement ────────────────────────────────────────────
 
@@ -197,6 +198,29 @@ function extraire(body: Record<string, unknown>): IncomingMessage[] {
   return out;
 }
 
+/**
+ * Les copies des messages que le commerçant envoie depuis son application
+ * WhatsApp Business (champ de webhook `smb_message_echoes`, coexistence).
+ */
+function extraireEchos(body: Record<string, unknown>): { phoneNumberId: string; client: string; texte: string }[] {
+  const out: { phoneNumberId: string; client: string; texte: string }[] = [];
+  for (const entry of (body.entry || []) as Record<string, unknown>[]) {
+    for (const ch of (entry.changes || []) as Record<string, unknown>[]) {
+      if (ch.field !== "smb_message_echoes") continue;
+      const v = (ch.value || {}) as Record<string, unknown>;
+      const phoneNumberId = String((v.metadata as { phone_number_id?: string })?.phone_number_id || "");
+      for (const m of (v.message_echoes || []) as Record<string, unknown>[]) {
+        const type = String(m.type || "");
+        const texte = type === "text"
+          ? String((m.text as { body?: string })?.body || "")
+          : `(${type || "message"} envoyé depuis le téléphone)`;
+        out.push({ phoneNumberId, client: String(m.to || ""), texte });
+      }
+    }
+  }
+  return out;
+}
+
 export async function POST(req: NextRequest) {
   // Le corps brut, et lui seul, permet de vérifier la signature : un
   // re-sérialisé JSON ne donne pas les mêmes octets.
@@ -224,6 +248,8 @@ export async function POST(req: NextRequest) {
   const messages = extraire(body);
   // Les accusés d'échec : le commerçant doit savoir qu'un message n'est pas parti.
   traiterEchecs(body).catch(() => {});
+  // Coexistence : les réponses du commerçant depuis son application.
+  for (const e of extraireEchos(body)) recevoirEcho(e).catch(() => {});
 
   // On accuse réception AVANT de traiter. Le traitement part détaché : une
   // erreur dedans ne doit ni retarder l'accusé, ni provoquer un réessai de

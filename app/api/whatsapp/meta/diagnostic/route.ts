@@ -17,6 +17,7 @@ import { sectorProfile } from "@/lib/sectorProfiles";
 import * as meta from "@/lib/whatsapp/meta";
 import { avecAgent, identifiantsAgent } from "@/lib/whatsapp/identifiants";
 import { modeDeVente, type Agent } from "@/lib/whatsapp/handle";
+import { autresApplications } from "@/lib/whatsapp/inscription";
 
 /**
  * Réservé à l'exploitation. Le diagnostic décrit la configuration Meta, le
@@ -89,7 +90,15 @@ export async function GET(req: NextRequest) {
   // ── Le catalogue Meta ─────────────────────────────────────────────────────
   // Lu avec les identifiants de l'agent diagnostiqué (les siens s'il a
   // connecté son WhatsApp, sinon ceux de l'application).
-  const source = agentId ? (await identifiantsAgent(agentId)).source : "env";
+  const ids = agentId ? await identifiantsAgent(agentId) : null;
+  const source = ids ? ids.source : "env";
+
+  // ── Un autre outil branché sur le même numéro ─────────────────────────────
+  // Deux applications abonnées au même compte WhatsApp : le client reçoit deux
+  // réponses à chaque message.
+  const autresOutils = ids?.source === "agent" && ids.wabaId ? await autresApplications(ids.wabaId, ids.token) : [];
+  if (autresOutils.length)
+    problemes.push(`Autre(s) outil(s) abonné(s) à ce compte WhatsApp : ${autresOutils.join(", ")}. Les clients recevront deux réponses tant qu'ils restent branchés.`);
   const cat = agentId ? await avecAgent(agentId, () => meta.listCatalog()) : await meta.listCatalog();
   if (!cat.ok) problemes.push(`Catalogue Meta illisible : ${cat.error}`);
   else if (!cat.items.length) problemes.push("Le catalogue Meta ne renvoie aucun produit.");
@@ -131,6 +140,7 @@ export async function GET(req: NextRequest) {
     config,
     // « agent » : ce commerçant a connecté son propre WhatsApp (Embedded Signup).
     identifiants: source,
+    autres_outils: autresOutils,
     webhook: {
       url: "https://camille.vps.buyticle.com/api/whatsapp/meta/webhook",
       verify_token_present: Boolean(process.env.WHATSAPP_VERIFY_TOKEN),

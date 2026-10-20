@@ -8,7 +8,12 @@
 - **App review Meta validée** : n'importe quel commerçant peut connecter son numéro WhatsApp Business (chemin Meta officiel).
 - Swap de 4 Go en place sur le VPS.
 - Sauvegarde chiffrée chaque nuit vers le Google Drive, vérifiée le 19 octobre (se déchiffre et s'ouvre en entier, 132 tables).
-- Page d'accueil refaite (PR #46) ; la vidéo de fond attend le feu vert pour être fusionnée.
+- Page d'accueil refaite (PR #46), vidéo de fond comprise.
+- Lot 1 fait (PR #47) : défauts 1, 2, 3, 4, 7, 12, 13, commandes de nuit, **boîte de réception** (15).
+- **Coexistence** : le commerçant garde son application WhatsApp Business (QR code). Ses réponses depuis le téléphone arrivent dans Camille, qui se tait 4 h pour ce client.
+- Détection d'un autre outil branché sur le même numéro (connexion et diagnostic).
+- Forfaits affichés en **conversations** (tarifs, facturation, fiche agent).
+- **Paiement en pause** (Mobile Money manuel comme pawaPay) : à reprendre après l'ouverture.
 
 ---
 
@@ -63,18 +68,19 @@
   - bouton « Créer mon site » dans Camille, qui prépare le brief à partir des données du commerçant ;
   - **étape 1** : commande traitée à la main avec DIP ; **étape 2** (après 5 à 10 sites) : automatisation sur un petit serveur **isolé** (Claude Code sans interface + clé API Console, environ 5 à 20 $ de tokens par site), validation humaine avant publication ;
   - variante « commerce » des règles DIP : pages légères, rapides en 3G/4G ;
-  - vendu comme **option « Site »** ajoutée à l'abonnement (prix à fixer, idée : +5 000 FCFA / mois).
+  - vendu comme **option « Site » : +10 000 FCFA / mois** sur l'abonnement (décidé le 20 octobre).
 - **Rétention** : bilan quotidien ou hebdomadaire sur WhatsApp au commerçant, **demandes manquées** (« 14 clients ont demandé X »), carnet clients.
 
-### Forfaits (grille proposée, à valider)
+### Forfaits
 | Forfait | Prix | Contenu |
 |---|---|---|
 | Gratuit | 0 | 1 commerce, ~80 conversations / mois, toutes les fonctions de vente |
 | Starter | 9 900 FCFA / mois | ~700 conversations, catalogue, panier, livraison, notifications |
 | Pro | 24 900 FCFA / mois | ~3 000 conversations, équipe, livreurs, plusieurs commerces, API site |
 | Enterprise | sur devis | volumes, accompagnement |
+| Option « Site » | +10 000 FCFA / mois | site unique relié au catalogue |
 
-Afficher des **conversations** au lieu des tokens. Faire respecter le forfait sur le chemin Meta.
+Conversations affichées au lieu des tokens (fait ; 1 conversation ≈ 650 tokens). Reste : faire respecter le forfait sur le chemin Meta.
 
 ---
 
@@ -93,7 +99,7 @@ Afficher des **conversations** au lieu des tokens. Faire respecter le forfait su
 - [ ] Nettoyage automatique de Docker dans Coolify (quotidien, seuil 70 %, sans les volumes).
 - [ ] Vérifier que `FIREBASE_SERVICE_ACCOUNT_JSON` est remplie (notifications push).
 - [ ] Supprimer du Drive `backup-data-only.tar.gz` et `.zip` (données d'avant le piratage, non chiffrées).
-- [ ] Page d'accueil : « Application validée par Meta » ; fusionner la vidéo de fond.
+- [x] Page d'accueil : « Application validée par Meta » ; vidéo de fond.
 
 ## D. Place sur le Drive
 
@@ -105,11 +111,21 @@ Sur 2,6 Go de sauvegardes, environ **1,8 Go viennent de n8n** (≈ 200 Mo × 9 c
 
 ---
 
+## Avant l'ouverture publique (22 octobre)
+
+- [x] Coexistence avec l'application WhatsApp Business.
+- [x] Détection d'un autre outil branché sur le numéro.
+- [x] Forfaits en conversations ; option « Site ».
+- [x] Guide de connexion pour les commerçants (page WhatsApp + `docs/GUIDE-CONNEXION-WHATSAPP.md`).
+- [ ] Dans l'app Meta → Webhooks : cocher `messages` **et** `smb_message_echoes` (plus `history`, `smb_app_state_sync`).
+- [ ] Coolify : `WHATSAPP_APP_SECRET` rempli, `NODE_ENV=production`, pas de `META_ALLOW_UNSIGNED`.
+- [ ] Vrai test de bout en bout avec un numéro WhatsApp Business de réserve.
+
 ## E. Ordre de travail
 
 1. **Sécurité des sauvegardes** : 6 heures, test du dimanche, n8n allégé, dossiers Coolify, place sur le Drive.
 2. **Lot 1, défauts** : 1, 2, 3, 4, 5, 7, 12, 13, 21 + commandes de nuit.
-3. Paiement Mobile Money manuel et statut payé.
+3. ~~Paiement Mobile Money manuel et statut payé~~ — en pause.
 4. Forfaits (8) et modèles au-delà de 24 h (6, 17).
 5. Mode caisse et import CSV / Excel.
 6. Bilan quotidien et demandes manquées.
@@ -119,8 +135,7 @@ Sur 2,6 Go de sauvegardes, environ **1,8 Go viennent de n8n** (≈ 200 Mo × 9 c
 
 ## F. En attente de décisions
 
-- Feu vert pour la vidéo de la page d'accueil.
-- Validation de la grille de forfaits et du prix de l'option « Site ».
+- Reprise du paiement : manuel ou pawaPay (déjà branché dans buyfacturation).
 - Où est géré buyticle.com.
 - Envoi des workflows N2/N3.
 - Packs DIP de référence pour les premiers thèmes.

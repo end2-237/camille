@@ -102,12 +102,12 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       { status: 409 }
     );
   }
-  const b = (await req.json().catch(() => ({}))) as { code?: string; waba_id?: string; phone_number_id?: string };
+  const b = (await req.json().catch(() => ({}))) as { code?: string; waba_id?: string; phone_number_id?: string; coexistence?: boolean };
   if (!b.code) return NextResponse.json({ error: "Code de connexion manquant" }, { status: 400 });
 
   let c;
   try {
-    c = await connecter(String(b.code), { wabaId: b.waba_id, phoneId: b.phone_number_id });
+    c = await connecter(String(b.code), { wabaId: b.waba_id, phoneId: b.phone_number_id }, { coexistence: Boolean(b.coexistence) });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
