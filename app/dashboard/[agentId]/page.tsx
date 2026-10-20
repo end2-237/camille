@@ -381,6 +381,9 @@ function OverviewTab({ agent, onToggleStatus, token, capabilities }: { agent: Ag
           {/* Usage tokens */}
           <UsageSection agentId={agent.id} token={token} />
 
+          {/* Ce que les clients cherchent sans le trouver */}
+          <DemandesManquees agentId={agent.id} token={token} />
+
           {/* ID */}
           <Section icone={Fingerprint} titre="Agent ID" rang={4}
             action={<Bouton variante="clair" icone={copied ? Check : Copy} onClick={copyId}>{copied ? "Copié" : "Copier"}</Bouton>}>
@@ -389,6 +392,34 @@ function OverviewTab({ agent, onToggleStatus, token, capabilities }: { agent: Ag
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Demandes manquées ─────────────────────────────────────────────────────────
+
+function DemandesManquees({ agentId, token }: { agentId: string; token: string | null }) {
+  const [demandes, setDemandes] = useState<{ demande: string; clients: number }[] | null>(null);
+  useEffect(() => {
+    fetch(`/api/agents/${agentId}/demandes-manquees?jours=30`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => r.json())
+      .then((d) => setDemandes(Array.isArray(d.demandes) ? d.demandes : []))
+      .catch(() => setDemandes([]));
+  }, [agentId, token]);
+  if (!demandes?.length) return null;
+  return (
+    <Section icone={TrendingUp} titre="Demandé sans succès" sous="30 derniers jours" rang={4}>
+      <p className="text-[13px]" style={{ color: "var(--cl-ink-faint)" }}>
+        Ce que vos clients ont cherché sans le trouver dans votre catalogue.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {demandes.map((d) => (
+          <li key={d.demande} className="flex items-center justify-between rounded-[16px] px-4 py-2.5 text-[14px]" style={{ background: FOND_DOUX }}>
+            <span className="first-letter:uppercase" style={{ color: "var(--cl-ink)" }}>{d.demande}</span>
+            <span className="tabular-nums" style={{ color: "var(--cl-ink-faint)" }}>{d.clients} client{d.clients > 1 ? "s" : ""}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 

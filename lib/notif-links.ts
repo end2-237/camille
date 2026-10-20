@@ -21,6 +21,9 @@ export function lienNotif(data: Record<string, unknown> | null | undefined): str
       return agentId ? `/dashboard/${agentId}/conversations${tel ? `?tel=${tel}` : ""}` : null;
     }
     case "complaint":             return "/dashboard/complaints";
+    // Le bilan du matin : la fiche de l'agent, où vivent les demandes manquées.
+    case "bilan":                 return agentId ? `/dashboard/${agentId}` : "/dashboard/orders";
+    case "courier":               return "/livraison";
     case "stock":                 return agentId ? `/dashboard/${agentId}/catalog` : null;
     // Vente manquée : le vendeur veut d'abord voir QUI a commandé, pour le
     // rappeler. Le réapprovisionnement vient après.

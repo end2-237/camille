@@ -41,6 +41,38 @@ export default function CatalogPage() {
   useEffect(() => { setPublicLink(`${window.location.origin}/catalog/${agentId}`); }, [agentId]);
   const [rayon, setRayon] = useState("tous");
 
+  // Import d'un tableur (Excel → « Enregistrer sous » CSV) : on montre d'abord
+  // ce qui sera fait, puis on confirme.
+  async function importer(f: File) {
+    if (/\.xlsx?$/i.test(f.name)) {
+      toast.error("Dans Excel : Fichier › Enregistrer sous › CSV, puis importez ce fichier.");
+      return;
+    }
+    const csv = await f.text();
+    const appel = (simulation: boolean) =>
+      fetch(`/api/agents/${agentId}/products/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ csv, simulation }),
+      }).then((r) => r.json());
+    try {
+      const sim = await appel(true);
+      if (sim.error) { toast.error(sim.error); return; }
+      const ok = confirm(
+        `${sim.crees} article(s) à créer, ${sim.mis_a_jour} à mettre à jour` +
+          (sim.ecartees?.length ? `, ${sim.ecartees.length} ligne(s) écartée(s)` : "") + ". Importer ?"
+      );
+      if (!ok) return;
+      const r = await appel(false);
+      if (r.error) { toast.error(r.error); return; }
+      toast.success(`${r.crees} créé(s), ${r.mis_a_jour} mis à jour.`);
+      if (r.ecartees?.length) toast.warning(r.ecartees.slice(0, 3).join(" · "));
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -228,6 +260,10 @@ export default function CatalogPage() {
             {copied ? "Lien copié" : "Lien du catalogue"}
           </Bouton>
           <LienBouton variante="clair" icone={ExternalLink} href={publicLink || undefined} target="_blank" rel="noopener noreferrer">Aperçu</LienBouton>
+          <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full px-4 text-[13.5px] font-medium" style={{ background: "#F4F2F7", color: "var(--cl-ink)" }}>
+            <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importer(f); e.target.value = ""; }} />
+            Importer (Excel)
+          </label>
           <Bouton variante="encre" icone={Plus} onClick={() => setEditing({ ...EMPTY })}>Ajouter un produit</Bouton>
         </div>
       </div>

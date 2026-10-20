@@ -899,6 +899,42 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("dimanche noté 0 ou 7", servieAujourdhui([0], new Date("2026-10-25T11:00:00Z")) && servieAujourdhui([7], new Date("2026-10-25T11:00:00Z")));
 }
 
+// ═══ demandes manquées — ce qui manque au catalogue ═════════════════════════
+{
+  groupe("demandes manquées — regroupement");
+  const { coeurDemande, regrouperDemandes } = await import(`${DIST}/whatsapp/demandes.js`);
+  eq("habillage retiré, pluriel ramené", coeurDemande("Bonjour vous avez des sandales noires ?"), "sandale");
+  eq("« je cherche » retiré", coeurDemande("je cherche sandale"), "sandale");
+  const g = regrouperDemandes([
+    { texte: "vous avez des sandales ?", phone: "1" },
+    { texte: "sandales dispo", phone: "2" },
+    { texte: "je cherche sandale", phone: "2" },
+    { texte: "perruque brésilienne", phone: "3" },
+  ]);
+  eq("trois messages, deux clients, une demande", g[0], { demande: "sandale", clients: 2 });
+  eq("la seconde demande suit", g[1]?.demande, "perruque bresilienne");
+  eq("rien que de la politesse → rien", regrouperDemandes([{ texte: "bonjour merci" }]), []);
+}
+
+// ═══ import CSV — le catalogue venu d'Excel ═════════════════════════════════
+{
+  groupe("import CSV — Excel français et Google Sheets");
+  const { lireCatalogue, lireNombre } = await import(`${DIST}/import-csv.js`);
+  eq("milliers avec espace", lireNombre("12 500 FCFA"), 12500);
+  eq("milliers avec point", lireNombre("12.500"), 12500);
+  eq("décimale à la virgule", lireNombre("2,5"), 2.5);
+  eq("vide → rien", lireNombre(""), null);
+  const xl = "\uFEFFNom;Prix;Quantité;Catégorie\nSandale cuir;12 500;4;Chaussures\n\"Robe; longue\";25000;;Robes\n;3000;1;\nSandale cuir;1;1;x\n";
+  const r = lireCatalogue(xl);
+  eq("Excel « ; » : deux articles", r.lignes.map((l) => l.name), ["Sandale cuir", "Robe; longue"]);
+  eq("prix et stock lus", [r.lignes[0].price, r.lignes[0].stock], [12500, 4]);
+  eq("stock vide → inconnu", r.lignes[1].stock, null);
+  eq("sans nom et doublon écartés", r.ecartees.length, 2);
+  const gs = lireCatalogue("Product,Price,Stock\nCap,\"3,000\",2\n");
+  eq("Google Sheets « , »", [gs.lignes[0].name, gs.lignes[0].price], ["Cap", 3000]);
+  eq("pas de colonne nom → expliqué", lireCatalogue("a;b\n1;2").ecartees.length, 1);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log(`\n${"═".repeat(66)}`);
 if (echecs.length) {

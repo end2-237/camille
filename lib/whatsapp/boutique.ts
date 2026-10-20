@@ -1898,6 +1898,11 @@ export async function repondreBoutique(
     // qu'on a. Répondre « je n'ai pas trouvé » à un acheteur en main, avec un
     // catalogue plein, c'est perdre la vente pour un mot mal orthographié.
     if (prods.length && !/^(merci|ok|okay|okey|dac|daccord|bien|super|a plus|bye|au revoir|oui|non)\b/.test(t)) {
+      // Noté pour le commerçant : c'est ce qui manque à son catalogue.
+      query(
+        "INSERT INTO camille.demandes_manquees (agent_id, phone, texte) VALUES ($1, $2, $3)",
+        [agent.id, phone, msg.text.trim().slice(0, 200)]
+      ).catch(() => { /* table absente : migration_ouverture.sql */ });
       return montrerVitrine(
         ctx, prods,
         resto ? "Notre carte" : "Notre boutique",

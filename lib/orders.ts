@@ -64,7 +64,7 @@ export type CreatedOrder = {
   scheduledAt: string | null;
 };
 
-function makeRef() {
+export function makeRef() {
   // Référence courte, lisible au téléphone (sans I/O/0/1 pour éviter les confusions)
   const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
@@ -128,7 +128,7 @@ type RuptureLine = { name: string; demande: number; dispo: number };
  *
  * @returns les articles passés au seuil bas, et ceux qui manquaient déjà
  */
-async function applyStock(
+export async function applyStock(
   agentId: string,
   items: NewOrderItem[]
 ): Promise<{ low: LowLine[]; ruptures: RuptureLine[]; touches: string[] }> {
