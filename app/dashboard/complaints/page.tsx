@@ -178,8 +178,10 @@ export default function ComplaintsPage() {
                           ) : (
                             <Bouton variante="clair" icone={RotateCcw} disabled={occupe} onClick={() => agir(c.id, { status: "active" })}>Rouvrir</Bouton>
                           )}
-                          <LienBouton variante="vert" icone={MessageCircle} className="sm:ml-auto" href={`https://wa.me/${c.phone}`} target="_blank" rel="noreferrer">
-                            Écrire au client
+                          {/* Répondre depuis le NUMÉRO DE LA BOUTIQUE : wa.me ouvrait le
+                              WhatsApp personnel, et le client recevait un message d'un inconnu. */}
+                          <LienBouton variante="vert" icone={MessageCircle} className="sm:ml-auto" href={`/dashboard/${c.agent_id}/conversations?tel=${String(c.phone).replace(/[^0-9]/g, "")}`}>
+                            Répondre au client
                           </LienBouton>
                         </div>
                       </motion.article>

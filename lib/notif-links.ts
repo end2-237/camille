@@ -14,6 +14,13 @@ export function lienNotif(data: Record<string, unknown> | null | undefined): str
   const agentId = String(d.agentId ?? "").trim();
   switch (String(d.type ?? "")) {
     case "order":                 return "/dashboard/orders";
+    // Un client attend une réponse humaine : on ouvre directement son fil
+    // dans la boîte de réception, prêt à répondre.
+    case "message": {
+      const tel = String(d.phone ?? "").replace(/[^0-9]/g, "");
+      return agentId ? `/dashboard/${agentId}/conversations${tel ? `?tel=${tel}` : ""}` : null;
+    }
+    case "complaint":             return "/dashboard/complaints";
     case "stock":                 return agentId ? `/dashboard/${agentId}/catalog` : null;
     // Vente manquée : le vendeur veut d'abord voir QUI a commandé, pour le
     // rappeler. Le réapprovisionnement vient après.

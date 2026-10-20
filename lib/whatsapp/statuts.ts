@@ -77,7 +77,7 @@ export async function traiterEchecs(body: Record<string, unknown>): Promise<void
       await notifyUser(agent.user_id, "alerte", {
         title: `Message WhatsApp non remis — +${e.client}`,
         body: `Le message n'est pas parti : ${raisonEchec(e.code, e.detail)}.`.slice(0, 160),
-        data: { type: "complaint", agentId: String(agent.id), phone: e.client },
+        data: { type: "message", agentId: String(agent.id), phone: e.client },
         channel: "alertes",
       });
     } catch (err) {

@@ -99,7 +99,7 @@ export type PushPayload = {
  * Ne lève jamais : le push est un bonus, jamais un point de rupture.
  */
 /** Ce qui touche aux ventes d'un agent part aussi à son équipe (gérants, vendeurs). */
-const POUR_L_EQUIPE = new Set(["order", "stock", "rupture", "complaint"]);
+const POUR_L_EQUIPE = new Set(["order", "stock", "rupture", "complaint", "message"]);
 
 export async function notifyUser(
   userId: string,

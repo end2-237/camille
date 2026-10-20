@@ -1930,7 +1930,7 @@ export async function prevenirCommercant(
     await notifyUser(agent.user_id, "alerte", {
       title: alerte.titre.slice(0, 90),
       body: alerte.corps.slice(0, 160),
-      data: { type: "complaint", agentId: agent.id, phone },
+      data: { type: "message", agentId: agent.id, phone },
       channel: "alertes",
     }).catch(() => {});
   }
@@ -1970,7 +1970,7 @@ async function passerLaMain(
     await notifyUser(agent.user_id, "alerte", {
       title: (dossier?.titre || `Un client veut parler à quelqu'un`).slice(0, 90),
       body: `${msg.contactName || "+" + phone} : ${msg.text || "demande un conseiller"}`.slice(0, 160),
-      data: { type: "complaint", agentId: agent.id, phone },
+      data: { type: "message", agentId: agent.id, phone },
       channel: "alertes",
     }).catch(() => {});
   }
