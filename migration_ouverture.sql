@@ -49,4 +49,19 @@ CREATE TABLE IF NOT EXISTS camille.bilans_envoyes (
   PRIMARY KEY (agent_id, jour)
 );
 
+-- L'option « Site » : la demande du commerçant et le brief préparé pour DIP.
+CREATE TABLE IF NOT EXISTS camille.site_demandes (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id   UUID NOT NULL REFERENCES camille.agents(id) ON DELETE CASCADE,
+  user_id    UUID REFERENCES camille.users(id) ON DELETE SET NULL,
+  statut     TEXT NOT NULL DEFAULT 'demande',   -- demande | en_cours | en_ligne | annule
+  domaine    TEXT,
+  envies     TEXT,
+  brief      TEXT NOT NULL,
+  url        TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_site_demandes_agent ON camille.site_demandes (agent_id, created_at DESC);
+
 COMMIT;

@@ -24,6 +24,7 @@ export function lienNotif(data: Record<string, unknown> | null | undefined): str
     // Le bilan du matin : la fiche de l'agent, où vivent les demandes manquées.
     case "bilan":                 return agentId ? `/dashboard/${agentId}` : "/dashboard/orders";
     case "courier":               return "/livraison";
+    case "site":                  return agentId ? `/dashboard/${agentId}/site` : null;
     case "stock":                 return agentId ? `/dashboard/${agentId}/catalog` : null;
     // Vente manquée : le vendeur veut d'abord voir QUI a commandé, pour le
     // rappeler. Le réapprovisionnement vient après.

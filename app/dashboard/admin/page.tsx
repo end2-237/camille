@@ -285,6 +285,9 @@ export default function AdminPage() {
           avec elle, et c'est elle qu'il faut lire en premier. */}
       {plateforme && <div className="mt-5"><CartePlateforme etat={plateforme} /></div>}
 
+      {/* Les sites à fabriquer (option « Site ») */}
+      <DemandesSite />
+
       <div className="mt-6">
         {/* ── Les agents ────────────────────────────────────────────────────── */}
         <section className="min-w-0">
@@ -610,3 +613,50 @@ function FenetreAbonnement({ ligne, onFermer, onFait }: { ligne: Ligne; onFermer
     document.body
   );
 }
+
+// ── Les demandes de site ──────────────────────────────────────────────────────
+
+type DemandeSite = { id: string; statut: string; domaine: string | null; brief: string; url: string | null; business_name: string | null; created_at: string };
+
+function DemandesSite() {
+  const [liste, setListe] = useState<DemandeSite[]>([]);
+  const [ouvert, setOuvert] = useState<string | null>(null);
+  const charger = useCallback(() => {
+    fetch("/api/admin/sites", { headers: { ...authHeaders() }, cache: "no-store" })
+      .then((r) => r.json()).then((d) => setListe(Array.isArray(d.demandes) ? d.demandes : [])).catch(() => {});
+  }, []);
+  useEffect(() => { charger(); }, [charger]);
+  if (!liste.length) return null;
+
+  async function maj(id: string, statut: string) {
+    const url = statut === "en_ligne" ? prompt("Adresse du site (https://…)") || undefined : undefined;
+    const r = await fetch("/api/admin/sites", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ id, statut, url }),
+    });
+    if (!r.ok) toast.error("Mise à jour refusée"); else charger();
+  }
+
+  return (
+    <section className="ui-carte mt-5 rounded-[24px] p-5">
+      <p className="text-[16px] font-medium" style={{ color: "var(--cl-ink)" }}>Sites à fabriquer · {liste.length}</p>
+      <ul className="mt-3 space-y-2">
+        {liste.map((d) => (
+          <li key={d.id} className="rounded-[16px] p-3" style={{ background: "#FAF9FC" }}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex-1 text-[14px] font-medium">{d.business_name || "—"} {d.domaine ? `· ${d.domaine}` : ""}</span>
+              <Pastille ton={d.statut === "en_ligne" ? "vert" : d.statut === "en_cours" ? "violet" : "ambre"}>{d.statut}</Pastille>
+              <Bouton variante="clair" onClick={() => setOuvert(ouvert === d.id ? null : d.id)}>Brief</Bouton>
+              <Bouton variante="clair" onClick={() => { navigator.clipboard.writeText(d.brief); toast.success("Brief copié pour /dip-create"); }}>Copier</Bouton>
+              {d.statut === "demande" && <Bouton variante="clair" onClick={() => maj(d.id, "en_cours")}>En fabrication</Bouton>}
+              {d.statut !== "en_ligne" && <Bouton variante="encre" onClick={() => maj(d.id, "en_ligne")}>En ligne</Bouton>}
+            </div>
+            {ouvert === d.id && <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap text-[12px]">{d.brief}</pre>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+

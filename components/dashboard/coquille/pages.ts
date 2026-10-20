@@ -42,6 +42,7 @@ export const PAGES: Page[] = [
   { famille: "catalogue", titre: "Catalogue WhatsApp", segment: "catalog-sync", parAgent: true, action: "catalogue" },
   { famille: "catalogue", titre: "WhatsApp officiel", segment: "whatsapp", parAgent: true, action: "reglages" },
   { famille: "catalogue", titre: "Médias", segment: "medias", parAgent: true, action: "catalogue" },
+  { famille: "catalogue", titre: "Mon site", segment: "site", parAgent: true, action: "reglages" },
   { famille: "reglages", titre: "Votre agent", segment: "", parAgent: true, action: "reglages" },
   { famille: "reglages", titre: "Configuration de l'agent", segment: "settings", parAgent: true, action: "reglages" },
   { famille: "reglages", titre: "Intégrations", segment: "integrations", parAgent: true, action: "reglages" },
