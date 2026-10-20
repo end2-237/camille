@@ -104,6 +104,9 @@ export default function ConversationsPage() {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Message non envoyé");
+      // Affiché tout de suite : la relecture du fil suit.
+      const envoye = texte.trim();
+      setFil((f) => (f ? { ...f, takeover: true, messages: [...f.messages, { role: "humain", texte: envoye, le: new Date().toISOString() }] } : f));
       setTexte("");
       await chargerFil(actif);
       chargerListe();

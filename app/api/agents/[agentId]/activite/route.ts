@@ -22,12 +22,12 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       `SELECT c.role, c.content, c.created_at, c.contact_phone
          FROM camille.agent_conversations c
         WHERE (c.session_name IN (SELECT session_name FROM camille.whatsapp_sessions WHERE agent_id = $1)
-               OR c.session_name = 'meta:' || $1::text)
+               OR c.session_name = $2)
           AND c.role IN ('user', 'assistant')
           AND c.content NOT LIKE '[%'
         ORDER BY c.created_at DESC
         LIMIT 6`,
-      [agentId]
+      [agentId, `meta:${agentId}`]
     );
     const messages = r.rows.reverse().map((m: Record<string, unknown>) => {
       const tel = String(m.contact_phone || "").replace(/@.*$/, "").replace(/[^0-9]/g, "");

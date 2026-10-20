@@ -36,9 +36,9 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const [fil, contact] = await Promise.all([
     query(
       `SELECT role, content, created_at FROM camille.agent_conversations
-        WHERE session_name = 'meta:' || $1::text AND contact_phone = $2
+        WHERE session_name = $1 AND contact_phone = $2
         ORDER BY created_at DESC LIMIT 150`,
-      [agentId, p]
+      [`meta:${agentId}`, p]
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT to_jsonb(c)->>'display_name' AS nom, COALESCE(human_takeover, false) AS takeover

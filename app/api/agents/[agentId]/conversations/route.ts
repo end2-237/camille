@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
                 ROW_NUMBER() OVER (PARTITION BY contact_phone ORDER BY created_at DESC) AS rn,
                 MAX(created_at) FILTER (WHERE role = 'user') OVER (PARTITION BY contact_phone) AS dernier_client
            FROM camille.agent_conversations
-          WHERE session_name = 'meta:' || $1::text
+          WHERE session_name = $2
             AND created_at > NOW() - INTERVAL '30 days'
        )
        SELECT m.contact_phone AS phone, m.role, m.content, m.created_at, m.dernier_client,
@@ -37,7 +37,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         WHERE m.rn = 1
         ORDER BY m.created_at DESC
         LIMIT 150`,
-      [agentId]
+      // $1 (uuid) pour les contacts, $2 (texte) pour la session : un même
+      // paramètre ne peut pas être les deux, Postgres refusait la requête
+      // (« uuid = text ») et la liste restait vide.
+      [agentId, `meta:${agentId}`]
     );
     return NextResponse.json({
       conversations: r.rows.map((x: Record<string, unknown>) => ({

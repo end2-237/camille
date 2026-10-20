@@ -153,9 +153,12 @@ async function humainEnCours(agentId: string, phone: string): Promise<boolean> {
     const r = await query(
       `SELECT COALESCE(c.human_takeover, false) AS h,
               (SELECT MAX(created_at) FROM camille.agent_conversations x
-                WHERE x.session_name = 'meta:' || $1::text AND x.contact_phone = $2 AND x.role = 'humain') AS dernier_humain
+                WHERE x.session_name = $3 AND x.contact_phone = $2 AND x.role = 'humain') AS dernier_humain
          FROM camille.contacts c WHERE c.agent_id = $1 AND c.phone = $2 LIMIT 1`,
-      [agentId, phone]
+      // La session en paramètre à part : `$1` ne peut pas être à la fois un
+      // uuid et du texte (Postgres refusait la requête, et la reprise en main
+      // n'était jamais vue).
+      [agentId, phone, sessionMeta(agentId)]
     );
     const row = r.rows[0];
     if (!row?.h) return false;
