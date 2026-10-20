@@ -29,7 +29,11 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       [agentId]
     )).rows[0] ?? null;
   } catch { /* table absente : migration_ouverture.sql */ }
-  return NextResponse.json({ demande, brief: await composerBrief(agentId) });
+  let siteExpiresAt: string | null = null;
+  try {
+    siteExpiresAt = (await query(`SELECT to_jsonb(a)->>'site_expires_at' AS fin FROM camille.agents a WHERE id = $1`, [agentId])).rows[0]?.fin ?? null;
+  } catch { /* migration_paiement_buyfacturation.sql absente */ }
+  return NextResponse.json({ demande, brief: await composerBrief(agentId), site_expires_at: siteExpiresAt });
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {

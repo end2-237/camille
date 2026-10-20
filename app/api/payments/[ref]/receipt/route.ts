@@ -63,7 +63,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 </div>
 <p style="margin-top:28px;font-size:14px"><span class="muted">Client</span><br><b>${e(p.full_name || p.email)}</b><br>${e(p.email)}${p.business_name ? `<br>${e(p.business_name)}` : ""}</p>
 <table>
-  <tr><td>Abonnement Camille ${e(getPlanLabel(p.plan_id))} — ${moisAg} mois<br><span class="muted">${e(p.agent)}</span></td><td>${e(fcfa(p.amount))}</td></tr>
+  <tr><td>${p.plan_id === "site" ? "Option Site Camille" : `Abonnement Camille ${e(getPlanLabel(p.plan_id))}`} — ${moisAg} mois<br><span class="muted">${e(p.agent)}</span></td><td>${e(fcfa(p.amount))}</td></tr>
   <tr class="total"><td>Total payé</td><td>${e(fcfa(p.amount))}</td></tr>
 </table>
 <p class="muted" style="font-size:12.5px;margin-top:20px">${moyen} · référence ${e(p.id)}</p>

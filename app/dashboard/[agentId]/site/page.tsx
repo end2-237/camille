@@ -13,6 +13,7 @@ import { Globe, Send } from "lucide-react";
 import { toast } from "sonner";
 import { authHeaders } from "@/lib/auth-client";
 import { PRIX_OPTION_SITE_XAF } from "@/lib/plans";
+import { PaiementMobileMoney } from "@/components/dashboard/PaiementMobileMoney";
 import { Bandeau, Bouton, Pastille, Squelettes, StylesUI } from "@/components/dashboard/ui";
 
 type Demande = { id: string; statut: string; domaine: string | null; envies: string | null; url: string | null; created_at: string };
@@ -30,11 +31,13 @@ export default function SitePage() {
   const [envies, setEnvies] = useState("");
   const [domaine, setDomaine] = useState("");
   const [occupe, setOccupe] = useState(false);
+  const [payeJusquau, setPayeJusquau] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     const d = await (await fetch(`/api/agents/${agentId}/site`, { headers: { ...authHeaders() } })).json().catch(() => ({}));
     setDemande(d.demande ?? null);
     setBrief(d.brief || "");
+    setPayeJusquau(d.site_expires_at ?? null);
   }, [agentId]);
   useEffect(() => { charger(); }, [charger]);
 
@@ -86,6 +89,15 @@ export default function SitePage() {
             {demande.statut === "demande" && (
               <Bandeau ton="violet">L&apos;équipe prépare votre site à partir de vos informations et vous écrit sur WhatsApp pour valider le style.</Bandeau>
             )}
+            {/* L'option se paie au mois, comme le forfait ; payer d'avance s'ajoute au mois en cours. */}
+            <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--cl-line)" }}>
+              <p className="mb-2 text-[13.5px]" style={{ color: "var(--cl-ink-soft)" }}>
+                {payeJusquau && new Date(payeJusquau) > new Date()
+                  ? `Option payée jusqu'au ${new Date(payeJusquau).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}. Vous pouvez prolonger d'un mois.`
+                  : "Activez l'option pour un mois :"}
+              </p>
+              <PaiementMobileMoney agentId={agentId} kind="site" montant={PRIX_OPTION_SITE_XAF} libelle="Option Site, 1 mois" onPaye={charger} />
+            </div>
           </div>
         ) : (
           <div className="ui-carte space-y-4 rounded-[28px] p-6">

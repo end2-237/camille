@@ -19,6 +19,7 @@ import { cn }          from "@/lib/utils";
 import type { Agent }  from "@/types/agent";
 import type { DbPlan, DbCapability } from "@/lib/plans-db";
 import { enConversations, libelleConversations } from "@/lib/plans";
+import { PaiementMobileMoney } from "@/components/dashboard/PaiementMobileMoney";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -223,33 +224,8 @@ function UpgradeModal({
 }: {
   agent: Agent; planRow: DbPlan; onClose: () => void; token: string | null;
 }) {
-  const [phone, setPhone]     = useState("");
-  const [country, setCountry] = useState("CM");
-  const [loading, setLoading] = useState(false);
-
   const price   = planRow.price_xaf;
   const planId  = planRow.id;
-
-  const handlePay = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/payments/initiate", {
-        method:  "POST",
-        headers: {
-          "Content-Type":  "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ agentId: agent.id, planId, phone, country }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur lors de l'initiation du paiement");
-      // Redirige vers Monetbil
-      window.location.href = data.payment_url;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur de paiement");
-      setLoading(false);
-    }
-  };
 
   return (
     <motion.div
@@ -286,69 +262,22 @@ function UpgradeModal({
           <p className="text-xs mt-0.5" style={{ color: "var(--text-disabled)" }}>par mois · paiement Mobile Money</p>
         </div>
 
-        {/* Phone */}
-        <div className="space-y-2">
-          <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-            <Phone className="w-3.5 h-3.5 inline mr-1.5" />
-            Numéro Mobile Money (optionnel)
-          </label>
-          <div className="flex gap-2">
-            <select
-              value={country} onChange={(e) => setCountry(e.target.value)}
-              className="rounded-lg px-3 py-2 text-xs appearance-none"
-              style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)", minWidth: 72 }}
-            >
-              <option value="CM">🇨🇲 CM</option>
-              <option value="SN">🇸🇳 SN</option>
-              <option value="CI">🇨🇮 CI</option>
-              <option value="BJ">🇧🇯 BJ</option>
-              <option value="BF">🇧🇫 BF</option>
-              <option value="ML">🇲🇱 ML</option>
-              <option value="GN">🇬🇳 GN</option>
-              <option value="TG">🇹🇬 TG</option>
-              <option value="NE">🇳🇪 NE</option>
-            </select>
-            <input
-              type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-              placeholder="6XXXXXXXX"
-              className="flex-1 rounded-lg px-3 py-2 text-xs outline-none"
-              style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)" }}
-            />
-          </div>
-          <p className="text-2xs" style={{ color: "var(--text-disabled)" }}>
-            Laissez vide pour choisir l'opérateur sur la page de paiement.
-          </p>
-        </div>
+        {/* Mobile Money : la demande arrive sur le téléphone, on attend la confirmation ici. */}
+        <PaiementMobileMoney
+          agentId={agent.id}
+          kind="forfait"
+          planId={planId}
+          montant={price}
+          libelle={`Forfait ${planRow.label}, 1 mois`}
+          onPaye={() => window.location.reload()}
+        />
 
-        {/* Security note */}
         <div className="flex items-start gap-2 rounded-lg p-3" style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
           <Shield className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: "var(--text-disabled)" }} />
           <p className="text-2xs leading-relaxed" style={{ color: "var(--text-disabled)" }}>
-            Paiement sécurisé via <strong style={{ color: "var(--text-tertiary)" }}>Monetbil</strong>.
-            MTN, Orange Money, Wave et autres opérateurs acceptés.
+            Paiement sécurisé par <strong style={{ color: "var(--text-tertiary)" }}>Buyticle Pay</strong> · MTN Mobile Money et Orange Money.
           </p>
         </div>
-
-        {/* CTA */}
-        <button
-          onClick={handlePay} disabled={loading}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-200"
-          style={{
-            background: loading ? "var(--bg-muted)" : "rgba(124,90,248,0.15)",
-            color:      loading ? "var(--text-disabled)" : "var(--color-gold)",
-            border: "1px solid rgba(124,90,248,0.3)",
-          }}
-        >
-          {loading ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
-          ) : (
-            <>
-              <CreditCard className="w-4 h-4" />
-              Payer {formatXAF(price)} avec Mobile Money
-              <ChevronRight className="w-4 h-4" />
-            </>
-          )}
-        </button>
       </motion.div>
     </motion.div>
   );
@@ -831,7 +760,7 @@ function BillingContent() {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-                        Plan {getPlanLabel(p.plan_id)}{agent ? ` · ${agent.identity.name}` : ""}
+                        {p.plan_id === "site" ? "Option Site" : `Plan ${getPlanLabel(p.plan_id)}`}{agent ? ` · ${agent.identity.name}` : ""}
                       </p>
                       <p className="text-2xs mt-0.5" style={{ color: "var(--text-disabled)" }}>
                         {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}

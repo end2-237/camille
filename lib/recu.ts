@@ -19,6 +19,9 @@ export const EMETTEUR = {
 
 export const fcfa = (n: number) => `${Math.round(Number(n) || 0).toLocaleString("fr-FR").replace(/ | /g, " ")} FCFA`;
 
+/** « Pro », ou « Option Site » pour un paiement de l'option. */
+const libelle = (plan: string) => (plan === "site" ? "Option Site" : getPlanLabel(plan));
+
 /** Pose le numéro de reçu s'il manque, et le renvoie. */
 export async function numeroterRecu(paymentRef: string): Promise<string | null> {
   try {
@@ -60,10 +63,10 @@ export async function envoyerRecu(paymentRef: string): Promise<void> {
       : null;
     await envoyerEmail({
       to: p.email,
-      subject: `Reçu ${numero || paymentRef} — Camille ${getPlanLabel(p.plan_id)}`,
+      subject: `Reçu ${numero || paymentRef} — Camille ${libelle(p.plan_id)}`,
       text:
         `Bonjour ${p.full_name || ""},\n\nMerci pour votre paiement.\n\n` +
-        `Reçu : ${numero || paymentRef}\nForfait : ${getPlanLabel(p.plan_id)} — ${p.agent}\n` +
+        `Reçu : ${numero || paymentRef}\nForfait : ${libelle(p.plan_id)} — ${p.agent}\n` +
         `Montant : ${fcfa(p.amount)}\n${String(p.transaction_id || "").startsWith("agence:") ? "Paiement reçu en agence\n" : p.transaction_id ? `Transaction : ${p.transaction_id}\n` : ""}` +
         `${jusqua ? `Actif jusqu'au ${jusqua}.\n` : ""}` +
         `${lien ? `\nVotre reçu imprimable : ${lien}\n` : ""}\n— ${EMETTEUR.nom}`,

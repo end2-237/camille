@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth-server";
+import { appliquerPaiement, marquerEchec, statutCollecte } from "@/lib/paiement";
 
 export async function GET(req: NextRequest) {
   const user = await getUserFromRequest(req);
@@ -20,8 +21,9 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await query(
-      `SELECT id, status, plan_id, agent_id, amount, transaction_id, created_at
-       FROM camille.payments
+      `SELECT id, status, plan_id, agent_id, amount, transaction_id, created_at,
+              to_jsonb(p)->>'provider' AS provider
+       FROM camille.payments p
        WHERE id = $1 AND user_id = $2`,
       [ref, user.id]
     );
@@ -35,6 +37,7 @@ export async function GET(req: NextRequest) {
 
     const row = result.rows[0] as {
       id: string;
+      provider?: string;
       status: string;
       plan_id: string;
       agent_id: string;
@@ -42,6 +45,14 @@ export async function GET(req: NextRequest) {
       transaction_id: string | null;
       created_at: string;
     };
+
+    // Une notification perdue ne doit pas laisser le commerçant sans son
+    // forfait : tant que c'est en attente, on redemande à buyfacturation.
+    if (row.status === "pending" && row.provider === "buyfacturation") {
+      const statut = await statutCollecte(row.id);
+      if (statut === "success") { await appliquerPaiement(row.id); row.status = "success"; }
+      else if (statut === "failed") { await marquerEchec(row.id); row.status = "failed"; }
+    }
 
     return NextResponse.json({
       status: row.status,

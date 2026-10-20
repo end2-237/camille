@@ -3,6 +3,8 @@ import crypto                          from "crypto";
 import { query }                       from "@/lib/db";
 import { getUserFromRequest }          from "@/lib/auth-server";
 import { isPurchasableDB, getPlanPriceXafDB } from "@/lib/plans-db";
+import { PRIX_OPTION_SITE_XAF } from "@/lib/plans";
+import { buyfacturationActive, lancerCollecte, msisdn, operateurDe, type Operateur } from "@/lib/paiement";
 
 const MONETBIL_SERVICE_KEY = process.env.MONETBIL_SERVICE_KEY!;
 const APP_URL =
@@ -22,12 +24,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { agentId, planId, phone, country } = body as {
+    const { agentId, phone, country, operateur } = body as {
       agentId?: string;
       planId?: string;
       phone?: string;
       country?: string;
+      operateur?: string;
     };
+    // L'option Site se paie comme un forfait, au mois, par agent.
+    const kind = body.kind === "site" ? "site" : "forfait";
+    const planId = kind === "site" ? "site" : (body.planId as string | undefined);
 
     // ── Validate inputs ───────────────────────────────────────────────────────
     if (!agentId || !planId) {
@@ -38,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Vérifie que le plan est achetable (is_purchasable = true en DB)
-    const purchasable = await isPurchasableDB(planId);
+    const purchasable = kind === "site" || (await isPurchasableDB(planId));
     if (!purchasable) {
       return NextResponse.json(
         {
@@ -67,7 +73,49 @@ export async function POST(req: NextRequest) {
 
     const agent = agentResult.rows[0] as { id: string; owner_email: string };
     // Prix depuis la DB (jamais depuis le client)
-    const amount = await getPlanPriceXafDB(planId);
+    const amount = kind === "site" ? PRIX_OPTION_SITE_XAF : await getPlanPriceXafDB(planId);
+
+    // ── buyfacturation : la demande arrive sur le téléphone ───────────────────
+    // Pas de page de paiement : le commerçant valide avec son code Mobile Money
+    // (*126# MTN, #150*50# Orange), et la page de facturation attend la
+    // confirmation. La référence est un UUID : buyfacturation l'exige.
+    if (buyfacturationActive()) {
+      const numero = msisdn(phone || "");
+      if (!numero) {
+        return NextResponse.json({ error: "Entrez le numéro Mobile Money qui paiera (MTN ou Orange, 6XXXXXXXX)." }, { status: 400 });
+      }
+      const op: Operateur | null = operateur === "MTN" || operateur === "ORANGE" ? operateur : operateurDe(numero);
+      const ref = crypto.randomUUID();
+      await query(
+        `INSERT INTO camille.payments
+           (id, user_id, agent_id, plan_id, amount, currency, status, phone, kind, provider, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'XAF', 'pending', $6, $7, 'buyfacturation', NOW(), NOW())`,
+        [ref, user.id, agentId, planId, amount, numero, kind]
+      );
+      const lance = await lancerCollecte({
+        reference: ref,
+        montant: amount,
+        numero,
+        operateur: op,
+        description: kind === "site" ? "Camille — option Site (1 mois)" : `Camille — forfait ${planId} (1 mois)`,
+        callbackUrl: `${APP_URL}/api/payments/buyfacturation`,
+      });
+      if (!lance.ok) {
+        await query(`UPDATE camille.payments SET status = 'failed', updated_at = NOW() WHERE id = $1`, [ref]);
+        return NextResponse.json({ error: `Paiement non lancé : ${lance.error}` }, { status: 502 });
+      }
+      return NextResponse.json(
+        {
+          payment_ref: ref,
+          amount,
+          instruction:
+            op === "ORANGE"
+              ? "Composez #150*50# et validez la demande avec votre code Orange Money."
+              : "Validez la demande reçue sur votre téléphone avec votre code Mobile Money (*126# pour MTN).",
+        },
+        { status: 201 }
+      );
+    }
 
     // ── Generate payment reference ────────────────────────────────────────────
     const paymentRef = `CAM-${Date.now()}-${crypto

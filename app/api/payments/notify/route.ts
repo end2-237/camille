@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { query } from "@/lib/db";
 import { egalConstant } from "@/lib/interne";
-import { sortirDeLEssai } from "@/lib/essai";
-import { envoyerRecu } from "@/lib/recu";
+import { appliquerPaiement } from "@/lib/paiement";
 
 const MONETBIL_SERVICE_SECRET = process.env.MONETBIL_SERVICE_SECRET!;
 
@@ -140,40 +139,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (isSuccess) {
-      // Mark payment as succeeded
-      await query(
-        `UPDATE camille.payments
-         SET status = 'success',
-             transaction_id = $1,
-             updated_at = NOW()
-         WHERE id = $2`,
-        [transactionId || null, paymentRef]
-      );
-
-      // Upgrade the agent's plan, et poser la date de fin.
-      //
-      // Sans cette date, l'agent restait actif indefiniment apres le mois paye :
-      // rien en base ne disait jusqu'a quand le paiement courait. On repart de
-      // la fin en cours quand elle est encore devant, pour qu'un renouvellement
-      // anticipe s'ajoute au lieu de raccourcir l'abonnement.
-      //
-      // free et enterprise n'ont pas de terme : le premier n'a rien a
-      // renouveler, le second ne doit jamais pouvoir etre desactive.
-      await query(
-        `UPDATE camille.agents
-         SET plan = $1,
-             plan_expires_at = CASE
-               WHEN $1 IN ('free', 'enterprise') THEN NULL
-               ELSE GREATEST(COALESCE(plan_expires_at, NOW()), NOW()) + INTERVAL '1 month'
-             END,
-             updated_at = NOW()
-         WHERE id = $2`,
-        [payment.plan_id, payment.agent_id]
-      );
-
-      // Payer termine l'essai ; le reçu part au propriétaire.
-      await sortirDeLEssai(payment.agent_id);
-      await envoyerRecu(paymentRef);
+      // Le forfait (ou l'option Site) et le reçu : la même règle que pour
+      // buyfacturation, idempotente.
+      await appliquerPaiement(paymentRef, transactionId || null);
 
       console.info(
         "[notify] Payment SUCCESS ref=%s plan=%s agent=%s",
