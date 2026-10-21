@@ -22,7 +22,7 @@ import { avecAgent } from "./identifiants";
 import { etatQuota } from "@/lib/quota";
 import { compterConversation } from "./usage";
 import { repondreBoutique, prevenirCommercant } from "./boutique";
-import { repondreSante } from "./sante";
+import { repondreSante, repondreServices } from "./sante";
 import { garderMedia } from "./photo";
 import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
 
@@ -429,7 +429,7 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
   // panier, adresse — le traite comme si le client l'avait tapé.
   if (msg.type === "audio") {
     const texte = await ecouter(msg, agent);
-    if (!texte && agent.sector === "healthcare") {
+    if (!texte && (agent.sector === "healthcare" || modeDeVente(agent) === "services")) {
       // L'agent santé gère lui-même le vocal mal compris : redire ce qu'il a
       // saisi, demander de répéter, puis proposer d'écrire.
       await tracer(agent.id, phone, "user", "(vocal non compris)");
@@ -475,6 +475,12 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
       await repondreSante(ctx);
       return;
     }
+    // Beauté (salon, institut) et services (plombier, dépannage, conseil) :
+    // prestations, devis, rendez-vous sans chevauchement, flyers en carrousel.
+    if (mode === "services") {
+      await repondreServices(ctx);
+      return;
+    }
     switch (mode) {
       case "boutique":
       case "restaurant":
@@ -485,7 +491,6 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
         await repondreBoutique(ctx, mode);
         break;
 
-      case "services":
       case "media":
         // Pas encore de parcours automatique (rendez-vous…). On le dit au
         // client, et SURTOUT on prévient le commerçant : promettre « un

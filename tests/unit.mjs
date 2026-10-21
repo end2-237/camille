@@ -688,6 +688,24 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("hors santé : la garde ne réécrit pas (règle générale ailleurs)", autre?.actions[0]?.texte !== REPONSE_SANTE);
 }
 
+// ═══ rendez-vous — jamais deux qui se chevauchent ══════════════════════════
+{
+  const { creneauxLibres, chevauche } = await import(`${DIST}/creneaux.js`);
+  groupe("rendez-vous — créneaux libres sans chevauchement");
+  // Lundi 5 octobre 2026, heure de Douala (UTC+1).
+  const h = (hh, mm = 0) => new Date(Date.UTC(2026, 9, 5, hh - 1, mm));
+  const loc = (d) => `${(d.getUTCHours() + 1) % 24}h${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  const occ = [{ debut: h(10), fin: h(10, 30) }];
+  const l30 = creneauxLibres({ horaires: "Lun-Sam 9h-12h", occupes: occ, duree: 30, maintenant: h(8), n: 5, delai: 60 }).map(loc);
+  eq("30 min : 10h00 pris, le reste libre", l30, ["9h00", "9h30", "10h30", "11h00", "11h30"]);
+  const l60 = creneauxLibres({ horaires: "Lun-Sam 9h-12h", occupes: occ, duree: 60, maintenant: h(8), n: 2, delai: 60 }).map(loc);
+  eq("1 h : rien qui touche 10h-10h30, rien qui dépasse midi", l60, ["9h00", "11h00"]);
+  chk("bout à bout n'est pas un chevauchement", !chevauche({ debut: h(9), fin: h(10) }, { debut: h(10), fin: h(11) }));
+  chk("à cheval est un chevauchement", chevauche({ debut: h(9), fin: h(10, 15) }, { debut: h(10), fin: h(11) }));
+  const dimanche = creneauxLibres({ horaires: "Lun-Sam 9h-12h", occupes: [], duree: 30, maintenant: new Date(Date.UTC(2026, 9, 4, 7)), n: 3, delai: 60 });
+  chk("dimanche fermé : premier créneau lundi", dimanche.length && new Date(dimanche[0].getTime() + 3600_000).getUTCDay() === 1);
+}
+
 // ═══ agent santé — ce que le code tient, quoi que dise le modèle ═══════════
 {
   const R = await import(`${DIST}/whatsapp/sante-regles.js`);
@@ -736,6 +754,13 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("même phrase deux fois : refusée", defauts(double).some((d) => d.startsWith("même phrase")));
   chk("même phrase deux fois : réparée", R.reparer(double, vide, "").blocs.length === 1);
   chk("état : accueil joué une seule fois", e2.accueilli === true);
+  const okS = { medias: ["flyer_1", "flyer_2"], pages: [], produits: ["p1"], chiffres: [] };
+  chk("flyers connus acceptés", R.controler({ blocs: [{ type: "flyers", ids: ["flyer_1", "flyer_2"], texte: "Nos offres" }] }, vide, okS).length === 0);
+  chk("flyer inventé refusé", R.controler({ blocs: [{ type: "flyers", ids: ["flyer_9"], texte: "x" }] }, vide, okS).length > 0);
+  chk("flyers + boutons : une seule action", R.controler({ blocs: [{ type: "flyers", ids: ["flyer_1", "flyer_2"], texte: "x" }, { type: "boutons", texte: "y", boutons: ["a"] }] }, vide, okS).length > 0);
+  chk("devis : pas une action, accepté avec des boutons", R.controler({ blocs: [{ type: "demande_devis", resume: "fuite sous évier, Akwa", texte: "Je transmets à l'équipe 🙏" }, { type: "boutons", texte: "Autre chose ?", boutons: ["📅 Prendre RDV"] }] }, vide, okS).length === 0);
+  chk("prestation inconnue refusée", R.controler({ blocs: [{ type: "formulaire_rdv", texte: "x", prestation: "p9" }] }, vide, okS).length > 0);
+  chk("consigne services : devis sans prix inventé", R.consigneServices({ centre: "Salon Awa", adresse: "Akwa", horaires: "Lun-Sam 9h-19h", praticien: "", catalogue: "p1 Tresses — 5 000 F (120 min)", medias: [], pages: [], metier: "Beauté" }).includes("demande_devis"));
 }
 
 // ═══ quartiers — le barème sans rien taper ═════════════════════════════════

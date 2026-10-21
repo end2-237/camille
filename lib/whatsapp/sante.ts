@@ -20,11 +20,12 @@ import * as meta from "./meta";
 import { tracer, sessionMeta, type Contexte } from "./handle";
 import { messageAccueil, prenomDe } from "./accueil";
 import { sectorProfile } from "@/lib/sectorProfiles";
-import { creneaux, libelleCreneau } from "./restaurant";
+import { libelleCreneau } from "./restaurant";
+import { proposer, reserver } from "@/lib/rendezvous";
 import { etatMaintenant, heureLocale } from "@/lib/horaires";
 import { prevenirCommercant, repondreBoutique } from "./boutique";
 import {
-  ETAT_VIDE, consigneSante, consignesDuTour, controler, detecter, etatSuivant, langueDe, reparer,
+  ETAT_VIDE, consigneSante, consigneServices, consignesDuTour, controler, detecter, etatSuivant, langueDe, reparer,
   repliUrgence, vocalCompris, type Bloc, type EtatSante, type FaitsCentre, type Sortie,
 } from "./sante-regles";
 
@@ -79,10 +80,17 @@ type Bibliotheque = {
   faits: FaitsCentre;
   /** id du modèle → retailer id Meta. */
   produits: Map<string, string>;
-  medias: Map<string, { url: string; type: "video" | "audio" | "image" }>;
+  medias: Map<string, { url: string; type: "video" | "audio" | "image"; legende?: string }>;
   pages: Map<string, string>;
   chiffres: string[];
+  /** id du modèle → la prestation (nom, durée) : sert à réserver la bonne durée. */
+  prestations: Map<string, { productId: string; nom: string; duree: number | null }>;
+  /** Les flyers et prospectus, dans l'ordre de la médiathèque. */
+  flyers: string[];
 };
+
+/** Santé, ou beauté & services : même ossature, consigne et accueil différents. */
+export type Profil = "sante" | "services";
 
 async function bibliotheque(ctx: Contexte): Promise<Bibliotheque> {
   const { agent } = ctx;
@@ -99,7 +107,7 @@ async function bibliotheque(ctx: Contexte): Promise<Bibliotheque> {
   const caps = ((lire(a.caps) as Record<string, unknown>) || {}) as Record<string, unknown>;
   a.media = lire(a.media);
 
-  const medias = new Map<string, { url: string; type: "video" | "audio" | "image" }>();
+  const medias = new Map<string, { url: string; type: "video" | "audio" | "image"; legende?: string }>();
   const descriptions: { id: string; description: string }[] = [];
   if (caps.welcome_video_url) {
     medias.set("video_centre", { url: String(caps.welcome_video_url), type: "video" });
@@ -109,32 +117,46 @@ async function bibliotheque(ctx: Contexte): Promise<Bibliotheque> {
     medias.set("vocal_praticien", { url: String(caps.welcome_audio_url), type: "audio" });
     descriptions.push({ id: "vocal_praticien", description: "le message vocal du praticien, qui accueille et rassure" });
   }
-  (Array.isArray(a.media) ? a.media : []).filter((m: { kind?: string }) => m?.kind === "gallery").slice(0, 6)
-    .forEach((m: { url: string; caption?: string }, i: number) => {
-      medias.set(`photo_${i + 1}`, { url: m.url, type: "image" });
-      descriptions.push({ id: `photo_${i + 1}`, description: m.caption || "une photo du centre" });
-    });
+  const liste = (Array.isArray(a.media) ? a.media : []) as { kind?: string; url: string; caption?: string }[];
+  liste.filter((m) => m?.kind === "gallery").slice(0, 6).forEach((m, i) => {
+    medias.set(`photo_${i + 1}`, { url: m.url, type: "image", legende: m.caption });
+    descriptions.push({ id: `photo_${i + 1}`, description: m.caption || "une photo du centre" });
+  });
+  // Flyers, prospectus et fiches de services : partagés en carrousel interactif.
+  const flyers: string[] = [];
+  liste.filter((m) => m?.kind === "flyers" || m?.kind === "services").slice(0, 10).forEach((m, i) => {
+    const id = `flyer_${i + 1}`;
+    flyers.push(id);
+    medias.set(id, { url: m.url, type: "image", legende: m.caption });
+    descriptions.push({ id, description: `flyer : ${m.caption || "offre du moment"}` });
+  });
 
   const pages = new Map<string, string>();
   if (agent.website_url) pages.set("site", agent.website_url);
 
   const produits = new Map<string, string>();
+  const prestations = new Map<string, { productId: string; nom: string; duree: number | null }>();
   const lignes: string[] = [];
   const chiffres = new Set<string>(["30", "24"]);
   try {
+    // Les prestations d'un salon ou d'un plombier ne sont pas forcément dans
+    // le catalogue WhatsApp : on les prend toutes, la fiche native seulement
+    // quand elle existe.
     const r = await query(
-      `SELECT name, price, COALESCE(currency,'XAF') AS currency, to_jsonb(p)->>'meta_retailer_id' AS retailer
+      `SELECT id, name, price, COALESCE(currency,'XAF') AS currency, to_jsonb(p)->>'meta_retailer_id' AS retailer,
+              (to_jsonb(p)->>'duree_min')::int AS duree
          FROM camille.products p
         WHERE agent_id = $1 AND COALESCE(active, true) AND COALESCE(stock, 1) > 0
-          AND to_jsonb(p)->>'meta_retailer_id' IS NOT NULL
         ORDER BY sort_order ASC, created_at DESC LIMIT 40`,
       [agent.id]
     );
-    r.rows.forEach((p: { name: string; price: number | null; retailer: string }, i: number) => {
+    r.rows.forEach((p: { id: string; name: string; price: number | null; retailer: string | null; duree: number | null }, i: number) => {
       const id = `p${i + 1}`;
-      produits.set(id, p.retailer);
-      const prix = p.price != null ? `${Math.round(Number(p.price)).toLocaleString("fr-FR")} F` : "prix sur demande";
-      lignes.push(`${id} ${p.name} — ${prix}`);
+      if (p.retailer) produits.set(id, p.retailer);
+      prestations.set(id, { productId: p.id, nom: p.name, duree: p.duree });
+      const prix = p.price != null && Number(p.price) > 0 ? `${Math.round(Number(p.price)).toLocaleString("fr-FR")} F` : "sur devis";
+      lignes.push(`${id} ${p.name} — ${prix}${p.duree ? ` (${p.duree} min)` : ""}`);
+      if (p.duree) chiffres.add(String(p.duree));
       if (p.price != null) chiffres.add(String(Math.round(Number(p.price))));
       for (const n of p.name.match(/\d{2,}/g) || []) chiffres.add(n);
     });
@@ -153,7 +175,7 @@ async function bibliotheque(ctx: Contexte): Promise<Bibliotheque> {
       medias: descriptions,
       pages: [...pages.keys()].map((id) => ({ id, description: "le site du centre (témoignages, présentation)" })),
     },
-    produits, medias, pages, chiffres: [...chiffres],
+    produits, medias, pages, chiffres: [...chiffres], prestations, flyers,
   };
 }
 
@@ -269,15 +291,57 @@ async function envoyer(ctx: Contexte, s: Sortie, bib: Bibliotheque, etat: EtatSa
         break;
       }
       case "formulaire_rdv": {
-        // Les créneaux libres d'après les horaires ; le formulaire WhatsApp
-        // natif (Flows) viendra remplacer cette liste.
-        const libres = creneaux(agent.business_hours, new Date(), 1, 9, 60, 60);
+        // Uniquement des créneaux LIBRES : jamais deux rendez-vous qui se
+        // chevauchent (et la base refuse de toute façon). La durée est celle
+        // de la prestation quand elle est connue.
+        const prest = b.prestation ? bib.prestations.get(b.prestation) : undefined;
+        const libres = await proposer(agent.id, agent.business_hours, prest?.duree || undefined, 9);
+        if (!libres.length) {
+          await meta.sendText(phone, etat.langue === "en"
+            ? "Our calendar is full for the next days 🙏 I've passed your request to the team, who will reply here."
+            : "Notre agenda est complet pour les prochains jours 🙏 Je transmets votre demande à l'équipe, qui vous répond ici.");
+          await prevenirCommercant(ctx, { titre: `📅 Agenda complet — ${msg.contactName || "+" + phone} voulait un rendez-vous`, corps: prest?.nom || "", contenu: { kind: "rendez_vous", contact: phone } });
+          trace = "[agenda complet]";
+          break;
+        }
         await meta.sendList(phone, b.texte, etat.langue === "en" ? "Pick a time" : "Choisir l'heure", [
-          { title: etat.langue === "en" ? "Times" : "Créneaux", rows: libres.map((d) => ({ id: `${ID}rdv:${d.getTime()}`, title: libelleCreneau(d) })) },
+          { title: etat.langue === "en" ? "Free times" : "Créneaux libres", rows: libres.map((d) => ({ id: `${ID}rdv:${d.getTime()}:${b.prestation || ""}`, title: libelleCreneau(d) })) },
         ]);
-        trace = `${b.texte} [créneaux]`;
+        trace = `${b.texte} [créneaux libres${prest ? ` · ${prest.nom}` : ""}]`;
         break;
       }
+      case "flyers": {
+        // Le carrousel : chaque flyer est une carte avec son image, son texte
+        // et deux boutons. Un seul flyer : l'image puis les boutons.
+        const ids = b.ids.filter((i) => bib.medias.has(i)).slice(0, 10);
+        const boutons = (i: string) => [
+          { id: `${ID}f:${i}:rdv`, title: etat.langue === "en" ? "📅 Book" : "📅 Réserver" },
+          { id: `${ID}f:${i}:info`, title: etat.langue === "en" ? "ℹ️ More info" : "ℹ️ En savoir plus" },
+        ];
+        if (ids.length >= 2) {
+          const r = await meta.sendMediaCarousel(phone, b.texte, ids.map((i) => ({
+            image: bib.medias.get(i)!.url, texte: bib.medias.get(i)!.legende || bib.faits.centre, boutons: boutons(i),
+          })));
+          if (!r.ok) {
+            console.warn(`[conversation] carrousel refusé (${r.error}) — envoi des images une à une`);
+            for (const i of ids) await meta.sendImage(phone, bib.medias.get(i)!.url, bib.medias.get(i)!.legende || undefined);
+            await meta.sendButtons(phone, b.texte, [boutons(ids[0])[0], { id: `${ID}b-info`, title: etat.langue === "en" ? "💬 A question" : "💬 Une question" }]);
+          }
+        } else if (ids.length === 1) {
+          await meta.sendButtonsMedia(phone, { type: "image", url: bib.medias.get(ids[0])!.url }, `${b.texte}${bib.medias.get(ids[0])!.legende ? `\n\n${bib.medias.get(ids[0])!.legende}` : ""}`, boutons(ids[0]));
+        }
+        trace = `${b.texte} [flyers ${ids.join(", ")}]`;
+        break;
+      }
+      case "demande_devis":
+        await prevenirCommercant(ctx, {
+          titre: `📝 Demande de devis — ${msg.contactName || "+" + phone}`,
+          corps: b.resume.slice(0, 160),
+          contenu: { kind: "devis", resume: b.resume, contact: phone, nom: msg.contactName || "" },
+        });
+        await meta.sendText(phone, b.texte);
+        trace = `[devis transmis] ${b.texte}`;
+        break;
       case "produits": {
         const ids = b.ids.map((i) => bib.produits.get(i)).filter((x): x is string => Boolean(x));
         if (ids.length === 1) await meta.sendProduct(phone, ids[0], b.texte);
@@ -318,7 +382,7 @@ const SIMPLE_SALUT = /^(bonjour|bonsoir|salut|slt|bjr|bsr|cc|coucou|hello|hi|hey
  * Camille qui se présente et dit qu'elle est là à toute heure. Écrit par le
  * code : c'est la première impression, elle ne dépend pas de l'humeur du modèle.
  */
-function accueilSante(ctx: Contexte, bib: Bibliotheque, langue: "fr" | "en" | null): Sortie {
+function accueilSante(ctx: Contexte, bib: Bibliotheque, langue: "fr" | "en" | null, profil: Profil): Sortie {
   const { agent, msg } = ctx;
   const centre = agent.business_name || "notre centre";
   const prenom = prenomClient(ctx);
@@ -331,26 +395,37 @@ function accueilSante(ctx: Contexte, bib: Bibliotheque, langue: "fr" | "en" | nu
     nomProfil: prenom,
     heure: heureLocale(new Date(), Number((agent as { utc_offset?: number }).utc_offset ?? 1)),
     commerce: centre,
-    texteSecteur: "Bienvenue chez {b} 🌿",
+    texteSecteur: profil === "sante" ? "Bienvenue chez {b} 🌿" : "Bienvenue chez {b} ✨",
     personnalise: agent.welcome_message,
   });
+  const services = profil === "services";
   const texte = en
-    ? `Hello${prenom ? ` ${prenom}` : ""} 🙏 Welcome to ${centre}.${pub}\n\nI'm Camille, the centre's assistant, and I'm here to answer you at any time, day or night. What brings you here?`
-    : `${salut}${pub}\n\nJe suis Camille, l'assistante du centre, et je suis là pour vous répondre à toute heure, de jour comme de nuit. Qu'est-ce qui vous amène ?`;
+    ? `Hello${prenom ? ` ${prenom}` : ""} 🙏 Welcome to ${centre}.${pub}\n\nI'm Camille, the assistant${services ? ": I can show you our services, book you a slot or pass on a quote request" : " of the centre"}, and I'm here to answer you at any time, day or night. ${services ? "What can I do for you?" : "What brings you here?"}`
+    : services
+      ? `${salut}${pub}\n\nJe suis Camille, l'assistante : je vous présente nos prestations, je vous réserve un créneau ou je transmets votre demande de devis, à toute heure, de jour comme de nuit. Que puis-je faire pour vous ?`
+      : `${salut}${pub}\n\nJe suis Camille, l'assistante du centre, et je suis là pour vous répondre à toute heure, de jour comme de nuit. Qu'est-ce qui vous amène ?`;
+  const boutons = services
+    ? en ? ["📅 Book a slot", "✨ Our services", "📝 Get a quote"] : ["📅 Prendre RDV", "✨ Nos prestations", "📝 Demander un devis"]
+    : en ? ["📅 Book a visit", "🌿 See products", "💬 Talk about me"] : ["📅 Prendre RDV", "🌿 Voir produits", "💬 Parler de moi"];
   return {
     phase: "accueil",
-    blocs: [{
-      type: "boutons",
-      entete: bib.medias.has("video_centre") ? "video_centre" : null,
-      texte,
-      boutons: en ? ["📅 Book a visit", "🌿 See products", "💬 Talk about me"] : ["📅 Prendre RDV", "🌿 Voir produits", "💬 Parler de moi"],
-    }],
+    blocs: [{ type: "boutons", entete: bib.medias.has("video_centre") ? "video_centre" : null, texte, boutons }],
   };
 }
 
 // ── Le tour complet ─────────────────────────────────────────────────────────
 
+/** L'agent santé & bien-être. */
 export async function repondreSante(ctx: Contexte): Promise<void> {
+  return repondreConversation(ctx, "sante");
+}
+
+/** L'agent beauté & services : salon, institut, plombier, dépannage, conseil. */
+export async function repondreServices(ctx: Contexte): Promise<void> {
+  return repondreConversation(ctx, "services");
+}
+
+async function repondreConversation(ctx: Contexte, profil: Profil): Promise<void> {
   const { agent, msg, phone } = ctx;
 
   // Le panier et tout ce qui le suit (quartier, heure, confirmation) : c'est la
@@ -387,18 +462,39 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
     echecsVocal: vocalRate ? etat.echecsVocal + 1 : etat.echecsVocal,
   };
 
-  // Un créneau choisi : on note la demande, l'équipe confirme.
+  const bib = await bibliotheque(ctx);
+
+  // Un créneau choisi : il est RÉSERVÉ (sans chevauchement possible), et
+  // l'équipe le confirme depuis la section Rendez-vous.
   let entree: string;
   if (msg.choiceId?.startsWith(`${ID}rdv:`)) {
-    const quand = new Date(Number(msg.choiceId.slice(`${ID}rdv:`.length)));
+    const [ts, pid] = msg.choiceId.slice(`${ID}rdv:`.length).split(":");
+    const quand = new Date(Number(ts));
+    const prest = pid ? bib.prestations.get(pid) : undefined;
     const libelle = libelleCreneau(quand);
-    etatTour.rdv = quand.toISOString();
-    await prevenirCommercant(ctx, {
-      titre: `📅 Demande de rendez-vous — ${msg.contactName || "+" + phone}`,
-      corps: `${libelle} · à confirmer au client sur WhatsApp`,
-      contenu: { kind: "rendez_vous", quand: quand.toISOString(), libelle, contact: phone, nom: msg.contactName || "" },
+    const r = await reserver({
+      agentId: agent.id, phone, nom: prenomClient(ctx) || msg.contactName || null, debut: quand,
+      duree: prest?.duree || undefined, prestation: prest?.nom || null, productId: prest?.productId || null,
     });
-    entree = `CRÉNEAU CHOISI : ${libelle}. C'est une DEMANDE : l'équipe la confirme ici sur WhatsApp. Remercie chaleureusement, dis que la demande est bien notée pour ${libelle} et que l'équipe confirme ici très vite ; ne dis PAS « nous vous attendons » tant que ce n'est pas confirmé. Propose la carte du centre et le vocal s'ils n'ont pas encore été envoyés.`;
+    if (r.ok) {
+      etatTour.rdv = quand.toISOString();
+      await prevenirCommercant(ctx, {
+        titre: `📅 Rendez-vous à confirmer — ${msg.contactName || "+" + phone}`,
+        corps: `${libelle}${prest ? ` · ${prest.nom}` : ""} · à confirmer dans Rendez-vous`,
+        contenu: { kind: "rendez_vous", id: r.rdv.id, quand: quand.toISOString(), libelle, contact: phone, nom: msg.contactName || "" },
+      });
+      entree = `CRÉNEAU RÉSERVÉ : ${libelle}${prest ? ` (${prest.nom})` : ""}. C'est une DEMANDE enregistrée : l'équipe la confirme ici sur WhatsApp. Remercie chaleureusement, dis que le créneau est bien noté et que l'équipe confirme ici très vite ; ne dis PAS « c'est confirmé » ni « nous vous attendons ». Propose la carte s'il ne l'a pas encore.`;
+    } else if (r.raison === "pris") {
+      entree = `LE CRÉNEAU ${libelle} VIENT D'ÊTRE PRIS par quelqu'un d'autre. Excuse-toi simplement et repropose des créneaux libres avec un bloc formulaire_rdv${pid ? ` (prestation ${pid})` : ""}.`;
+    } else {
+      entree = `Le créneau ${libelle} n'a pas pu être enregistré (${r.raison === "passe" ? "déjà passé" : "erreur technique"}). Repropose des créneaux avec un bloc formulaire_rdv.`;
+    }
+  } else if (msg.choiceId?.startsWith(`${ID}f:`)) {
+    const [, id, quoi] = msg.choiceId.split(":");
+    const legende = bib.medias.get(id)?.legende || "ce flyer";
+    entree = quoi === "rdv"
+      ? `FLYER CHOISI (« ${legende} ») : la personne veut RÉSERVER. Propose les créneaux libres (formulaire_rdv), avec la prestation correspondante si tu la reconnais dans la liste.`
+      : `FLYER CHOISI (« ${legende} ») : la personne veut EN SAVOIR PLUS. Présente l'offre d'après la légende et les prestations connues, sans rien inventer, puis propose de réserver.`;
   } else if (msg.type === "interactive") {
     entree = `BOUTON TOUCHÉ : ${texte}`;
   } else if (msg.vocal) {
@@ -407,14 +503,13 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
     entree = `TEXTE : ${texte}`;
   }
 
-  const bib = await bibliotheque(ctx);
   const fil = await historique(agent.id, phone);
   const premier = !etat.accueilli && !fil.slice(0, -1).some((m) => m.role === "assistant");
-  if (!bib.medias.has("video_centre")) console.log(`[santé] agent ${agent.id} : pas de vidéo d'accueil trouvée`);
+  if (!bib.medias.has("video_centre")) console.log(`[${profil}] agent ${agent.id} : pas de vidéo d'accueil trouvée`);
 
   // Nouveau contact qui dit juste bonjour : l'accueil est celui du code.
   if (premier && !etatTour.alerte && msg.type === "text" && SIMPLE_SALUT.test(texte.trim())) {
-    const s = accueilSante(ctx, bib, etatTour.langue);
+    const s = accueilSante(ctx, bib, etatTour.langue, profil);
     await envoyer(ctx, s, bib, etatTour);
     await ecrireEtat(agent.id, phone, etatSuivant(etatTour, s, { alerte: false, humain: false, vocalRate }));
     return;
@@ -434,13 +529,16 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
   // Un seul message système : certains fournisseurs (Gemini) ne lisent pas
   // correctement plusieurs consignes système et perdent alors le format.
   let messages = [
-    { role: "system", content: `${consigneSante(bib.faits)}\n\nCONTEXTE — ${contexte}` },
+    {
+      role: "system",
+      content: `${profil === "services" ? consigneServices({ ...bib.faits, metier: sectorProfile(agent.sector).label }) : consigneSante(bib.faits)}\n\nCONTEXTE — ${contexte}`,
+    },
     ...fil.slice(0, -1),
     { role: "user", content: entree + (consignes.length ? `\n[CODE — consignes obligatoires de ce tour]\n- ${consignes.join("\n- ")}` : "") },
   ];
 
   const autorise = {
-    medias: [...bib.medias.keys()], pages: [...bib.pages.keys()], produits: [...bib.produits.keys()],
+    medias: [...bib.medias.keys()], pages: [...bib.pages.keys()], produits: [...bib.prestations.keys()],
     chiffres: [...bib.chiffres, ...(texte.match(/\d{2,}/g) || [])],
   };
   let sortie: Sortie | null = null;

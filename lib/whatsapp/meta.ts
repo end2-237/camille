@@ -192,6 +192,35 @@ export async function sendButtonsMedia(
   });
 }
 
+/**
+ * Un carrousel de cartes média (2 à 10) : chaque carte a son image, son texte
+ * (160 caractères) et ses propres boutons — les mêmes sur toutes les cartes,
+ * c'est la règle de Meta. Pour les flyers, prospectus, réalisations.
+ */
+export function sendMediaCarousel(
+  to: string, body: string,
+  cartes: { image: string; texte: string; boutons: { id: string; title: string }[] }[]
+): Promise<MetaResult> {
+  return send(to, {
+    type: "interactive",
+    interactive: {
+      type: "carousel",
+      body: { text: body.slice(0, 1024) },
+      action: {
+        cards: cartes.slice(0, 10).map((c, i) => ({
+          card_index: i,
+          type: "cta_url",
+          header: { type: "image", image: { link: c.image } },
+          body: { text: c.texte.slice(0, 160) },
+          action: {
+            buttons: c.boutons.slice(0, 2).map((b) => ({ type: "quick_reply", quick_reply: { id: b.id.slice(0, 256), title: b.title.slice(0, 20) } })),
+          },
+        })),
+      },
+    },
+  });
+}
+
 // ── Téléverser une fois, envoyer mille fois ─────────────────────────────────
 //
 // Envoyer une vidéo par `link` oblige Meta à la TÉLÉCHARGER à chaque envoi.

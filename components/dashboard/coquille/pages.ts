@@ -29,6 +29,7 @@ export type Page = {
 export const PAGES: Page[] = [
   { famille: "ventes", titre: "Conversations", segment: "conversations", parAgent: true, action: "ventes" },
   { famille: "ventes", titre: "Commandes", chemin: "/dashboard/orders", parAgent: true, action: "ventes" },
+  { famille: "ventes", titre: "Rendez-vous", segment: "rendez-vous", parAgent: true, action: "ventes" },
   { famille: "ventes", titre: "Caisse", segment: "caisse", parAgent: true, action: "ventes" },
   { famille: "ventes", titre: "Suivi des livraisons", segment: "suivi", parAgent: true, action: "ventes" },
   { famille: "ventes", titre: "Réclamations", chemin: "/dashboard/complaints", parAgent: false, action: "ventes" },
