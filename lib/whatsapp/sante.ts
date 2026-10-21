@@ -300,6 +300,16 @@ async function envoyer(ctx: Contexte, s: Sortie, bib: Bibliotheque, etat: EtatSa
 
 // ── Le premier message : tenu par le code ───────────────────────────────────
 
+/**
+ * Le prénom à dire : celui du profil WhatsApp, sauf si ce profil porte le nom
+ * du commerce lui-même (le commerçant qui se teste, un compte d'entreprise).
+ */
+function prenomClient(ctx: Contexte): string {
+  const p = prenomDe(ctx.msg.contactName);
+  const commerce = String(ctx.agent.business_name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return p && !commerce.split(/[^a-z0-9]+/).includes(p.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")) ? p : "";
+}
+
 const SIMPLE_SALUT = /^(bonjour|bonsoir|salut|slt|bjr|bsr|cc|coucou|hello|hi|hey|allo|info|infos|good (morning|afternoon|evening)|yo|svp|[?.!👋🙏]+)[\s!?.,👋🙏]*$/i;
 
 /**
@@ -311,14 +321,14 @@ const SIMPLE_SALUT = /^(bonjour|bonsoir|salut|slt|bjr|bsr|cc|coucou|hello|hi|hey
 function accueilSante(ctx: Contexte, bib: Bibliotheque, langue: "fr" | "en" | null): Sortie {
   const { agent, msg } = ctx;
   const centre = agent.business_name || "notre centre";
-  const prenom = prenomDe(msg.contactName);
+  const prenom = prenomClient(ctx);
   const en = langue === "en";
   const pub = msg.referral?.headline
     ? en ? ` You saw our video « ${msg.referral.headline.slice(0, 80)} » — you're in the right place.`
          : ` Vous avez vu notre vidéo « ${msg.referral.headline.slice(0, 80)} » : vous êtes au bon endroit.`
     : "";
   const salut = messageAccueil({
-    nomProfil: msg.contactName,
+    nomProfil: prenom,
     heure: heureLocale(new Date(), Number((agent as { utc_offset?: number }).utc_offset ?? 1)),
     commerce: centre,
     texteSecteur: "Bienvenue chez {b} 🌿",
@@ -388,7 +398,7 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
       corps: `${libelle} · à confirmer au client sur WhatsApp`,
       contenu: { kind: "rendez_vous", quand: quand.toISOString(), libelle, contact: phone, nom: msg.contactName || "" },
     });
-    entree = `CRÉNEAU CHOISI : ${libelle}. L'équipe va le confirmer ici sur WhatsApp. Remercie, rassure (on l'attend), propose la carte du centre et le vocal si pas encore envoyés.`;
+    entree = `CRÉNEAU CHOISI : ${libelle}. C'est une DEMANDE : l'équipe la confirme ici sur WhatsApp. Remercie chaleureusement, dis que la demande est bien notée pour ${libelle} et que l'équipe confirme ici très vite ; ne dis PAS « nous vous attendons » tant que ce n'est pas confirmé. Propose la carte du centre et le vocal s'ils n'ont pas encore été envoyés.`;
   } else if (msg.type === "interactive") {
     entree = `BOUTON TOUCHÉ : ${texte}`;
   } else if (msg.vocal) {
@@ -399,7 +409,7 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
 
   const bib = await bibliotheque(ctx);
   const fil = await historique(agent.id, phone);
-  const premier = !fil.slice(0, -1).some((m) => m.role === "assistant") && !etat.envoyes.length;
+  const premier = !etat.accueilli && !fil.slice(0, -1).some((m) => m.role === "assistant");
   if (!bib.medias.has("video_centre")) console.log(`[santé] agent ${agent.id} : pas de vidéo d'accueil trouvée`);
 
   // Nouveau contact qui dit juste bonjour : l'accueil est celui du code.
@@ -410,7 +420,7 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
     return;
   }
   const contexte = [
-    `Prénom (profil WhatsApp) : ${prenomDe(msg.contactName) || "(aucun prénom lisible)"}.`,
+    `Prénom (profil WhatsApp) : ${prenomClient(ctx) || "(aucun prénom lisible : ne nomme pas la personne)"}.`,
     msg.referral?.headline || msg.referral?.body
       ? `Vient de la publicité : « ${[msg.referral.headline, msg.referral.body].filter(Boolean).join(" — ").slice(0, 200)} ».`
       : "",

@@ -49,6 +49,8 @@ export type EtatSante = {
   sujet?: string;
   tutoie?: boolean;
   rdv?: string;
+  /** L'accueil a été joué : on ne le rejoue pas. */
+  accueilli?: boolean;
 };
 
 export const ETAT_VIDE: EtatSante = {
@@ -174,6 +176,14 @@ export function controler(
     for (const f of etat.formules.slice(-4)) if (f && texte.includes(sans(f))) d.push(`formule répétée : « ${f} »`);
   }
   if (etat.pauseReaction > 0 && blocs.some((b) => b.type === "reaction")) d.push("réaction emoji trop rapprochée");
+  // La même phrase en texte puis au-dessus des boutons : le client la lit deux fois.
+  const action = actions[actions.length - 1] as { texte?: string } | undefined;
+  if (action?.texte) {
+    const a = sans(action.texte).trim();
+    for (const b of blocs) {
+      if (b.type === "texte" && a && (sans(b.texte).includes(a) || a.includes(sans(b.texte).trim()))) d.push("même phrase envoyée deux fois (texte puis bloc d'action)");
+    }
+  }
   return d;
 }
 
@@ -190,7 +200,9 @@ export function reparer(s: Sortie, etat: EtatSante, repliUrgence: string): Sorti
   }
   let action: Bloc | null = null;
   const reste: Bloc[] = [];
+  const texteAction = sans(String(((s.blocs || []).filter((b) => ACTIONS.has(b.type)).pop() as { texte?: string } | undefined)?.texte || "")).trim();
   for (const b of s.blocs || []) {
+    if (b.type === "texte" && texteAction && (sans(b.texte).includes(texteAction) || texteAction.includes(sans(b.texte).trim()))) continue;
     if (b.type === "reaction" && etat.pauseReaction > 0) continue;
     if (b.type === "media" && etat.envoyes.includes(b.id)) continue;
     if (ACTIONS.has(b.type)) { action = b; continue; }
@@ -232,6 +244,7 @@ export function etatSuivant(etat: EtatSante, s: Sortie, vu: { alerte: boolean; h
     formules: [...etat.formules, ...formulesDe(s)].slice(-8),
     pauseReaction: (s.blocs || []).some((b) => b.type === "reaction") ? 2 : Math.max(0, etat.pauseReaction - 1),
     envoyes: [...envoyes],
+    accueilli: true,
     sujet: s.memoire?.sujet || etat.sujet,
     tutoie: s.memoire?.tutoie ?? etat.tutoie,
   };

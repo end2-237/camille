@@ -732,6 +732,10 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("2e vocal raté : proposer d'écrire", c2.some((x) => x.includes("propose d'écrire")));
   const e2 = R.etatSuivant(vide, { blocs: [{ type: "boutons", entete: "video_centre", texte: "Bonsoir Jean, je suis là pour vous.", boutons: ["a"] }] }, { alerte: true, humain: false, vocalRate: false });
   chk("état : urgence verrouillée et vidéo comptée", e2.alerte && e2.envoyes.includes("video_centre"));
+  const double = { blocs: [{ type: "texte", texte: "Que puis-je faire pour vous aujourd'hui ?" }, { type: "boutons", texte: "Que puis-je faire pour vous aujourd'hui ?", boutons: ["📅 Prendre RDV"] }] };
+  chk("même phrase deux fois : refusée", defauts(double).some((d) => d.startsWith("même phrase")));
+  chk("même phrase deux fois : réparée", R.reparer(double, vide, "").blocs.length === 1);
+  chk("état : accueil joué une seule fois", e2.accueilli === true);
 }
 
 // ═══ quartiers — le barème sans rien taper ═════════════════════════════════
