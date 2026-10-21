@@ -184,6 +184,9 @@ function extraire(body: Record<string, unknown>): IncomingMessage[] {
           continue;
         }
 
+        // La pub d'origine : WhatsApp la joint au premier message d'un client
+        // venu d'une publicité « Cliquer pour envoyer un message ».
+        const rf = (m.referral || null) as { headline?: string; body?: string; source_url?: string; source_type?: string } | null;
         out.push({
           messageId: String(m.id || ""),
           from: String(m.from || ""),
@@ -193,6 +196,7 @@ function extraire(body: Record<string, unknown>): IncomingMessage[] {
           text: texte,
           order: ordre,
           timestamp: Number(m.timestamp || 0),
+          ...(rf ? { referral: { headline: rf.headline, body: rf.body, sourceUrl: rf.source_url, sourceType: rf.source_type } } : {}),
         });
       }
     }

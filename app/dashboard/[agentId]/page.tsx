@@ -958,6 +958,23 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
             formats=".mp4 — max 50 Mo"
           />
         </div>
+        {/* Agents santé : la vidéo et le vocal ci-dessus sont les preuves que l'agent montre
+            (vidéo du centre, voix du praticien). Il nomme le praticien tel qu'écrit ici. */}
+        {agent.business_context?.sector === "healthcare" ? (
+          <div className="mt-5 grid gap-1.5">
+            <span className="text-[13px] font-medium" style={{ color: "var(--cl-ink)" }}>Praticien du centre — nom et titre exacts</span>
+            <input
+              className="ui-champ"
+              maxLength={80}
+              placeholder="Mme Ngo, naturopathe"
+              value={String(caps.praticien ?? "")}
+              onChange={(e) => setCaps((c) => ({ ...c, praticien: e.target.value }))}
+            />
+            <span className="text-[12px]" style={{ color: "var(--cl-ink-faint)" }}>
+              Le vrai titre uniquement (médecin seulement s'il l'est). La vidéo d'accueil sert de vidéo du centre, et le vocal de message du praticien. Pour WhatsApp, une vidéo de 16 Mo au plus.
+            </span>
+          </div>
+        ) : null}
       </Section>
 
     </div>

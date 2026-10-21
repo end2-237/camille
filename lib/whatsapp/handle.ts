@@ -22,6 +22,7 @@ import { avecAgent } from "./identifiants";
 import { etatQuota } from "@/lib/quota";
 import { compterConversation } from "./usage";
 import { repondreBoutique, prevenirCommercant } from "./boutique";
+import { repondreSante } from "./sante";
 import { garderMedia } from "./photo";
 import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
 
@@ -46,6 +47,8 @@ export type IncomingMessage = {
   mime?: string;
   /** Le message était un vocal : `text` est sa transcription. */
   vocal?: boolean;
+  /** La pub Facebook d'où vient le client (« Cliquer pour envoyer un message »), au premier message. */
+  referral?: { headline?: string; body?: string; sourceUrl?: string; sourceType?: string };
   rawType?: string;
   timestamp?: number;
 };
@@ -426,15 +429,21 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
   // panier, adresse — le traite comme si le client l'avait tapé.
   if (msg.type === "audio") {
     const texte = await ecouter(msg, agent);
-    if (!texte) {
+    if (!texte && agent.sector === "healthcare") {
+      // L'agent santé gère lui-même le vocal mal compris : redire ce qu'il a
+      // saisi, demander de répéter, puis proposer d'écrire.
+      await tracer(agent.id, phone, "user", "(vocal non compris)");
+      msg = { ...msg, type: "text", text: "", vocal: true };
+    } else if (!texte) {
       await tracer(agent.id, phone, "user", "(vocal non compris)");
       await meta.sendText(
         phone,
         "Je n'ai pas réussi à écouter ton vocal 🙏 Tu peux me l'écrire ? / I couldn't play your voice note, could you type it?"
       );
       return;
+    } else {
+      msg = { ...msg, type: "text", text: texte, vocal: true };
     }
-    msg = { ...msg, type: "text", text: texte, vocal: true };
   }
 
   await tracer(agent.id, phone, "user", msg.vocal ? `🎤 ${msg.text}` : msg.text || `(${msg.rawType || msg.type})`);
@@ -460,6 +469,12 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
   }
 
   try {
+    // Santé & bien-être : l'agent qui écoute et rassure (sante.ts). Le panier
+    // et la commande restent ceux de la boutique, qu'il appelle lui-même.
+    if (agent.sector === "healthcare") {
+      await repondreSante(ctx);
+      return;
+    }
     switch (mode) {
       case "boutique":
       case "restaurant":

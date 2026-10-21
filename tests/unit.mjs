@@ -688,6 +688,52 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("hors santé : la garde ne réécrit pas (règle générale ailleurs)", autre?.actions[0]?.texte !== REPONSE_SANTE);
 }
 
+// ═══ agent santé — ce que le code tient, quoi que dise le modèle ═══════════
+{
+  const R = await import(`${DIST}/whatsapp/sante-regles.js`);
+  groupe("agent santé — détecteurs, contrôle, réparation");
+  const vide = { ...R.ETAT_VIDE };
+  chk("urgence : femme enceinte qui saigne", R.detecter("svp ma femme est enceinte elle saigne beaucoup").alerte);
+  chk("urgence : douleur à la poitrine", R.detecter("j'ai une douleur dans la poitrine").alerte);
+  chk("pas d'urgence : mal au genou", !R.detecter("j'ai mal aux genoux depuis 3 ans").alerte);
+  chk("arrêt de traitement détecté", R.detecter("je veux arreter mes comprimés").arretTraitement);
+  chk("demande d'une personne", R.detecter("je veux parler à une vraie personne").humain);
+  chk("« c'est un robot ? »", R.detecter("slt c un robot qui repond ?").robot);
+  eq("pidgin → anglais", R.langueDe("Good morning. I di get waist pain since long time, wey una place dey?"), "en");
+  eq("français", R.langueDe("bonjour j'ai mal au dos, vous êtes où ?"), "fr");
+  chk("vocal vide = mal compris", !R.vocalCompris(""));
+  chk("vocal à trous = mal compris", !R.vocalCompris("[inaudible] genoux [inaudible]"));
+  chk("vocal clair = compris", R.vocalCompris("j'ai mal aux genoux depuis trois ans"));
+
+  const ok = { medias: ["video_centre", "vocal_praticien"], pages: ["site"], produits: ["p1"], chiffres: ["6000", "30"] };
+  const defauts = (s, e = vide) => R.controler(s, e, ok);
+  chk("réponse propre acceptée", defauts({ blocs: [{ type: "texte", texte: "Bonsoir Jean 🙏 Je suis là pour vous répondre à toute heure." }, { type: "boutons", entete: "video_centre", texte: "Par quoi commencer ?", boutons: ["📅 Prendre RDV", "🌿 Voir produits"] }] }).length === 0);
+  chk("promesse refusée", defauts({ blocs: [{ type: "texte", texte: "Notre tisane guérit le diabète." }] }).some((d) => d.startsWith("promesse")));
+  chk("effet de produit refusé", defauts({ blocs: [{ type: "texte", texte: "Le baume aide à soulager les douleurs." }] }).some((d) => d.startsWith("effet")));
+  chk("contre-marketing refusé", defauts({ blocs: [{ type: "texte", texte: "Personne ne peut vous promettre de résultat." }] }).some((d) => d.startsWith("doute")));
+  chk("panier simulé refusé", defauts({ blocs: [{ type: "texte", texte: "La tisane a été ajoutée à votre panier." }] }).some((d) => d.startsWith("simulation")));
+  chk("certificat inventé refusé", defauts({ blocs: [{ type: "texte", texte: "L'équipe vous enverra les certificats." }] }).some((d) => d.startsWith("engagement")));
+  chk("numéro inventé refusé", defauts({ blocs: [{ type: "texte", texte: "Appelez le 699 12 34 56." }] }).some((d) => d.startsWith("chiffre")));
+  chk("prix du catalogue accepté", defauts({ blocs: [{ type: "texte", texte: "La tisane coûte 6 000 F." }] }).length === 0);
+  chk("question médicale refusée", defauts({ blocs: [{ type: "texte", texte: "Quel traitement prenez-vous en ce moment ?" }] }).some((d) => d.startsWith("question médicale")));
+  chk("deux blocs d'action refusés", defauts({ blocs: [{ type: "produits", ids: ["p1"], texte: "x" }, { type: "boutons", texte: "y", boutons: ["a"] }] }).length > 0);
+  chk("bouton trop long refusé", defauts({ blocs: [{ type: "boutons", texte: "x", boutons: ["Demander la composition"] }] }).length > 0);
+  const urgence = { ...vide, alerte: true };
+  chk("urgence : boutons refusés", defauts({ blocs: [{ type: "texte", texte: "Allez aux urgences." }, { type: "boutons", texte: "x", boutons: ["📅 RDV"] }] }, urgence).length > 0);
+  const rep = R.reparer({ blocs: [{ type: "reaction", emoji: "❤️" }, { type: "texte", texte: "Allez aux urgences de l'hôpital le plus proche." }, { type: "produits", ids: ["p1"], texte: "x" }] }, urgence, R.repliUrgence("fr"));
+  chk("urgence réparée : un seul texte", rep.blocs.length === 1 && rep.blocs[0].type === "texte" && rep.humain === true);
+  const rep2 = R.reparer({ blocs: [{ type: "boutons", texte: "a", boutons: ["Demander la composition"] }, { type: "texte", texte: "b" }, { type: "produits", ids: ["p1"], texte: "c" }] }, vide, "");
+  chk("réparé : une seule action, en dernier", rep2.blocs.filter((b) => ["boutons", "produits"].includes(b.type)).length === 1 && rep2.blocs.at(-1).type === "produits");
+  const vu = R.reparer({ blocs: [{ type: "media", id: "video_centre" }, { type: "texte", texte: "x" }] }, { ...vide, envoyes: ["video_centre"] }, "");
+  chk("vidéo déjà envoyée : retirée", !vu.blocs.some((b) => b.type === "media"));
+  const c = R.consignesDuTour("je veux arreter mes comprimés", vide, "Mme Ngo, naturopathe");
+  chk("consigne de sécurité imposée", c.some((x) => x.includes("SÉCURITÉ") && x.includes("Mme Ngo")));
+  const c2 = R.consignesDuTour("allo", { ...vide, echecsVocal: 2 }, "x", { compris: false });
+  chk("2e vocal raté : proposer d'écrire", c2.some((x) => x.includes("propose d'écrire")));
+  const e2 = R.etatSuivant(vide, { blocs: [{ type: "boutons", entete: "video_centre", texte: "Bonsoir Jean, je suis là pour vous.", boutons: ["a"] }] }, { alerte: true, humain: false, vocalRate: false });
+  chk("état : urgence verrouillée et vidéo comptée", e2.alerte && e2.envoyes.includes("video_centre"));
+}
+
 // ═══ quartiers — le barème sans rien taper ═════════════════════════════════
 {
   const { QUARTIERS, lireBareme, ecrireBareme, appliquerTarif } = await import(`${DIST}/quartiers.js`);

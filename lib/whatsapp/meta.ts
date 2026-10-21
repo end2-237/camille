@@ -150,6 +150,45 @@ export function sendVideo(to: string, url: string, caption?: string): Promise<Me
   });
 }
 
+/** Une note vocale (OGG/Opus s'affiche comme un vocal, MP3 comme un fichier audio). */
+export function sendAudio(to: string, url: string): Promise<MetaResult> {
+  return send(to, { type: "audio", audio: { link: url } });
+}
+
+/** Une réaction emoji posée sur un message du client (« je t'ai entendu », sans un mot de plus). */
+export function sendReaction(to: string, messageId: string, emoji: string): Promise<MetaResult> {
+  return send(to, { type: "reaction", reaction: { message_id: messageId, emoji } });
+}
+
+/** Un bouton qui ouvre une page (le site) — l'adresse ne s'affiche pas en clair. */
+export function sendCtaUrl(to: string, body: string, label: string, url: string): Promise<MetaResult> {
+  return send(to, {
+    type: "interactive",
+    interactive: {
+      type: "cta_url",
+      body: { text: body.slice(0, 1024) },
+      action: { name: "cta_url", parameters: { display_text: label.slice(0, 20), url } },
+    },
+  });
+}
+
+/** Trois boutons au plus, avec une vidéo ou une image en en-tête : montrer et proposer en un seul message. */
+export function sendButtonsMedia(
+  to: string, media: { type: "video" | "image"; url: string }, body: string, buttons: { id: string; title: string }[]
+): Promise<MetaResult> {
+  return send(to, {
+    type: "interactive",
+    interactive: {
+      type: "button",
+      header: { type: media.type, [media.type]: { link: media.url } },
+      body: { text: body.slice(0, 1024) },
+      action: {
+        buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id.slice(0, 256), title: b.title.slice(0, 20) } })),
+      },
+    },
+  });
+}
+
 // ── Téléverser une fois, envoyer mille fois ─────────────────────────────────
 //
 // Envoyer une vidéo par `link` oblige Meta à la TÉLÉCHARGER à chaque envoi.
