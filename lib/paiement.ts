@@ -45,6 +45,36 @@ export function operateurDe(numero: string): Operateur | null {
   return null;
 }
 
+/**
+ * Les opérateurs ouverts à l'encaissement. BUYFACT_OPERATEURS (« MTN » ou
+ * « MTN,ORANGE ») tranche s'il est posé ; sinon on demande à buyfacturation
+ * ce que le compte pawaPay autorise réellement, toutes les 5 minutes. Faute
+ * de réponse : MTN seul — mieux vaut griser Orange à tort que laisser un
+ * commerçant attendre une demande qui n'arrivera jamais.
+ */
+let memo: { ops: Operateur[]; jusqua: number } | null = null;
+
+export async function operateursOuverts(): Promise<Operateur[]> {
+  const force = env("BUYFACT_OPERATEURS").toUpperCase();
+  if (force) return (["MTN", "ORANGE"] as Operateur[]).filter((o) => force.includes(o));
+  if (memo && memo.jusqua > Date.now()) return memo.ops;
+  try {
+    const r = await fetch(`${base()}/api/v1/operateurs`, { headers: { "x-api-key": cle() }, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = (await r.json()) as { operateurs?: { provider?: string; operations?: { type?: string; statut?: string }[] }[] };
+    const ouverts = (d.operateurs ?? []).filter((o) =>
+      (o.operations ?? []).some((op) => op.type === "DEPOSIT" && (op.statut ?? "OPERATIONAL") === "OPERATIONAL")
+    );
+    const ops: Operateur[] = [];
+    if (ouverts.some((o) => /MTN/i.test(o.provider ?? ""))) ops.push("MTN");
+    if (ouverts.some((o) => /ORANGE/i.test(o.provider ?? ""))) ops.push("ORANGE");
+    memo = { ops: ops.length ? ops : ["MTN"], jusqua: Date.now() + 5 * 60_000 };
+  } catch {
+    memo = { ops: memo?.ops ?? ["MTN"], jusqua: Date.now() + 60_000 };
+  }
+  return memo.ops;
+}
+
 async function appel(chemin: string, init: RequestInit = {}) {
   const r = await fetch(base() + chemin, {
     ...init,

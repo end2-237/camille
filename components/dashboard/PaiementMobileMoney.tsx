@@ -11,6 +11,18 @@ import { authHeaders } from "@/lib/auth-client";
  * Avec Monetbil (secours, quand buyfacturation n'est pas configuré), la
  * réponse porte une page de paiement : on y va.
  */
+type Operateur = "MTN" | "ORANGE";
+/** L'opérateur d'après le préfixe (même règle que lib/paiement.ts, qui ne peut pas venir côté client). */
+function operateurDe(numero: string): Operateur | null {
+  const d = numero.replace(/\D/g, "").replace(/^00/, "");
+  const n = d.startsWith("237") ? d.slice(3) : d;
+  if (!/^6\d{8}$/.test(n)) return null;
+  if (/^(67|65[0-4]|68[0-4])/.test(n)) return "MTN";
+  if (/^(69|65[5-9]|68[5-9])/.test(n)) return "ORANGE";
+  return null;
+}
+const NOMS: Record<Operateur, string> = { MTN: "MTN Mobile Money", ORANGE: "Orange Money" };
+
 export function PaiementMobileMoney({
   agentId, kind, planId, montant, libelle, onPaye,
 }: {
@@ -25,6 +37,13 @@ export function PaiementMobileMoney({
   const [envoi, setEnvoi] = useState(false);
   const [attente, setAttente] = useState<{ ref: string; instruction: string } | null>(null);
   const fini = useRef(false);
+  // Les opérateurs ouverts chez buyfacturation (null tant qu'on ne sait pas).
+  const [ouverts, setOuverts] = useState<Operateur[] | null>(null);
+  useEffect(() => {
+    fetch("/api/payments/operateurs").then((r) => r.json()).then((d) => setOuverts(d.operateurs)).catch(() => {});
+  }, []);
+  const op = operateurDe(numero);
+  const ferme = op !== null && ouverts !== null && !ouverts.includes(op);
 
   useEffect(() => {
     if (!attente) return;
@@ -97,20 +116,29 @@ export function PaiementMobileMoney({
           className="ui-champ min-w-[160px] flex-1"
           type="tel"
           inputMode="tel"
-          placeholder="Numéro MTN ou Orange · 6XXXXXXXX"
+          placeholder={ouverts && ouverts.length === 1 ? `Numéro ${ouverts[0] === "MTN" ? "MTN" : "Orange"} · 6XXXXXXXX` : "Numéro MTN ou Orange · 6XXXXXXXX"}
           value={numero}
           onChange={(e) => setNumero(e.target.value)}
         />
         <button
           type="button"
           onClick={payer}
-          disabled={envoi || numero.replace(/\D/g, "").length < 9}
+          disabled={envoi || ferme || numero.replace(/\D/g, "").length < 9}
           className="rounded-full px-5 py-2.5 text-[13.5px] font-medium text-white disabled:opacity-40"
           style={{ background: "var(--cl-ink, #19171B)" }}
         >
           {envoi ? "Envoi…" : `Payer ${montant.toLocaleString("fr-FR")} FCFA`}
         </button>
       </div>
+      {ferme ? (
+        <p className="text-[12.5px]" style={{ color: "#B45309" }}>
+          Ce numéro est {NOMS[op!]}, indisponible pour le moment. Payez avec un numéro {ouverts?.find((o) => o !== op) === "ORANGE" ? "Orange" : "MTN"}.
+        </p>
+      ) : ouverts && !ouverts.includes("ORANGE") ? (
+        <p className="text-[12px]" style={{ color: "var(--cl-ink-soft, #5F5A6B)" }}>
+          Orange Money est momentanément indisponible : seul MTN Mobile Money est accepté.
+        </p>
+      ) : null}
       <p className="text-[12px]" style={{ color: "var(--cl-ink-faint, #9A94A6)" }}>
         {libelle} · une demande de paiement arrive sur ce téléphone, validez-la avec votre code.
       </p>

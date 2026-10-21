@@ -3,7 +3,7 @@ import crypto                          from "crypto";
 import { query }                       from "@/lib/db";
 import { getUserFromRequest }          from "@/lib/auth-server";
 import { isPurchasableDB, getPlanPriceXafDB, prixOptionSitePour } from "@/lib/plans-db";
-import { buyfacturationActive, lancerCollecte, msisdn, operateurDe, type Operateur } from "@/lib/paiement";
+import { buyfacturationActive, lancerCollecte, msisdn, operateurDe, operateursOuverts, type Operateur } from "@/lib/paiement";
 
 const MONETBIL_SERVICE_KEY = process.env.MONETBIL_SERVICE_KEY!;
 const APP_URL =
@@ -85,6 +85,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Entrez le numéro Mobile Money qui paiera (MTN ou Orange, 6XXXXXXXX)." }, { status: 400 });
       }
       const op: Operateur | null = operateur === "MTN" || operateur === "ORANGE" ? operateur : operateurDe(numero);
+      // Opérateur fermé chez buyfacturation : refusé avant toute demande.
+      const ouverts = await operateursOuverts();
+      if (op && !ouverts.includes(op)) {
+        const nom = op === "ORANGE" ? "Orange Money" : "MTN Mobile Money";
+        const autre = ouverts.find((o) => o !== op);
+        return NextResponse.json(
+          { error: `${nom} est indisponible pour le moment.${autre ? ` Payez avec un numéro ${autre === "MTN" ? "MTN" : "Orange"}.` : ""}`, code: "operateur_indisponible" },
+          { status: 400 }
+        );
+      }
       const ref = crypto.randomUUID();
       await query(
         `INSERT INTO camille.payments
