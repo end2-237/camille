@@ -72,6 +72,7 @@ import {
   normaliserOptions, ouvertMaintenant, questionsPour, type GroupeOptions,
 } from "./restaurant";
 import { messageAccueil } from "./accueil";
+import { envoyerFlyers, flyersDe } from "./flyers";
 import { closedNotice, etatMaintenant, heureLocale, lireSemaine, prochaineOuverture, resumeSemaine } from "@/lib/horaires";
 import { formatVitrine, formatNaturel, noterEnvoi } from "./repetition";
 import {
@@ -101,6 +102,8 @@ const B = {
   encore: "cam:encore",
   asap: "cam:asap",
   plustard: "cam:plustard",
+  /** Préfixe d'un bouton de flyer : « cam:flyer:<id>:cmd|info ». */
+  flyer: "cam:flyer:",
   /** Préfixe d'un créneau choisi : « cam:heure:<ms> ». */
   heure: "cam:heure:",
 } as const;
@@ -1446,6 +1449,7 @@ async function executer(
       );
         break;
 
+      case "flyers":      await montrerFlyers(ctx, resto); break;
       case "mode_emploi": await envoyerTuto(ctx, resto); break;
       case "infos":       await donnerInfos(ctx); break;
       case "humain":      await passerLaMain(ctx); break;
@@ -1553,6 +1557,23 @@ async function orienterNouveau(ctx: Contexte, resto: boolean) {
 }
 
 /** Les faits du commerce, tels que le modèle est autorisé à les citer. */
+/** Les flyers de la médiathèque, en carrousel. false s'il n'y en a aucun. */
+async function montrerFlyers(ctx: Contexte, resto: boolean): Promise<boolean> {
+  const { agent, phone } = ctx;
+  const flyers = await flyersDe(agent.id);
+  if (!flyers.length) return false;
+  await envoyerFlyers(
+    phone, flyers, "Nos offres du moment 👇",
+    (id) => [
+      { id: `${B.flyer}${id}:cmd`, title: resto ? "🍽️ Commander" : "🛒 Commander" },
+      { id: `${B.flyer}${id}:info`, title: "ℹ️ En savoir plus" },
+    ],
+    agent.business_name || ""
+  );
+  await tracer(agent.id, phone, "assistant", `[flyers] ${flyers.map((f) => f.legende || f.id).join(" · ")}`);
+  return true;
+}
+
 function faitsDe(agent: Contexte["agent"]): FaitsCommerce {
   return {
     nom: agent.business_name || "la boutique",
@@ -1696,6 +1717,22 @@ export async function repondreBoutique(
       }
     }
 
+    // Un bouton d'une carte de flyer : commander (le catalogue) ou en savoir plus.
+    if (id.startsWith(B.flyer)) {
+      const [, , fid, quoi] = id.split(":");
+      const f = (await flyersDe(agent.id)).find((x) => x.id === fid);
+      await tracer(agent.id, phone, "user", `[flyer ${f?.legende || fid}] ${quoi === "cmd" ? "commander" : "en savoir plus"}`);
+      if (quoi === "info" && f?.legende) {
+        await meta.sendButtons(phone, `${f.legende}\n\nUne question ? Écris-la-moi, je te réponds ici 🙂`, [
+          { id: B.catalogue, title: resto ? "🍽️ Voir la carte" : "🛍️ Les produits" },
+          { id: B.conseiller, title: "💬 Un conseiller" },
+        ]);
+        return;
+      }
+      const prods = await catalogue(agent.id);
+      return montrerVitrine(ctx, prods, resto ? "Notre carte" : "Notre boutique", resto ? "Voici ce qu'on propose 🍽️" : "Voici ce qu'on a en ce moment 🛍️", true);
+    }
+
     if (id === B.catalogue) {
       const prods = await catalogue(agent.id);
       return montrerVitrine(
@@ -1831,6 +1868,13 @@ export async function repondreBoutique(
     }
   }
 
+  // 3 quater. « Les promos », « vos offres », « l'affiche » : les flyers de la
+  // médiathèque, s'il y en a. Une phrase courte seulement — « la promo sur
+  // le sac noir, elle marche encore ? » est une vraie question pour le modèle.
+  if (!enAttente && msg.text.trim().length <= 40 && /\b(promos?|promotions?|offres?|affiches?|flyers?|prospectus|bons? plans?|nouveautes)\b/.test(t)) {
+    if (await montrerFlyers(ctx, resto)) return;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // 4. LA COMPRÉHENSION. C'est la voie normale, pas une option.
   //
@@ -1856,7 +1900,7 @@ export async function repondreBoutique(
         currency: p.currency, category: p.category, stock: p.stock,
         options: p.optionsTexte || null,
       })),
-      faitsDe(agent),
+      { ...faitsDe(agent), affiches: (await flyersDe(agent.id)).map((f) => f.legende) },
       resto,
       await derniersTours(agent.id, phone),
       {

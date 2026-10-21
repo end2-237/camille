@@ -39,6 +39,7 @@ export type Action =
   | { faire: "position" }
   | { faire: "retrait" }
   | { faire: "accueil" }
+  | { faire: "flyers" }
   | { faire: "animations"; activer: boolean };
 
 export type Comprehension = {
@@ -78,6 +79,8 @@ export type FaitsCommerce = {
   /** Le secteur : la santé, l'immobilier et la cosmétique ont leurs propres interdits. */
   secteur?: string | null;
   fraisLivraison?: number | null;
+  /** Les légendes des flyers de la médiathèque (Médias › Flyers). */
+  affiches?: string[];
   livraison: boolean;
   devise: string;
 };
@@ -231,6 +234,11 @@ export function valider(
         actions.push({ faire: x.faire } as Action);
         break;
 
+      case "flyers":
+        // Pas d'affiche dans la médiathèque : l'outil n'existe pas.
+        if (faits.affiches?.length) actions.push({ faire: "flyers" });
+        break;
+
       case "animations":
         actions.push({ faire: "animations", activer: x.activer === true });
         break;
@@ -344,7 +352,7 @@ export function cleCache(parties: {
   // L'état ouvert/fermé entre dans la clé, pas la minute : une réponse « on est
   // ouverts » mise en cache à 17 h ne doit pas resservir à 23 h.
   const etat = (parties.faits.etat || "").replace(/il est [^.]*\./, "");
-  const f = `${parties.faits.nom}|${parties.faits.adresse}|${parties.faits.horaires}|${etat}|${parties.faits.fraisLivraison}|${parties.faits.livraison}`;
+  const f = `${parties.faits.nom}|${parties.faits.adresse}|${parties.faits.horaires}|${etat}|${parties.faits.fraisLivraison}|${parties.faits.livraison}|${(parties.faits.affiches || []).join("·")}`;
   const h = parties.historique.map((x) => `${x.role}:${x.content}`).join("|");
   const msg = parties.message.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
   return [
@@ -475,7 +483,8 @@ Tu as une boîte à outils. Chaque outil PRODUIT quelque chose chez le client �
 {"faire":"humain"} → passe la main à l'équipe, et tu te tais COMPLÈTEMENT après : ce client ne reçoit plus aucune réponse de toi, même s'il demande autre chose. N'utilise cet outil que si le client a vraiment besoin d'une personne.
 {"faire":"alerter","sujet":"..."} → prévient le commerçant, et TU CONTINUES à parler. C'est l'outil des engagements : tu promets que l'équipe confirmera quelque chose, et quelqu'un est réellement averti. Préfère-le à humain partout où tu peux encore être utile.
 {"faire":"accueil"} → une salutation, rien de plus à faire.
-{"faire":"animations","activer":false} → il ne veut plus des autocollants animés (« trop de gifs », « arrête les stickers »). "activer":true s'il les redemande. Confirme-lui avec repondre.
+${faits.affiches?.length ? `{"faire":"flyers"} → envoie nos affiches du moment en carrousel (voir AFFICHES). Quand il demande les promos, les offres, les nouveautés, « vous avez quoi en ce moment ? ».
+` : ""}{"faire":"animations","activer":false} → il ne veut plus des autocollants animés (« trop de gifs », « arrête les stickers »). "activer":true s'il les redemande. Confirme-lui avec repondre.
 
 COMBINER est normal, et souvent meilleur : un prix se répond ET se montre (repondre + montrer), « des écouteurs, et vous livrez ? » c'est montrer + repondre. Mets les outils dans l'ordre utile.
 
@@ -508,7 +517,9 @@ Livraison : ${
       : "non, retrait sur place uniquement"
   }
 
-CATALOGUE — id | nom | catégorie | prix | variations
+${faits.affiches?.length ? `AFFICHES (flyers envoyables) — ${faits.affiches.map((a) => a || "sans légende").join(" · ")}
+
+` : ""}CATALOGUE — id | nom | catégorie | prix | variations
 ${liste || "(vide)"}
 
 COMMANDE EN COURS (dans « CE CLIENT ») : son étape est un FAIT. « Ça vient quand ? », « elle en est où ? » → réponds avec repondre en donnant cette étape, sans inventer de durée ; si la durée compte pour lui, ajoute {"faire":"alerter","sujet":"délai commande <réf>"}. Commande en RETRAIT : ne parle JAMAIS de livraison ni de frais de livraison — dis qu'on le prévient dès qu'elle est prête à récupérer.
