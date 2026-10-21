@@ -173,14 +173,17 @@ export function sendCtaUrl(to: string, body: string, label: string, url: string)
 }
 
 /** Trois boutons au plus, avec une vidéo ou une image en en-tête : montrer et proposer en un seul message. */
-export function sendButtonsMedia(
+export async function sendButtonsMedia(
   to: string, media: { type: "video" | "image"; url: string }, body: string, buttons: { id: string; title: string }[]
 ): Promise<MetaResult> {
+  // Une vidéo téléversée une fois part instantanément ; par lien, Meta la
+  // retélécharge à chaque envoi et refuse au-delà de 16 Mo.
+  const id = media.type === "video" ? await mediaId(media.url) : null;
   return send(to, {
     type: "interactive",
     interactive: {
       type: "button",
-      header: { type: media.type, [media.type]: { link: media.url } },
+      header: { type: media.type, [media.type]: id ? { id } : { link: media.url } },
       body: { text: body.slice(0, 1024) },
       action: {
         buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id.slice(0, 256), title: b.title.slice(0, 20) } })),

@@ -18,9 +18,10 @@
 import { query } from "@/lib/db";
 import * as meta from "./meta";
 import { tracer, sessionMeta, type Contexte } from "./handle";
-import { prenomDe } from "./accueil";
+import { messageAccueil, prenomDe } from "./accueil";
+import { sectorProfile } from "@/lib/sectorProfiles";
 import { creneaux, libelleCreneau } from "./restaurant";
-import { etatMaintenant } from "@/lib/horaires";
+import { etatMaintenant, heureLocale } from "@/lib/horaires";
 import { prevenirCommercant, repondreBoutique } from "./boutique";
 import {
   ETAT_VIDE, consigneSante, consignesDuTour, controler, detecter, etatSuivant, langueDe, reparer,
@@ -85,12 +86,18 @@ type Bibliotheque = {
 
 async function bibliotheque(ctx: Contexte): Promise<Bibliotheque> {
   const { agent } = ctx;
+  // to_jsonb : la colonne capabilities peut être du texte JSON selon les bases ;
+  // un COALESCE avec un jsonb y échouait — et l'agent se croyait sans média.
   const a = (await query(
-    `SELECT COALESCE(capabilities, '{}'::jsonb) AS caps, COALESCE(to_jsonb(a)->'media', '[]'::jsonb) AS media
-       FROM camille.agents a WHERE id = $1`,
+    `SELECT to_jsonb(a)->'capabilities' AS caps, to_jsonb(a)->'media' AS media FROM camille.agents a WHERE id = $1`,
     [agent.id]
-  ).catch(() => ({ rows: [] }))).rows[0] || { caps: {}, media: [] };
-  const caps = (typeof a.caps === "string" ? JSON.parse(a.caps) : a.caps) as Record<string, unknown>;
+  ).catch((e: Error) => { console.error("[santé] médias illisibles :", e.message); return { rows: [] }; })).rows[0] || {};
+  const lire = (v: unknown): unknown => {
+    if (typeof v !== "string") return v;
+    try { return JSON.parse(v); } catch { return null; }
+  };
+  const caps = ((lire(a.caps) as Record<string, unknown>) || {}) as Record<string, unknown>;
+  a.media = lire(a.media);
 
   const medias = new Map<string, { url: string; type: "video" | "audio" | "image" }>();
   const descriptions: { id: string; description: string }[] = [];
@@ -230,7 +237,12 @@ async function envoyer(ctx: Contexte, s: Sortie, bib: Bibliotheque, etat: EtatSa
         const r = video && video.type !== "audio"
           ? await meta.sendButtonsMedia(phone, { type: video.type, url: video.url }, b.texte, boutons)
           : await meta.sendButtons(phone, b.texte, boutons);
-        if (!r.ok && video) await meta.sendButtons(phone, b.texte, boutons); // en-tête refusé : les boutons partent quand même
+        if (!r.ok && video) {
+          // En-tête refusé (vidéo trop lourde, lien privé…) : la vidéo part seule, puis les boutons.
+          console.warn(`[santé] vidéo en en-tête refusée (${r.error}) — envoi séparé`);
+          await meta.sendVideoRapide(phone, video.url, "");
+          await meta.sendButtons(phone, b.texte, boutons);
+        }
         trace = `${b.entete ? `[🎬 ${b.entete}] ` : ""}${b.texte} [${b.boutons.join(" | ")}]`;
         break;
       }
@@ -284,6 +296,46 @@ async function envoyer(ctx: Contexte, s: Sortie, bib: Bibliotheque, etat: EtatSa
     }
     if (trace) await tracer(agent.id, phone, "assistant", trace.slice(0, 1000));
   }
+}
+
+// ── Le premier message : tenu par le code ───────────────────────────────────
+
+const SIMPLE_SALUT = /^(bonjour|bonsoir|salut|slt|bjr|bsr|cc|coucou|hello|hi|hey|allo|info|infos|good (morning|afternoon|evening)|yo|svp|[?.!👋🙏]+)[\s!?.,👋🙏]*$/i;
+
+/**
+ * L'accueil d'un nouveau contact qui dit simplement bonjour : la vidéo du
+ * centre au-dessus des boutons (si elle existe), son prénom, le centre,
+ * Camille qui se présente et dit qu'elle est là à toute heure. Écrit par le
+ * code : c'est la première impression, elle ne dépend pas de l'humeur du modèle.
+ */
+function accueilSante(ctx: Contexte, bib: Bibliotheque, langue: "fr" | "en" | null): Sortie {
+  const { agent, msg } = ctx;
+  const centre = agent.business_name || "notre centre";
+  const prenom = prenomDe(msg.contactName);
+  const en = langue === "en";
+  const pub = msg.referral?.headline
+    ? en ? ` You saw our video « ${msg.referral.headline.slice(0, 80)} » — you're in the right place.`
+         : ` Vous avez vu notre vidéo « ${msg.referral.headline.slice(0, 80)} » : vous êtes au bon endroit.`
+    : "";
+  const salut = messageAccueil({
+    nomProfil: msg.contactName,
+    heure: heureLocale(new Date(), Number((agent as { utc_offset?: number }).utc_offset ?? 1)),
+    commerce: centre,
+    texteSecteur: "Bienvenue chez {b} 🌿",
+    personnalise: agent.welcome_message,
+  });
+  const texte = en
+    ? `Hello${prenom ? ` ${prenom}` : ""} 🙏 Welcome to ${centre}.${pub}\n\nI'm Camille, the centre's assistant, and I'm here to answer you at any time, day or night. What brings you here?`
+    : `${salut}${pub}\n\nJe suis Camille, l'assistante du centre, et je suis là pour vous répondre à toute heure, de jour comme de nuit. Qu'est-ce qui vous amène ?`;
+  return {
+    phase: "accueil",
+    blocs: [{
+      type: "boutons",
+      entete: bib.medias.has("video_centre") ? "video_centre" : null,
+      texte,
+      boutons: en ? ["📅 Book a visit", "🌿 See products", "💬 Talk about me"] : ["📅 Prendre RDV", "🌿 Voir produits", "💬 Parler de moi"],
+    }],
+  };
 }
 
 // ── Le tour complet ─────────────────────────────────────────────────────────
@@ -346,6 +398,17 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
   }
 
   const bib = await bibliotheque(ctx);
+  const fil = await historique(agent.id, phone);
+  const premier = !fil.slice(0, -1).some((m) => m.role === "assistant") && !etat.envoyes.length;
+  if (!bib.medias.has("video_centre")) console.log(`[santé] agent ${agent.id} : pas de vidéo d'accueil trouvée`);
+
+  // Nouveau contact qui dit juste bonjour : l'accueil est celui du code.
+  if (premier && !etatTour.alerte && msg.type === "text" && SIMPLE_SALUT.test(texte.trim())) {
+    const s = accueilSante(ctx, bib, etatTour.langue);
+    await envoyer(ctx, s, bib, etatTour);
+    await ecrireEtat(agent.id, phone, etatSuivant(etatTour, s, { alerte: false, humain: false, vocalRate }));
+    return;
+  }
   const contexte = [
     `Prénom (profil WhatsApp) : ${prenomDe(msg.contactName) || "(aucun prénom lisible)"}.`,
     msg.referral?.headline || msg.referral?.body
@@ -362,7 +425,7 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
   // correctement plusieurs consignes système et perdent alors le format.
   let messages = [
     { role: "system", content: `${consigneSante(bib.faits)}\n\nCONTEXTE — ${contexte}` },
-    ...(await historique(agent.id, phone)).slice(0, -1),
+    ...fil.slice(0, -1),
     { role: "user", content: entree + (consignes.length ? `\n[CODE — consignes obligatoires de ce tour]\n- ${consignes.join("\n- ")}` : "") },
   ];
 
@@ -400,6 +463,12 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
         };
   }
   sortie = reparer(sortie, etatTour, repliUrgence(etatTour.langue));
+  // Première réponse à une vraie question : la vidéo du centre vient quand même en tête.
+  if (premier && !etatTour.alerte && bib.medias.has("video_centre")) {
+    const b = sortie.blocs.find((x) => x.type === "boutons") as Extract<Bloc, { type: "boutons" }> | undefined;
+    if (b) b.entete = "video_centre";
+    else sortie.blocs = [{ type: "media", id: "video_centre", legende: "" } as Bloc, ...sortie.blocs].slice(0, 3);
+  }
   if (sortie.humain && !etatTour.humain) {
     await prevenirCommercant(ctx, {
       titre: `${msg.contactName || "+" + phone} attend une personne`,
