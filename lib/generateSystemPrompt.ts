@@ -51,6 +51,8 @@ const SECTOR_CONTEXT: Record<BusinessSector, string> = {
     "preliminary legal information only — always direct to a licensed attorney for specific advice",
   beauty_wellness:
     "treatments, bookings, product recommendations, and wellness guidance",
+  cosmetics:
+    "skincare, haircare, makeup and fragrance products, shades and sizes, skin-type advice — never medical claims",
   food_beverage:
     "menu inquiries, reservations, dietary requirements, delivery, and special offers",
   tech_saas:

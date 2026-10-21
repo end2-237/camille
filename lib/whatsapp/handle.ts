@@ -69,6 +69,8 @@ export type Agent = {
   delivery_delay?: string | null;
   /** Montant minimum d'une commande (articles, hors livraison). */
   min_order?: number | null;
+  /** Le message d'accueil écrit par le commerçant ({b}, {prenom}). */
+  welcome_message?: string | null;
 };
 
 /** Ce qu'une réponse sectorielle reçoit pour travailler. */
@@ -104,7 +106,8 @@ async function trouverAgent(phoneNumberId: string): Promise<Agent | null> {
     COALESCE((to_jsonb(a)->>'delivery_enabled')::boolean, true)  AS delivery_enabled,
     to_jsonb(a)->'delivery_zones'                               AS delivery_zones,
     to_jsonb(a)->>'delivery_delay'                              AS delivery_delay,
-    (to_jsonb(a)->>'min_order')::numeric                        AS min_order`;
+    (to_jsonb(a)->>'min_order')::numeric                        AS min_order,
+    to_jsonb(a)->>'welcome_message'                             AS welcome_message`;
 
   // Un agent ne répond par Meta que s'il est ACTIF et marqué `transport='meta'`.
   // Sans ce second filtre, un agent resté sur camille-core mais qui garde un

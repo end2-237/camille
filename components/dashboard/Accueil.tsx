@@ -55,7 +55,7 @@ async function lire<T>(url: string): Promise<T | null> {
 
 const SECTEURS: Record<string, string> = {
   ecommerce: "Boutique", tech_saas: "High-tech", food_beverage: "Restaurant", hospitality: "Hôtellerie",
-  beauty_wellness: "Beauté", consulting: "Services", healthcare: "Santé", real_estate: "Immobilier",
+  beauty_wellness: "Beauté", cosmetics: "Cosmétique", consulting: "Services", healthcare: "Santé", real_estate: "Immobilier",
   education: "Éducation", legal: "Juridique", finance: "Finance", nonprofit: "Associatif", other: "Autre",
 };
 

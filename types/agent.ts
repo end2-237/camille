@@ -39,6 +39,7 @@ export type BusinessSector =
   | "real_estate"
   | "legal"
   | "beauty_wellness"
+  | "cosmetics"
   | "food_beverage"
   | "tech_saas"
   | "consulting"

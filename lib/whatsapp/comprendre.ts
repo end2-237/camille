@@ -75,6 +75,8 @@ export type FaitsCommerce = {
    * à 23 h un dimanche.
    */
   etat?: string;
+  /** Le secteur : la santé, l'immobilier et la cosmétique ont leurs propres interdits. */
+  secteur?: string | null;
   fraisLivraison?: number | null;
   livraison: boolean;
   devise: string;
@@ -176,6 +178,28 @@ export function faitsNumeriques(
  * Cette fonction est pure, et c'est délibéré : c'est elle qui protège le
  * client, donc c'est elle qu'il faut pouvoir éprouver sans appeler personne.
  */
+// ── La santé : jamais de promesse de guérison ───────────────────────────────
+
+const VERBE_SOIN = /\b(guerit|guerir|gueri|guerison|soigne|soigner|soignent|traite|traiter|traitement|elimine|eliminer|combat|combattre|vient a bout|remede|stoppe|stopper|regle|regler|fait disparaitre|fait partir|debarrasse)\b/;
+const MALADIE = /\b(diabete|hepatite|cancer|fibrome|hypertension|tension|vih|sida|paludisme|palu|hemorroide|prostate|infertilite|sterilite|ulcere|asthme|insuffisance|kyste|tumeur|typhoide|cholesterol|avc|arthrose|rhumatisme|impuissance|faiblesse sexuelle|maladie|infection|mst|ist|covid|acne|eczema|psoriasis|vitiligo)s?\b/;
+
+/**
+ * Le texte promet-il de soigner une maladie ? « Ce thé guérit le diabète »,
+ * « notre produit traite l'hépatite B ».
+ *
+ * C'est interdit par les règles de Meta pour le commerce, et c'est ainsi que
+ * des numéros de produits naturels se font bloquer. C'est surtout dangereux :
+ * un malade qui arrête son traitement sur la foi d'un message WhatsApp.
+ */
+export function promesseMedicale(texte: string): boolean {
+  const t = String(texte || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/['’]/g, " ");
+  return VERBE_SOIN.test(t) && MALADIE.test(t);
+}
+
+const SECTEURS_SANTE = new Set(["healthcare", "cosmetics", "beauty_wellness"]);
+export const REPONSE_SANTE =
+  "Je ne peux pas donner d'avis médical : pour une maladie ou des symptômes, le mieux est d'en parler à un médecin ou à un pharmacien. Je transmets ta question à l'équipe, qui te répondra ici.";
+
 export function valider(
   brut: unknown,
   prods: ProduitConnu[],
@@ -241,6 +265,14 @@ export function valider(
         // relais. On ne peut pas le savoir ici — `humain` peut arriver après
         // dans la liste — donc on note et on tranche à la fin.
         if (promesseNonTenable(texte)) promesse = true;
+        // Santé et cosmétique : une promesse de guérison ne part jamais. On la
+        // remplace par la réponse prudente, et l'équipe est prévenue.
+        if (SECTEURS_SANTE.has(String(faits.secteur || "")) && promesseMedicale(texte)) {
+          rejets.push(`promesse médicale : « ${texte.slice(0, 80)} »`);
+          actions.push({ faire: "repondre", texte: REPONSE_SANTE });
+          if (!actions.some((a) => a.faire === "alerter")) actions.push({ faire: "alerter", sujet: "Question de santé d'un client" });
+          break;
+        }
         actions.push({ faire: "repondre", texte: texte.slice(0, 900) });
         break;
       }
@@ -387,6 +419,37 @@ export function comprehensionDisponible(): boolean {
  * partent APRÈS, en tours utilisateur : ils changent à chaque appel, et les
  * mettre ici casserait le préfixe pour tout le monde.
  */
+/** Ce que chaque secteur interdit en plus des règles communes. Vide pour les autres. */
+function reglesDuSecteur(secteur?: string | null): string {
+  if (secteur === "healthcare") {
+    return `SANTÉ — règles absolues
+• Tu ne diagnostiques pas, tu ne promets JAMAIS de guérir, soigner ou traiter une maladie (diabète, hépatite, fibrome, hypertension, cancer…), tu ne donnes ni posologie ni conseil médical, tu ne dis jamais d'arrêter un traitement.
+• Tu peux présenter les produits du catalogue, leur prix et ce que dit leur fiche, sans rien ajouter.
+• Le client décrit une maladie ou des symptômes : réponds avec douceur que tu ne peux pas donner d'avis médical, conseille un médecin ou un pharmacien, et ajoute {"faire":"alerter","sujet":"question de santé"}.
+• Grossesse, accouchement, enfant, traitement en cours, douleur forte, saignement : conseille de consulter sans attendre (les urgences si c'est grave), et ajoute {"faire":"humain"}.
+
+`;
+  }
+  if (secteur === "real_estate") {
+    return `IMMOBILIER — règles absolues
+• Tu ne promets la disponibilité que d'un bien du catalogue. Tu ne négocies jamais un prix ni des conditions : c'est l'agence qui décide.
+• Pour aider, tu poses UNE question à la fois : achat ou location, quartier, budget, nombre de pièces, date d'entrée.
+• Une visite demandée : ajoute {"faire":"alerter","sujet":"demande de visite : <bien, jour souhaité>"} et dis que l'agence confirme le rendez-vous.
+• Tu ne demandes jamais d'avance, de frais de dossier ou de paiement par WhatsApp : c'est la porte des arnaques.
+
+`;
+  }
+  if (secteur === "cosmetics" || secteur === "beauty_wellness") {
+    return `COSMÉTIQUE — règles absolues
+• Aucune promesse médicale ni de résultat garanti : pas de « guérit l'acné », pas d'« éclaircit à coup sûr ».
+• Pour conseiller, demande le type de peau ou de cheveux, puis montre les produits du catalogue qui correspondent.
+• Allergie, grossesse, peau irritée : conseille de demander l'avis d'un pharmacien ou d'un dermatologue avant usage.
+
+`;
+  }
+  return "";
+}
+
 function consigne(prods: ProduitConnu[], faits: FaitsCommerce, resto: boolean): string {
   const liste = prods
     .slice(0, 60)
@@ -434,7 +497,7 @@ INTERDITS
 • {"faire":"humain"} quand le client a un PROBLÈME MAINTENANT : il attend, il n'a pas reçu, c'est cassé, il est mécontent, il veut parler à quelqu'un. Une question sur le fonctionnement — « qu'est-ce qui se passe si ma commande n'arrive pas ? », « vous remboursez ? », « c'est garanti ? » — n'est PAS un problème : c'est une question, et personne ne s'est encore plaint. Réponds avec repondre si tu sais, et ajoute humain seulement si la réponse engage le commerçant. Faire taire l'agent pour un client qui posait une simple question, c'est le perdre.
 • Tu hésites → baisse certitude. En dessous de 0,55 c'est traité sans toi, ce n'est pas un échec.
 
-FAITS — la seule vérité
+${reglesDuSecteur(faits.secteur)}FAITS — la seule vérité
 ${faits.nom}${faits.adresse ? ` · ${faits.adresse}` : ""}${faits.horaires ? ` · ouvert ${faits.horaires}` : ""}
 On expédie depuis : ${faits.adresse || "(non renseigné)"} — aucune autre zone n'est connue
 Livraison : ${

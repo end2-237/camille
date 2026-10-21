@@ -650,6 +650,44 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("8h30 s'écrit « 8h30 »", closedNotice("8h30 - 18h", 1, a(1)).includes("8h30"));
 }
 
+// ═══ accueil — appeler le client par son nom ════════════════════════════════
+{
+  const { prenomDe, messageAccueil } = await import(`${DIST}/whatsapp/accueil.js`);
+  groupe("accueil — le nom du client dès le premier message");
+  eq("« paul ndjock » → Paul", prenomDe("paul ndjock"), "Paul");
+  eq("« ~Lady B 💄 » → Lady", prenomDe("~Lady B 💄"), "Lady");
+  eq("un numéro n'est pas un prénom", prenomDe("+237 699 12 03 45"), "");
+  eq("« Ets Kamga » → Kamga", prenomDe("Ets Kamga"), "Kamga");
+  eq("« Maman Rose » → Rose", prenomDe("Maman Rose"), "Rose");
+  eq("profil vide → rien", prenomDe(""), "");
+  const SECTEUR = "Bonjour et bienvenue chez {b} 👋 Dites-moi ce que vous cherchez.";
+  eq("nouveau, le soir", messageAccueil({ nomProfil: "Paul", heure: 20, commerce: "BUYTICLE", texteSecteur: SECTEUR }),
+    "Bonsoir Paul ! Bienvenue chez BUYTICLE 👋 Dites-moi ce que vous cherchez.");
+  eq("nouveau, sans nom", messageAccueil({ nomProfil: "😎", heure: 9, commerce: "BUYTICLE", texteSecteur: SECTEUR }),
+    "Bonjour ! Bienvenue chez BUYTICLE 👋 Dites-moi ce que vous cherchez.");
+  chk("habitué : content de le revoir", messageAccueil({ nomProfil: "Awa", heure: 10, commerce: "Ikone", texteSecteur: SECTEUR, habitue: true }).startsWith("Bonjour Awa 😊 Content de te revoir chez Ikone"));
+  eq("message du commerçant avec {prenom}", messageAccueil({ nomProfil: "Awa", heure: 10, commerce: "Ikone", texteSecteur: SECTEUR, personnalise: "Salut {prenom}, ici {b} !" }), "Salut Awa, ici Ikone !");
+  eq("{prenom} sans nom connu : pas de trou", messageAccueil({ nomProfil: "", heure: 10, commerce: "Ikone", texteSecteur: SECTEUR, personnalise: "Salut {prenom}, ici {b} !" }), "Salut, ici Ikone !");
+  eq("message du commerçant sans {prenom} : on salue avant", messageAccueil({ nomProfil: "Awa", heure: 10, commerce: "Ikone", texteSecteur: SECTEUR, personnalise: "Bienvenue chez {b}." }), "Bonjour Awa 👋\nBienvenue chez Ikone.");
+}
+
+// ═══ santé — jamais de promesse de guérison ════════════════════════════════
+{
+  const { promesseMedicale, valider, REPONSE_SANTE } = await import(`${DIST}/whatsapp/comprendre.js`);
+  groupe("santé — aucune promesse de guérir");
+  chk("« ce thé guérit le diabète » est une promesse", promesseMedicale("Ce thé guérit le diabète en 2 semaines"));
+  chk("« notre produit traite l'hépatite B »", promesseMedicale("Notre produit traite l'hépatite B"));
+  chk("« soigne les fibromes »", promesseMedicale("Oui, il soigne les fibromes"));
+  chk("une adresse n'est pas une promesse", !promesseMedicale("Nous sommes à Akwa, ouvert de 9h à 19h"));
+  chk("un prix n'est pas une promesse", !promesseMedicale("La tisane coûte 5000 FCFA"));
+  const faits = { nom: "NL", adresse: "Akwa", horaires: "9h-19h", fraisLivraison: 1000, livraison: true, devise: "XAF", secteur: "healthcare" };
+  const c = valider({ actions: [{ faire: "repondre", texte: "Oui ce produit guérit le diabète" }], certitude: 0.9 }, [], faits, "ça soigne le diabète ?");
+  eq("santé : la promesse est remplacée", c?.actions[0]?.texte, REPONSE_SANTE);
+  chk("santé : l'équipe est prévenue", c?.actions.some((a) => a.faire === "alerter"));
+  const autre = valider({ actions: [{ faire: "repondre", texte: "Oui ce produit guérit le diabète" }], certitude: 0.9 }, [], { ...faits, secteur: "ecommerce" }, "x");
+  chk("hors santé : la garde ne réécrit pas (règle générale ailleurs)", autre?.actions[0]?.texte !== REPONSE_SANTE);
+}
+
 // ═══ quartiers — le barème sans rien taper ═════════════════════════════════
 {
   const { QUARTIERS, lireBareme, ecrireBareme, appliquerTarif } = await import(`${DIST}/quartiers.js`);

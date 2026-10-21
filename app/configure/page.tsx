@@ -41,6 +41,7 @@ const SECTEURS: { value: string; label: string; icone: React.ElementType }[] = [
   { value: "ecommerce",       label: "Boutique",        icone: ShoppingBag },
   { value: "food_beverage",   label: "Restauration",    icone: UtensilsCrossed },
   { value: "beauty_wellness", label: "Beauté",          icone: Sparkles },
+  { value: "cosmetics",       label: "Cosmétique",      icone: Sparkles },
   { value: "healthcare",      label: "Santé",           icone: HeartPulse },
   { value: "hospitality",     label: "Hôtellerie",      icone: Hotel },
   { value: "education",       label: "Formation",       icone: GraduationCap },

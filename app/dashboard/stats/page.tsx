@@ -100,7 +100,7 @@ const PERIODS = [
 const SECTOR_LABELS: Record<string, string> = {
   ecommerce: "E-commerce", hospitality: "Hôtellerie", healthcare: "Santé",
   finance: "Finance", education: "Éducation", real_estate: "Immobilier",
-  legal: "Juridique", beauty_wellness: "Beauté", food_beverage: "Restauration",
+  legal: "Juridique", beauty_wellness: "Beauté", cosmetics: "Cosmétique", food_beverage: "Restauration",
   tech_saas: "Tech/SaaS", consulting: "Conseil", nonprofit: "Associatif", other: "Autre",
 };
 

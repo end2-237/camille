@@ -28,7 +28,7 @@ export const step1Schema = z.object({
   whatsapp_number: e164Phone,
   sector: z.enum([
     "ecommerce","hospitality","healthcare","finance","education",
-    "real_estate","legal","beauty_wellness","food_beverage",
+    "real_estate","legal","beauty_wellness","cosmetics","food_beverage",
     "tech_saas","consulting","nonprofit","other",
   ], { errorMap: () => ({ message: "Secteur requis" }) }),
   description:     z.string().min(20, "Décrivez votre activité (min. 20 caractères)"),

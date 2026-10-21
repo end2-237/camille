@@ -78,6 +78,30 @@ const PROFILES: Partial<Record<BusinessSector, SectorProfile>> = {
     categoriesHint: ["Coiffure", "Onglerie", "Soins", "Maquillage"],
     media: [LOGO, SERVICES, GALLERY, FLYERS],
   },
+  // 🌿 — santé, produits naturels, pharmacie : le catalogue, sans jamais promettre de guérir
+  healthcare: {
+    mode: "catalogue", auto: false, label: "Santé / produits naturels",
+    welcome: "Bienvenue chez {b} 🌿 Dites-moi ce que vous cherchez : je vous présente nos produits, leurs prix et comment les recevoir. Pour une question médicale, votre médecin ou votre pharmacien reste le bon interlocuteur.",
+    quickReplies: ["Voir les produits", "Nous trouver", "Un conseiller"],
+    categoriesHint: ["Tisanes", "Compléments", "Huiles", "Soins"],
+    media: [LOGO, FLYERS],
+  },
+  // 🏠 — chaque bien est une fiche du catalogue ; la visite passe par l'agence
+  real_estate: {
+    mode: "catalogue", auto: false, label: "Immobilier",
+    welcome: "Bienvenue chez {b} 🏠 Vous cherchez à louer ou à acheter ? Dites-moi le quartier et votre budget, je vous montre les biens disponibles et on organise la visite.",
+    quickReplies: ["Location", "Achat", "Programmer une visite"],
+    categoriesHint: ["Studios", "Appartements", "Villas", "Terrains", "Bureaux"],
+    media: [LOGO, GALLERY, FLYERS],
+  },
+  // 💄 — produits de beauté : teintes, contenances, type de peau
+  cosmetics: {
+    mode: "catalogue", auto: false, label: "Cosmétique / parfumerie",
+    welcome: "Bienvenue chez {b} 💄 Soins du visage, cheveux, maquillage, parfums… dites-moi votre type de peau ou ce que vous cherchez, je vous montre les produits et les prix.",
+    quickReplies: ["Voir les produits", "Les nouveautés", "Un conseil"],
+    categoriesHint: ["Visage", "Corps", "Cheveux", "Maquillage", "Parfums"],
+    media: [LOGO, FLYERS],
+  },
   // 🛠️ — services purs, pas de catalogue : prospection par médias
   consulting: {
     mode: "services", auto: false, label: "Entreprise de services",

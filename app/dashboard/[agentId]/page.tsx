@@ -49,6 +49,7 @@ const SECTOR_OPTIONS = [
   { value: "real_estate",     label: "Immobilier" },
   { value: "legal",           label: "Juridique" },
   { value: "beauty_wellness", label: "Beauté & Bien-être" },
+  { value: "cosmetics",       label: "Cosmétique & parfumerie" },
   { value: "food_beverage",   label: "Restauration" },
   { value: "tech_saas",       label: "Tech / SaaS" },
   { value: "consulting",      label: "Conseil" },

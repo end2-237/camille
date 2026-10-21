@@ -71,7 +71,8 @@ import {
   appliquerChoix, creneaux, libelleCreneau, lignesListe, lireChoixTexte, lireHeureDemandee,
   normaliserOptions, ouvertMaintenant, questionsPour, type GroupeOptions,
 } from "./restaurant";
-import { closedNotice, etatMaintenant, lireSemaine, prochaineOuverture, resumeSemaine } from "@/lib/horaires";
+import { messageAccueil } from "./accueil";
+import { closedNotice, etatMaintenant, heureLocale, lireSemaine, prochaineOuverture, resumeSemaine } from "@/lib/horaires";
 import { formatVitrine, formatNaturel, noterEnvoi } from "./repetition";
 import {
   articlesPour, libelleVariante, produitParent, retailerAffiche, varianteDemandee,
@@ -517,6 +518,19 @@ async function marquerAccueilli(agentId: string, phone: string) {
   }
 }
 
+/** Le premier mot, avec le nom du client (profil WhatsApp) et l'heure qu'il est. */
+function bienvenue(ctx: Contexte, habitue: boolean): string {
+  const { agent, msg } = ctx;
+  return messageAccueil({
+    nomProfil: msg.contactName,
+    heure: heureLocale(new Date(), Number((agent as { utc_offset?: number }).utc_offset ?? 1)),
+    commerce: agent.business_name || "",
+    texteSecteur: sectorProfile(agent.sector).welcome || "Bienvenue chez {b} 👋",
+    personnalise: agent.welcome_message,
+    habitue,
+  });
+}
+
 /**
  * L'accueil d'un nouveau venu : on lui demande s'il connaît le principe.
  *
@@ -526,9 +540,8 @@ async function marquerAccueilli(agentId: string, phone: string) {
  */
 async function accueillir(ctx: Contexte, resto: boolean) {
   const { agent, phone } = ctx;
-  const profil = sectorProfile(agent.sector);
   await marquerAccueilli(agent.id, phone);
-  const accueil = (profil.welcome || "Bonjour 👋").replace(/\{b\}/g, agent.business_name || "nous");
+  const accueil = bienvenue(ctx, false);
 
   await meta.sendButtons(
     phone,
@@ -1494,8 +1507,7 @@ async function executer(
  */
 async function revoir(ctx: Contexte, resto: boolean, souvenir: Souvenir) {
   const { agent, phone } = ctx;
-  const profil = sectorProfile(agent.sector);
-  const accueil = (profil.welcome || "Bonjour 👋").replace(/\{b\}/g, agent.business_name || "nous");
+  const accueil = bienvenue(ctx, true);
 
   const dejaVu = await repasser(agent.id, souvenir);
   await meta.sendButtons(
@@ -1546,6 +1558,7 @@ function faitsDe(agent: Contexte["agent"]): FaitsCommerce {
     nom: agent.business_name || "la boutique",
     adresse: agent.location,
     horaires: agent.business_hours,
+    secteur: agent.sector,
     etat: etatMaintenant(agent.business_hours, Number((agent as { utc_offset?: number }).utc_offset ?? 1)),
     fraisLivraison: agent.delivery_fee != null ? Number(agent.delivery_fee) : null,
     livraison: Boolean(agent.delivery_enabled),
