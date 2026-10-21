@@ -156,6 +156,8 @@ async function bibliotheque(ctx: Contexte): Promise<Bibliotheque> {
  * Les fournisseurs, dans l'ordre. Le premier est celui de Camille (Groq) ; le
  * second, facultatif, prend le relais quand le premier sature ou refuse —
  * n'importe quel service compatible OpenAI (IA2_BASE_URL, IA2_KEY, IA2_MODEL).
+ * Essayé avec Gemini : IA2_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai,
+ * IA2_MODEL=gemini-3.1-flash-lite (1 s, format respecté).
  */
 function fournisseurs(): { base: string; cle: string; modele: string }[] {
   const base = (process.env.IA_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/$/, "");
@@ -191,9 +193,12 @@ async function demander(messages: { role: string; content: string }[]): Promise<
       const d = await r.json();
       const brut = d?.choices?.[0]?.message?.content;
       if (!brut) continue;
-      const s = JSON.parse(String(brut).match(/\{[\s\S]*\}/)?.[0] || "{}") as Sortie;
-      // Un bloc mal formé (une phrase nue) devient un texte.
+      const s = JSON.parse(String(brut).match(/\{[\s\S]*\}/)?.[0] || "{}") as Sortie & { message?: unknown; texte?: unknown };
+      // Un bloc mal formé (une phrase nue) devient un texte ; une réponse sans
+      // blocs mais avec un message aussi — le contrôle juge ensuite le fond.
       s.blocs = (Array.isArray(s.blocs) ? s.blocs : []).map((b) => (typeof b === "string" ? { type: "texte", texte: b } : b)) as Bloc[];
+      const seul = typeof s.message === "string" ? s.message : typeof s.texte === "string" ? s.texte : "";
+      if (!s.blocs.length && seul) s.blocs = [{ type: "texte", texte: seul }];
       return s;
     } catch (e) {
       console.warn(`[santé] ${f.modele} :`, (e as Error).message);
@@ -353,9 +358,10 @@ export async function repondreSante(ctx: Contexte): Promise<void> {
   ].filter(Boolean).join(" ");
 
   const consignes = consignesDuTour(texte, etatTour, bib.faits.praticien, msg.vocal ? { compris: !vocalRate } : undefined);
+  // Un seul message système : certains fournisseurs (Gemini) ne lisent pas
+  // correctement plusieurs consignes système et perdent alors le format.
   let messages = [
-    { role: "system", content: consigneSante(bib.faits) },
-    { role: "system", content: `CONTEXTE — ${contexte}` },
+    { role: "system", content: `${consigneSante(bib.faits)}\n\nCONTEXTE — ${contexte}` },
     ...(await historique(agent.id, phone)).slice(0, -1),
     { role: "user", content: entree + (consignes.length ? `\n[CODE — consignes obligatoires de ce tour]\n- ${consignes.join("\n- ")}` : "") },
   ];
