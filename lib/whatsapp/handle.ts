@@ -256,8 +256,12 @@ async function lierSession(agentId: string) {
       [nom]
     );
     if (r.rows.length) return;
+    // user_id est obligatoire : c'est le propriétaire de l'agent. Sans lui
+    // l'insertion échouait à chaque message, et la session restait orpheline
+    // (statistiques et fil de conversation incomplets).
     await query(
-      "INSERT INTO camille.whatsapp_sessions (agent_id, session_name) VALUES ($1, $2)",
+      `INSERT INTO camille.whatsapp_sessions (agent_id, user_id, session_name)
+       SELECT id, user_id, $2 FROM camille.agents WHERE id = $1 AND user_id IS NOT NULL`,
       [agentId, nom]
     );
   } catch (e) {

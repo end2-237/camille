@@ -136,6 +136,24 @@ const INTERDITS: [RegExp, string][] = [
 export type Controle = { defauts: string[] };
 
 /**
+ * Les défauts de forme que reparer() corrige seul : redemander au modèle pour
+ * ceux-là coûte une seconde et un appel (et fait saturer le quota) pour un
+ * résultat que le code obtient sans lui.
+ */
+const MECANIQUES = [
+  "plus d'un bloc d'action", "le bloc d'action doit venir en dernier", "plus de 3 boutons",
+  "bouton de plus de 20", "option de plus de 24", "plus de 3 blocs", "même phrase envoyée deux fois",
+];
+export const seulementMecanique = (defauts: string[]) =>
+  defauts.length > 0 && defauts.every((d) => MECANIQUES.some((m) => d.startsWith(m)));
+
+/**
+ * Quand le modèle donne plusieurs blocs d'action, on garde le plus parlant :
+ * des flyers ou des créneaux valent mieux que trois boutons génériques.
+ */
+const PRIORITE_ACTION: Record<string, number> = { flyers: 5, formulaire_rdv: 4, produits: 3, liste: 2, boutons: 1 };
+
+/**
  * Les défauts d'une réponse. `identifiants` : ce que le modèle a le droit de
  * nommer (médias, pages, produits) ; `chiffres` : les nombres autorisés (prix
  * du catalogue, horaires, adresse) — tout autre nombre est inventé.
@@ -213,7 +231,10 @@ export function reparer(s: Sortie, etat: EtatSante, repliUrgence: string): Sorti
     if (b.type === "texte" && texteAction && (sans(b.texte).includes(texteAction) || texteAction.includes(sans(b.texte).trim()))) continue;
     if (b.type === "reaction" && etat.pauseReaction > 0) continue;
     if (b.type === "media" && etat.envoyes.includes(b.id)) continue;
-    if (ACTIONS.has(b.type)) { action = b; continue; }
+    if (ACTIONS.has(b.type)) {
+      if (!action || (PRIORITE_ACTION[b.type] ?? 0) >= (PRIORITE_ACTION[action.type] ?? 0)) action = b;
+      continue;
+    }
     reste.push(b);
   }
   if (action?.type === "boutons") {
@@ -335,7 +356,9 @@ export function consigneServices(f: FaitsCentre & { metier: string }): string {
 - ${f.centre} — ${f.adresse}. Horaires : ${f.horaires}.
 - Prestations (prix exacts, « sur devis » quand il n'y a pas de prix) : ${f.catalogue || "(à présenter par l'équipe)"}
 - Rendez-vous : le code propose uniquement des créneaux LIBRES ; un créneau choisi est une DEMANDE que l'équipe confirme ici sur WhatsApp. Ne dis jamais « c'est confirmé » toi-même.
-- Devis : tu ne donnes JAMAIS de prix qui n'est pas dans la liste, ni d'estimation, ni de délai d'intervention. Tu rassembles le besoin (quoi, où, depuis quand, photo si utile) et tu transmets avec un bloc demande_devis ; l'équipe répond ici.
+- Devis : tu ne donnes JAMAIS de prix qui n'est pas dans la liste, ni d'estimation, ni de délai d'intervention. Tu rassembles d'abord le besoin et le quartier (une question à la fois), PUIS tu transmets avec UN SEUL bloc demande_devis qui résume tout ; l'équipe répond ici. Jamais deux demande_devis pour le même besoin : une précision qui arrive après se transmet par un nouveau demande_devis seulement si elle change le besoin.
+- Pour obtenir une information à ÉCRIRE (adresse, quartier, détails, photo), pose la question SANS boutons : un bouton « Envoyer adresse » ne sert à rien.
+- Il demande vos offres, vos prestations, vos promos : montre les flyers (bloc flyers) s'il y en a.
 - Contact : l'équipe écrit sur CE numéro WhatsApp. Aucun autre numéro.
 
 ## Ta posture

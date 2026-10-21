@@ -1106,6 +1106,22 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("pas de colonne nom → expliqué", lireCatalogue("a;b\n1;2").ecartees.length, 1);
 }
 
+// ═══ agent services — forme corrigée par le code ═══════════════════════════
+{
+  const R = await import(`${DIST}/whatsapp/sante-regles.js`);
+  groupe("agent services — défauts de forme réparés sans le modèle");
+  chk("deux blocs d'action : mécanique", R.seulementMecanique(["plus d'un bloc d'action (boutons, liste, formulaire, produits) : un seul, en dernier"]));
+  chk("promesse : pas mécanique", !R.seulementMecanique(["plus de 3 boutons", "promesse de résultat : « guérit »"]));
+  chk("aucun défaut : rien à réparer", !R.seulementMecanique([]));
+  const vide = { ...R.ETAT_VIDE };
+  const r = R.reparer({ blocs: [
+    { type: "texte", texte: "Voici nos offres" },
+    { type: "flyers", ids: ["flyer_1"], texte: "Nos offres" },
+    { type: "boutons", texte: "Et maintenant ?", boutons: ["Devis", "RDV"] },
+  ] }, vide, "");
+  eq("les flyers l'emportent sur des boutons", r.blocs.map((b) => b.type), ["texte", "flyers"]);
+}
+
 // ═══ vitrine en ligne — adresse, options, numéro ═══════════════════════════
 {
   groupe("vitrine — adresse, prix des options, numéro du client");

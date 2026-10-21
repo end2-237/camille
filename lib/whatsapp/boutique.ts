@@ -1591,7 +1591,7 @@ async function reserverVisite(ctx: Contexte, quand: Date) {
     titre: `🏠 Visite à confirmer — ${msg.contactName || "+" + phone}`,
     corps: `${quandLisible(quand)} · à confirmer dans Rendez-vous`,
     contenu: { kind: "rendez_vous", id: r.rdv.id, quand: quand.toISOString(), contact: phone, nom: msg.contactName || "" },
-  });
+  }, { toujours: true });
   await meta.sendText(
     phone,
     `C'est noté pour ${quandLisible(quand)} 🏠\nL'agence vous confirme la visite ici très vite. Vous pourrez préciser le bien qui vous intéresse en répondant à ce message.`
@@ -2157,17 +2157,21 @@ async function alerterSansSeTaire(ctx: Contexte, sujet: string) {
  */
 export async function prevenirCommercant(
   ctx: Contexte,
-  alerte: { titre: string; corps: string; contenu: Record<string, unknown> }
+  alerte: { titre: string; corps: string; contenu: Record<string, unknown> },
+  /** toujours : même si une alerte est déjà partie (devis complété, rendez-vous). */
+  opts: { toujours?: boolean } = {}
 ): Promise<void> {
   const { agent, phone } = ctx;
   try {
-    const recent = await query(
-      `SELECT 1 FROM camille.owner_tasks
-        WHERE agent_id = $1 AND phone = $2 AND created_at > NOW() - INTERVAL '6 hours'
-        LIMIT 1`,
-      [agent.id, phone]
-    );
-    if (recent.rows.length) return;
+    if (!opts.toujours) {
+      const recent = await query(
+        `SELECT 1 FROM camille.owner_tasks
+          WHERE agent_id = $1 AND phone = $2 AND created_at > NOW() - INTERVAL '6 hours'
+          LIMIT 1`,
+        [agent.id, phone]
+      );
+      if (recent.rows.length) return;
+    }
     await query(
       `INSERT INTO camille.owner_tasks (agent_id, phone, type, title, content)
        VALUES ($1, $2, 'complaint', $3, $4::jsonb)`,

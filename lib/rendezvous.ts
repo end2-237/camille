@@ -86,6 +86,20 @@ export async function reserver(p: {
   }
 }
 
+/** Ce créneau est-il déjà un rendez-vous actif de ce client ? (il a touché deux fois) */
+export async function dejaReserve(agentId: string, phone: string, debut: Date): Promise<boolean> {
+  try {
+    const r = await query(
+      `SELECT 1 FROM camille.rendez_vous
+        WHERE agent_id = $1 AND phone = $2 AND debut = $3 AND statut IN ('demande','confirme') LIMIT 1`,
+      [agentId, phone, debut.toISOString()]
+    );
+    return r.rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 /** « mardi 21 octobre à 10h30 », à l'heure de Douala. */
 export function quandLisible(d: Date): string {

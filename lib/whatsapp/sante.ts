@@ -21,17 +21,18 @@ import { tracer, sessionMeta, type Contexte } from "./handle";
 import { messageAccueil, prenomDe } from "./accueil";
 import { sectorProfile } from "@/lib/sectorProfiles";
 import { libelleCreneau } from "./restaurant";
-import { proposer, reserver } from "@/lib/rendezvous";
+import { dejaReserve, proposer, reserver } from "@/lib/rendezvous";
 import { etatMaintenant, heureLocale } from "@/lib/horaires";
 import { prevenirCommercant, repondreBoutique } from "./boutique";
 import {
-  ETAT_VIDE, consigneSante, consigneServices, consignesDuTour, controler, detecter, etatSuivant, langueDe, reparer,
+  ETAT_VIDE, consigneSante, consigneServices, consignesDuTour, controler, detecter, etatSuivant, langueDe, reparer, seulementMecanique,
   repliUrgence, vocalCompris, type Bloc, type EtatSante, type FaitsCentre, type Sortie,
 } from "./sante-regles";
 
 // ── L'état de la conversation ───────────────────────────────────────────────
 
 const MEMOIRE = new Map<string, { etat: EtatSante; t: number }>();
+let etatEnPanne = false;
 
 async function lireEtat(agentId: string, phone: string): Promise<EtatSante> {
   try {
@@ -53,7 +54,12 @@ async function ecrireEtat(agentId: string, phone: string, etat: EtatSante) {
        ON CONFLICT (agent_id, phone) DO UPDATE SET etat = EXCLUDED.etat, updated_at = NOW()`,
       [agentId, phone, JSON.stringify(etat)]
     );
-  } catch { /* idem */ }
+  } catch (e) {
+    // Table absente ou droits manquants (migration_droits_app.sql) : on le dit
+    // une fois, sinon l'agent oublie tout à chaque redémarrage sans que personne le sache.
+    if (!etatEnPanne) console.error("[conversation] état non enregistré :", (e as Error).message);
+    etatEnPanne = true;
+  }
 }
 
 /** Les derniers échanges, tels que tracés : le fil que le modèle relit. */
@@ -84,7 +90,7 @@ type Bibliotheque = {
   pages: Map<string, string>;
   chiffres: string[];
   /** id du modèle → la prestation (nom, durée) : sert à réserver la bonne durée. */
-  prestations: Map<string, { productId: string; nom: string; duree: number | null }>;
+  prestations: Map<string, { productId: string; nom: string; duree: number | null; prix: string }>;
   /** Les flyers et prospectus, dans l'ordre de la médiathèque. */
   flyers: string[];
 };
@@ -135,7 +141,7 @@ async function bibliotheque(ctx: Contexte): Promise<Bibliotheque> {
   if (agent.website_url) pages.set("site", agent.website_url);
 
   const produits = new Map<string, string>();
-  const prestations = new Map<string, { productId: string; nom: string; duree: number | null }>();
+  const prestations = new Map<string, { productId: string; nom: string; duree: number | null; prix: string }>();
   const lignes: string[] = [];
   const chiffres = new Set<string>(["30", "24"]);
   try {
@@ -153,8 +159,8 @@ async function bibliotheque(ctx: Contexte): Promise<Bibliotheque> {
     r.rows.forEach((p: { id: string; name: string; price: number | null; retailer: string | null; duree: number | null }, i: number) => {
       const id = `p${i + 1}`;
       if (p.retailer) produits.set(id, p.retailer);
-      prestations.set(id, { productId: p.id, nom: p.name, duree: p.duree });
       const prix = p.price != null && Number(p.price) > 0 ? `${Math.round(Number(p.price)).toLocaleString("fr-FR")} F` : "sur devis";
+      prestations.set(id, { productId: p.id, nom: p.name, duree: p.duree, prix });
       lignes.push(`${id} ${p.name} — ${prix}${p.duree ? ` (${p.duree} min)` : ""}`);
       if (p.duree) chiffres.add(String(p.duree));
       if (p.price != null) chiffres.add(String(Math.round(Number(p.price))));
@@ -270,7 +276,14 @@ async function envoyer(ctx: Contexte, s: Sortie, bib: Bibliotheque, etat: EtatSa
       }
       case "liste":
         await meta.sendList(phone, b.texte, b.bouton || "Choisir", [
-          { title: "Choix", rows: b.options.map((t, i) => ({ id: `${ID}l${i}`, title: t })) },
+          {
+            title: "Choix",
+            // 24 caractères pour le titre (règle de WhatsApp) ; le libellé
+            // complet passe en description plutôt que d'être tronqué.
+            rows: b.options.map((t, i) => ([...t].length > 24
+              ? { id: `${ID}l${i}`, title: `${[...t].slice(0, 23).join("")}…`, description: [...t].slice(0, 72).join("") }
+              : { id: `${ID}l${i}`, title: t })),
+          },
         ]);
         trace = `${b.texte} [${b.options.join(" | ")}]`;
         break;
@@ -334,11 +347,13 @@ async function envoyer(ctx: Contexte, s: Sortie, bib: Bibliotheque, etat: EtatSa
         break;
       }
       case "demande_devis":
+        // Toujours transmis : un complément (le quartier, une photo) arrivé
+        // après la première demande doit aussi parvenir à l'équipe.
         await prevenirCommercant(ctx, {
           titre: `📝 Demande de devis — ${msg.contactName || "+" + phone}`,
           corps: b.resume.slice(0, 160),
           contenu: { kind: "devis", resume: b.resume, contact: phone, nom: msg.contactName || "" },
-        });
+        }, { toujours: true });
         await meta.sendText(phone, b.texte);
         trace = `[devis transmis] ${b.texte}`;
         break;
@@ -413,6 +428,105 @@ function accueilSante(ctx: Contexte, bib: Bibliotheque, langue: "fr" | "en" | nu
   };
 }
 
+// ── Les gestes sans ambiguïté : le code répond, pas le modèle ──────────────
+//
+// « Réserver », « Nos prestations », un flyer touché : la réponse attendue est
+// toujours la même (les créneaux, la liste, les affiches). Le modèle la
+// ratait une fois sur trois — une phrase et trois boutons au lieu des
+// créneaux. Ici elle part à coup sûr, et sans appel au modèle.
+
+const norme = (s: string) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const VEUT_RDV = /\b(rdv|rendez[- ]?vous|reserver|reservation|creneau|creneaux|book|booking|appointment)\b/;
+const VEUT_OFFRES = /\b(prestations?|services?|offres?|promos?|promotions?|flyers?|affiches?|tarifs?|catalogue|nouveautes)\b/;
+
+/** La prestation nommée dans un texte (« une coupe homme », la légende d'un flyer). */
+function prestationNommee(bib: Bibliotheque, texte: string): string | null {
+  const t = norme(texte);
+  let meilleur: { id: string; score: number } | null = null;
+  for (const [id, p] of bib.prestations) {
+    const mots = norme(p.nom).split(/[^a-z0-9]+/).filter((m) => m.length >= 4);
+    const score = mots.filter((m) => t.includes(m)).length;
+    if (score && (!meilleur || score > meilleur.score)) meilleur = { id, score };
+  }
+  return meilleur?.id ?? null;
+}
+
+/** La liste des prestations, pour choisir celle à réserver (sa durée compte). */
+async function listePrestations(ctx: Contexte, bib: Bibliotheque, en: boolean, intro: string) {
+  const { agent, phone } = ctx;
+  const toutes = [...bib.prestations.entries()];
+  const lignes = toutes.slice(0, toutes.length > 10 ? 9 : 10).map(([id, p]) => ({
+    id: `${ID}p:${id}`,
+    title: [...p.nom].length > 24 ? `${[...p.nom].slice(0, 23).join("")}…` : p.nom,
+    description: [p.prix, p.duree ? `${p.duree} min` : ""].filter(Boolean).join(" · ").slice(0, 72),
+  }));
+  if (toutes.length > 10) lignes.push({ id: `${ID}p:`, title: en ? "Something else" : "Autre prestation", description: "" });
+  await meta.sendList(phone, intro, en ? "Choose" : "Choisir", [{ title: en ? "Our services" : "Nos prestations", rows: lignes }]);
+  await tracer(agent.id, phone, "assistant", `${intro} [prestations ${toutes.slice(0, 10).map(([, p]) => p.nom).join(" | ")}]`);
+}
+
+/** true si le geste a été traité ici. */
+async function gesteDirect(ctx: Contexte, bib: Bibliotheque, etat: EtatSante, profil: Profil, texte: string): Promise<boolean> {
+  const { msg } = ctx;
+  const en = etat.langue === "en";
+  const services = profil === "services";
+  const choix = msg.choiceId || "";
+  const t = norme(texte);
+  const court = t.length <= 60;
+
+  const creneaux = async (pid: string | null, intro?: string) => {
+    const nom = pid ? bib.prestations.get(pid)?.nom : null;
+    const s: Sortie = { blocs: [{
+      type: "formulaire_rdv", prestation: pid || undefined,
+      texte: intro || (en ? `Pick the time that suits you${nom ? ` for ${nom}` : ""} 👇 The team confirms here.` : `Choisissez le moment qui vous arrange${nom ? ` pour ${nom}` : ""} 👇 L'équipe vous confirme ici.`),
+    }] };
+    await envoyer(ctx, s, bib, etat);
+    await ecrireEtat(ctx.agent.id, ctx.phone, etatSuivant(etat, s, { alerte: false, humain: false, vocalRate: null }));
+    return true;
+  };
+  const choisirPrestation = async () => {
+    await listePrestations(ctx, bib, en, en ? "Which service would you like to book? 👇" : "Quelle prestation souhaitez-vous réserver ? 👇");
+    await ecrireEtat(ctx.agent.id, ctx.phone, { ...etat, accueilli: true });
+    return true;
+  };
+
+  // Une prestation choisie dans la liste : ses créneaux, à sa durée.
+  if (choix.startsWith(`${ID}p:`)) return creneaux(choix.slice(`${ID}p:`.length) || null);
+
+  // « Réserver » sur une carte de flyer : la prestation du flyer si on la reconnaît.
+  if (choix.startsWith(`${ID}f:`) && choix.endsWith(":rdv")) {
+    const id = choix.split(":")[2];
+    const pid = prestationNommee(bib, bib.medias.get(id)?.legende || "");
+    if (pid || !services || bib.prestations.size <= 1) return creneaux(pid);
+    return choisirPrestation();
+  }
+  if (choix.startsWith(`${ID}rdv:`) || choix.startsWith(`${ID}f:`)) return false;
+
+  // « Prendre RDV », « je veux un rendez-vous (pour une coupe) ».
+  // Annuler ou déplacer un rendez-vous n'est pas en prendre un : au modèle (et à l'équipe).
+  if (court && VEUT_RDV.test(t) && !/\b(annul|deplac|report|decal|change)/.test(t)) {
+    const pid = prestationNommee(bib, texte);
+    if (pid || !services || bib.prestations.size <= 1) return creneaux(pid);
+    return choisirPrestation();
+  }
+
+  // « Nos prestations », « vos offres », « les promos » : les flyers, sinon la liste.
+  if (services && ((court && VEUT_OFFRES.test(t)) || (msg.type === "interactive" && /prestations|services/.test(t)))) {
+    if (bib.flyers.length) {
+      const s: Sortie = { blocs: [{ type: "flyers", ids: bib.flyers, texte: en ? "Here's what we offer right now 👇" : "Voici ce qu'on vous propose en ce moment 👇" }] };
+      await envoyer(ctx, s, bib, etat);
+      await ecrireEtat(ctx.agent.id, ctx.phone, etatSuivant(etat, s, { alerte: false, humain: false, vocalRate: null }));
+      return true;
+    }
+    if (bib.prestations.size) {
+      await listePrestations(ctx, bib, en, en ? "Here are our services 👇 Pick one to book it." : "Voici nos prestations 👇 Touchez-en une pour la réserver.");
+      await ecrireEtat(ctx.agent.id, ctx.phone, { ...etat, accueilli: true });
+      return true;
+    }
+  }
+  return false;
+}
+
 // ── Le tour complet ─────────────────────────────────────────────────────────
 
 /** L'agent santé & bien-être. */
@@ -464,6 +578,9 @@ async function repondreConversation(ctx: Contexte, profil: Profil): Promise<void
 
   const bib = await bibliotheque(ctx);
 
+  // Réserver, voir les offres, un flyer touché : réponse du code, à coup sûr.
+  if (!etatTour.alerte && !etatTour.humain && !msg.vocal && (await gesteDirect(ctx, bib, etatTour, profil, texte))) return;
+
   // Un créneau choisi : il est RÉSERVÉ (sans chevauchement possible), et
   // l'équipe le confirme depuis la section Rendez-vous.
   let entree: string;
@@ -482,8 +599,11 @@ async function repondreConversation(ctx: Contexte, profil: Profil): Promise<void
         titre: `📅 Rendez-vous à confirmer — ${msg.contactName || "+" + phone}`,
         corps: `${libelle}${prest ? ` · ${prest.nom}` : ""} · à confirmer dans Rendez-vous`,
         contenu: { kind: "rendez_vous", id: r.rdv.id, quand: quand.toISOString(), libelle, contact: phone, nom: msg.contactName || "" },
-      });
+      }, { toujours: true });
       entree = `CRÉNEAU RÉSERVÉ : ${libelle}${prest ? ` (${prest.nom})` : ""}. C'est une DEMANDE enregistrée : l'équipe la confirme ici sur WhatsApp. Remercie chaleureusement, dis que le créneau est bien noté et que l'équipe confirme ici très vite ; ne dis PAS « c'est confirmé » ni « nous vous attendons ». Propose la carte s'il ne l'a pas encore.`;
+    } else if (r.raison === "pris" && (await dejaReserve(agent.id, phone, quand))) {
+      // Il a touché deux fois le même créneau : c'est déjà le sien.
+      entree = `CE CRÉNEAU (${libelle}) EST DÉJÀ RÉSERVÉ POUR CETTE PERSONNE (elle a touché deux fois). Rassure-la simplement : c'est bien noté, l'équipe confirme ici. Ne propose pas d'autres créneaux.`;
     } else if (r.raison === "pris") {
       entree = `LE CRÉNEAU ${libelle} VIENT D'ÊTRE PRIS par quelqu'un d'autre. Excuse-toi simplement et repropose des créneaux libres avec un bloc formulaire_rdv${pid ? ` (prestation ${pid})` : ""}.`;
     } else {
@@ -548,7 +668,12 @@ async function repondreConversation(ctx: Contexte, profil: Profil): Promise<void
     sortie = s;
     const defauts = controler(s, etatTour, autorise);
     if (!defauts.length) break;
-    console.log(`[santé] réponse refusée (${essai + 1}) :`, defauts.join(" ; "));
+    // Un défaut de forme seulement : reparer() le corrige sans redemander.
+    if (seulementMecanique(defauts)) {
+      console.log(`[${profil}] forme corrigée par le code :`, defauts.join(" ; "));
+      break;
+    }
+    console.log(`[${profil}] réponse refusée (${essai + 1}) :`, defauts.join(" ; "));
     messages = [
       ...messages,
       { role: "assistant", content: JSON.stringify(s) },
