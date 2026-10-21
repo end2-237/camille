@@ -40,6 +40,7 @@ export type Action =
   | { faire: "retrait" }
   | { faire: "accueil" }
   | { faire: "flyers" }
+  | { faire: "visite" }
   | { faire: "animations"; activer: boolean };
 
 export type Comprehension = {
@@ -232,6 +233,11 @@ export function valider(
       case "retrait":
       case "accueil":
         actions.push({ faire: x.faire } as Action);
+        break;
+
+      case "visite":
+        // Immobilier seulement : ailleurs, une « visite » n'a pas d'agenda.
+        if (faits.secteur === "real_estate") actions.push({ faire: "visite" });
         break;
 
       case "flyers":
@@ -442,7 +448,7 @@ function reglesDuSecteur(secteur?: string | null): string {
     return `IMMOBILIER — règles absolues
 • Tu ne promets la disponibilité que d'un bien du catalogue. Tu ne négocies jamais un prix ni des conditions : c'est l'agence qui décide.
 • Pour aider, tu poses UNE question à la fois : achat ou location, quartier, budget, nombre de pièces, date d'entrée.
-• Une visite demandée : ajoute {"faire":"alerter","sujet":"demande de visite : <bien, jour souhaité>"} et dis que l'agence confirme le rendez-vous.
+• Une visite demandée : utilise {"faire":"visite"} — il reçoit la liste des créneaux libres de l'agence et choisit lui-même ; l'agence confirme ensuite. Ne propose jamais d'heure toi-même.
 • Tu ne demandes jamais d'avance, de frais de dossier ou de paiement par WhatsApp : c'est la porte des arnaques.
 
 `;
@@ -483,7 +489,8 @@ Tu as une boîte à outils. Chaque outil PRODUIT quelque chose chez le client �
 {"faire":"humain"} → passe la main à l'équipe, et tu te tais COMPLÈTEMENT après : ce client ne reçoit plus aucune réponse de toi, même s'il demande autre chose. N'utilise cet outil que si le client a vraiment besoin d'une personne.
 {"faire":"alerter","sujet":"..."} → prévient le commerçant, et TU CONTINUES à parler. C'est l'outil des engagements : tu promets que l'équipe confirmera quelque chose, et quelqu'un est réellement averti. Préfère-le à humain partout où tu peux encore être utile.
 {"faire":"accueil"} → une salutation, rien de plus à faire.
-${faits.affiches?.length ? `{"faire":"flyers"} → envoie nos affiches du moment en carrousel (voir AFFICHES). Quand il demande les promos, les offres, les nouveautés, « vous avez quoi en ce moment ? ».
+${faits.secteur === "real_estate" ? `{"faire":"visite"} → envoie les créneaux libres de l'agence pour programmer une visite.
+` : ""}${faits.affiches?.length ? `{"faire":"flyers"} → envoie nos affiches du moment en carrousel (voir AFFICHES). Quand il demande les promos, les offres, les nouveautés, « vous avez quoi en ce moment ? ».
 ` : ""}{"faire":"animations","activer":false} → il ne veut plus des autocollants animés (« trop de gifs », « arrête les stickers »). "activer":true s'il les redemande. Confirme-lui avec repondre.
 
 COMBINER est normal, et souvent meilleur : un prix se répond ET se montre (repondre + montrer), « des écouteurs, et vous livrez ? » c'est montrer + repondre. Mets les outils dans l'ordre utile.

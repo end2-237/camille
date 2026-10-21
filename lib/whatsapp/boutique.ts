@@ -73,6 +73,7 @@ import {
 } from "./restaurant";
 import { messageAccueil } from "./accueil";
 import { envoyerFlyers, flyersDe } from "./flyers";
+import { proposer, quandLisible, reserver } from "@/lib/rendezvous";
 import { closedNotice, etatMaintenant, heureLocale, lireSemaine, prochaineOuverture, resumeSemaine } from "@/lib/horaires";
 import { formatVitrine, formatNaturel, noterEnvoi } from "./repetition";
 import {
@@ -102,6 +103,8 @@ const B = {
   encore: "cam:encore",
   asap: "cam:asap",
   plustard: "cam:plustard",
+  /** Préfixe d'un créneau de visite (immobilier) : « cam:visite:<ms> ». */
+  visite: "cam:visite:",
   /** Préfixe d'un bouton de flyer : « cam:flyer:<id>:cmd|info ». */
   flyer: "cam:flyer:",
   /** Préfixe d'un créneau choisi : « cam:heure:<ms> ». */
@@ -1450,6 +1453,7 @@ async function executer(
         break;
 
       case "flyers":      await montrerFlyers(ctx, resto); break;
+      case "visite":      await proposerVisite(ctx); break;
       case "mode_emploi": await envoyerTuto(ctx, resto); break;
       case "infos":       await donnerInfos(ctx); break;
       case "humain":      await passerLaMain(ctx); break;
@@ -1557,6 +1561,44 @@ async function orienterNouveau(ctx: Contexte, resto: boolean) {
 }
 
 /** Les faits du commerce, tels que le modèle est autorisé à les citer. */
+/**
+ * Immobilier : les créneaux de visite libres de l'agence. La visite prend la
+ * durée réglée dans Rendez-vous ; deux visites ne se chevauchent jamais.
+ */
+async function proposerVisite(ctx: Contexte, intro = "Choisissez le moment de la visite 👇") {
+  const { agent, phone } = ctx;
+  const libres = await proposer(agent.id, agent.business_hours, undefined, 9);
+  if (!libres.length) {
+    await alerterSansSeTaire(ctx, "demande de visite (agenda complet)");
+    return;
+  }
+  await meta.sendList(phone, `${intro}\nL'agence confirme ensuite ici même.`, "Choisir l'heure", [
+    { title: "Créneaux libres", rows: libres.map((d) => ({ id: `${B.visite}${d.getTime()}`, title: libelleCreneau(d) })) },
+  ]);
+  await tracer(agent.id, phone, "assistant", "[visite] créneaux proposés");
+}
+
+async function reserverVisite(ctx: Contexte, quand: Date) {
+  const { agent, msg, phone } = ctx;
+  const r = await reserver({ agentId: agent.id, phone, nom: msg.contactName || null, debut: quand, prestation: "Visite", source: "whatsapp" });
+  if (!r.ok) {
+    if (r.raison === "pris") return proposerVisite(ctx, "Ce créneau vient d'être pris 🙏 En voici d'autres 👇");
+    if (r.raison === "passe") return proposerVisite(ctx, "Ce créneau est déjà passé. Choisissez-en un autre 👇");
+    await alerterSansSeTaire(ctx, `demande de visite (${quandLisible(quand)}) non enregistrée`);
+    return;
+  }
+  await prevenirCommercant(ctx, {
+    titre: `🏠 Visite à confirmer — ${msg.contactName || "+" + phone}`,
+    corps: `${quandLisible(quand)} · à confirmer dans Rendez-vous`,
+    contenu: { kind: "rendez_vous", id: r.rdv.id, quand: quand.toISOString(), contact: phone, nom: msg.contactName || "" },
+  });
+  await meta.sendText(
+    phone,
+    `C'est noté pour ${quandLisible(quand)} 🏠\nL'agence vous confirme la visite ici très vite. Vous pourrez préciser le bien qui vous intéresse en répondant à ce message.`
+  );
+  await tracer(agent.id, phone, "assistant", `[visite demandée] ${quandLisible(quand)}`);
+}
+
 /** Les flyers de la médiathèque, en carrousel. false s'il n'y en a aucun. */
 async function montrerFlyers(ctx: Contexte, resto: boolean): Promise<boolean> {
   const { agent, phone } = ctx;
@@ -1717,6 +1759,9 @@ export async function repondreBoutique(
       }
     }
 
+    // Un créneau de visite choisi (immobilier).
+    if (id.startsWith(B.visite)) return reserverVisite(ctx, new Date(Number(id.slice(B.visite.length))));
+
     // Un bouton d'une carte de flyer : commander (le catalogue) ou en savoir plus.
     if (id.startsWith(B.flyer)) {
       const [, , fid, quoi] = id.split(":");
@@ -1866,6 +1911,12 @@ export async function repondreBoutique(
         ...(pos ? { lat: pos.lat, lng: pos.lng } : {}),
       });
     }
+  }
+
+  // 3 ter bis. Immobilier : « je veux visiter », « programmer une visite » →
+  // les créneaux libres de l'agence, sans passer par le modèle.
+  if (!enAttente && agent.sector === "real_estate" && /\b(visite|visiter|visites)\b/.test(t)) {
+    return proposerVisite(ctx);
   }
 
   // 3 quater. « Les promos », « vos offres », « l'affiche » : les flyers de la
