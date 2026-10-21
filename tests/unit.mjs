@@ -1106,6 +1106,26 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("pas de colonne nom → expliqué", lireCatalogue("a;b\n1;2").ecartees.length, 1);
 }
 
+// ═══ vitrine en ligne — adresse, options, numéro ═══════════════════════════
+{
+  groupe("vitrine — adresse, prix des options, numéro du client");
+  const { slugDe, slugValide, prixAvecOptions, numeroClient } = await import(`${DIST}/vitrine-regles.js`);
+  eq("adresse tirée du nom", slugDe("Yoos Food — Bonamoussadi !"), "yoos-food-bonamoussadi");
+  eq("accents retirés", slugDe("Pâtisserie Élégance"), "patisserie-elegance");
+  chk("adresse valide", slugValide("yoos-food"));
+  chk("pas de tiret au bout", !slugValide("yoos-"));
+  const g = [
+    { name: "Accompagnement", required: true, choices: [{ label: "Frites", price: 0 }, { label: "Plantain", price: 500 }] },
+    { name: "Piment", required: false, choices: [{ label: "Piment fort", price: 0 }] },
+  ];
+  eq("supplément ajouté au prix", prixAvecOptions(2500, g, [1, -1]), { ok: true, prix: 3000, libelle: "Plantain, Sans piment" });
+  eq("groupe obligatoire manquant", prixAvecOptions(2500, g, [-1, 0]), { ok: false, groupe: "Accompagnement" });
+  eq("sans options", prixAvecOptions(1000, [], undefined), { ok: true, prix: 1000, libelle: "" });
+  eq("numéro local", numeroClient("6 77 45 12 08"), "237677451208");
+  eq("numéro avec +237", numeroClient("+237 699 12 34 56"), "237699123456");
+  eq("numéro invalide", numeroClient("12345"), null);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log(`\n${"═".repeat(66)}`);
 if (echecs.length) {

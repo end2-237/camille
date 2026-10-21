@@ -99,16 +99,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Ambient glow — adapté par le thème */}
           <div
             aria-hidden="true"
+            data-habillage
             className="pointer-events-none fixed inset-x-0 top-0 h-[480px] ambient-glow z-0"
           />
 
-          <Navbar />
+          {/* L'habillage du site Camille s'efface sur une vitrine de commerçant
+              (globals.css, [data-habillage]) — y compris en sous-domaine, où
+              l'adresse vue par le menu est « / ». */}
+          <div data-habillage className="contents"><Navbar /></div>
 
           <div className="relative z-10">{children}</div>
 
-          <Footer />
+          <div data-habillage className="contents"><Footer /></div>
 
-          <CookieBanner />
+          <div data-habillage className="contents"><CookieBanner /></div>
 
           <Toaster
             position="bottom-right"

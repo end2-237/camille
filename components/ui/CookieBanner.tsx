@@ -34,7 +34,7 @@ export function CookieBanner() {
     // Le tableau de bord et l'écran du livreur : on y arrive connecté, donc
     // après être passé par une page publique où l'information a été donnée.
     // Et sur l'écran du livreur, rien ne doit couvrir les boutons du bas.
-    if (chemin.startsWith("/dashboard") || chemin.startsWith("/livraison")) { setVisible(false); return; }
+    if (chemin.startsWith("/dashboard") || chemin.startsWith("/livraison") || chemin.startsWith("/s/") || document.querySelector("[data-vitrine]")) { setVisible(false); return; }
     try {
       if (localStorage.getItem(CLE) || localStorage.getItem(ANCIENNE_CLE)) return;
     } catch {

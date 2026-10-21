@@ -1,32 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Les tâches de fond du serveur Camille.
+// Les tâches de fond du serveur Camille (lib/taches.ts).
 //
-// Next.js appelle register() une fois au démarrage. On y lance le tour
-// horaire du bilan du matin : chaque agent reçoit le sien à son heure
-// d'ouverture. Pas besoin de n8n pour ça — un oubli de configuration ne doit
-// pas priver tous les commerçants de leur bilan.
+// Next.js appelle register() une fois au démarrage, et compile ce fichier
+// aussi pour le runtime « edge » (à cause de middleware.ts). L'import vit donc
+// DANS le bloc nodejs : c'est la forme que Next sait élaguer, et la base de
+// données ou web-push ne sont jamais embarqués côté edge.
 //
 // CAMILLE_TACHES=0 coupe les tâches (une seconde instance, un test local).
 // ─────────────────────────────────────────────────────────────────────────────
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  if (process.env.CAMILLE_TACHES === "0" || process.env.NODE_ENV !== "production") return;
-
-  const { envoyerBilans } = await import("./lib/bilan");
-  const tour = () => envoyerBilans().catch((e) => console.error("[taches] bilan :", (e as Error).message));
-
-  // Au début de chaque heure (+2 min), pour tomber pile sur les ouvertures.
-  const attente = ((62 - new Date().getUTCMinutes()) % 60) * 60_000;
-  setTimeout(() => {
-    tour();
-    setInterval(tour, 3600_000);
-  }, attente || 60_000);
-
-  // Les rappels de rendez-vous : toutes les 10 minutes.
-  const { rappelerRendezVous } = await import("./lib/rendezvous");
-  setInterval(() => {
-    rappelerRendezVous()
-      .then((n) => { if (n) console.log(`[taches] ${n} rappel(s) de rendez-vous envoyé(s)`); })
-      .catch((e) => console.error("[taches] rappels :", (e as Error).message));
-  }, 10 * 60_000);
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    if (process.env.CAMILLE_TACHES === "0" || process.env.NODE_ENV !== "production") return;
+    const { lancerTaches } = await import("./lib/taches");
+    lancerTaches();
+  }
 }

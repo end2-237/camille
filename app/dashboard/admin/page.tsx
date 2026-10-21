@@ -638,7 +638,9 @@ function DemandesSite() {
   if (!liste.length) return null;
 
   async function maj(id: string, statut: string) {
-    const url = statut === "en_ligne" ? prompt("Adresse du site (https://…)") || undefined : undefined;
+    const url = statut === "en_ligne"
+      ? prompt("Adresse d'un site sur mesure (https://…).\nLaisser vide pour ouvrir la vitrine Camille.") || undefined
+      : undefined;
     const r = await fetch("/api/admin/sites", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders() },

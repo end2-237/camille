@@ -468,3 +468,7 @@ body {
 @media (display-mode: standalone) {
   body:not(:has(.coq)) { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
+
+/* Vitrine d'un commerçant (/s/<adresse> ou son sous-domaine) : sans le menu,
+   le pied de page ni le bandeau de Camille. */
+body:has([data-vitrine]) [data-habillage] { display: none !important; }
