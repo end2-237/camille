@@ -10,7 +10,7 @@ import { RESSORT } from "@/components/dashboard/coquille/Entete";
 import { toast } from "sonner";
 import { JOURS, optImage, optValue, type OptionGroup, type Product } from "@/components/catalog/ProductCard";
 import { authHeaders } from "@/lib/auth-client";
-import { sertDesRepas } from "@/lib/sectorProfiles";
+import { sectorProfile, sertDesRepas } from "@/lib/sectorProfiles";
 
 type Draft = Omit<Partial<Product>, "price" | "price_max" | "stock" | "min_order"> & {
   price?: string | number | null;
@@ -18,6 +18,8 @@ type Draft = Omit<Partial<Product>, "price" | "price_max" | "stock" | "min_order
   stock?: string | number | null;
   min_order?: string | number | null;
   tagsStr?: string;
+  /** Durée de la prestation, en minutes (rendez-vous). */
+  duree_min?: string | number | null;
 };
 
 const EMPTY: Draft = { name: "", description: "", currency: "XAF", min_order: 1, active: true, tagsStr: "" };
@@ -34,6 +36,8 @@ export default function CatalogPage() {
   // Le menu du jour ne concerne que la restauration : ailleurs, l'interrupteur
   // n'apparaît pas du tout.
   const [restauration, setRestauration] = useState(false);
+  // Secteurs à rendez-vous : chaque prestation peut avoir sa durée.
+  const [rendezVous, setRendezVous] = useState(false);
 
   // Construit après le montage : le serveur ne connaît pas l'adresse du site
   // (sinon le lien diffère entre le rendu serveur et le navigateur).
@@ -90,7 +94,9 @@ export default function CatalogPage() {
       try {
         const r = await fetch(`/api/agents/${agentId}`, { headers: { ...authHeaders() } });
         const d = await r.json();
-        setRestauration(sertDesRepas(d?.agent?.business_context?.sector));
+        const secteur = d?.agent?.business_context?.sector;
+        setRestauration(sertDesRepas(secteur));
+        setRendezVous(sectorProfile(secteur).mode === "services" || secteur === "healthcare" || secteur === "real_estate");
       } catch {
         /* secteur inconnu : on n'affiche pas l'interrupteur, c'est le bon défaut */
       }
@@ -149,6 +155,9 @@ export default function CatalogPage() {
       product_url: (editing.product_url ?? "").trim() || null,
       active: editing.active ?? true,
       daily_menu: restauration ? editing.daily_menu ?? false : undefined,
+      // Envoyée seulement en secteur à rendez-vous : ailleurs la colonne peut
+      // ne pas exister encore, et l'enregistrement échouerait pour rien.
+      duree_min: rendezVous ? (editing.duree_min === "" || editing.duree_min == null ? null : Number(editing.duree_min)) : undefined,
       available_days: restauration
         ? (editing.available_days ?? []).filter((j) => j >= 1 && j <= 6).sort()
         : undefined,
@@ -338,6 +347,16 @@ export default function CatalogPage() {
                 <Field label="Stock (vide = non suivi)"><input className="cl-input" type="number" value={editing.stock ?? ""} onChange={(e) => setEditing({ ...editing, stock: e.target.value })} placeholder="12" /></Field>
                 <Field label="Commande min."><input className="cl-input" type="number" value={editing.min_order ?? 1} onChange={(e) => setEditing({ ...editing, min_order: Number(e.target.value) })} /></Field>
               </div>
+              {rendezVous && (
+                <Field label="Durée du rendez-vous (minutes, vide = durée par défaut)">
+                  <select className="cl-input" value={editing.duree_min ?? ""} onChange={(e) => setEditing({ ...editing, duree_min: e.target.value })}>
+                    <option value="">Durée par défaut (réglage Rendez-vous)</option>
+                    {[15, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 480].map((m) => (
+                      <option key={m} value={m}>{m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}` : ""}`}</option>
+                    ))}
+                  </select>
+                </Field>
+              )}
               <Field label="Image du produit">
                 <div className="flex items-center gap-3">
                   <div

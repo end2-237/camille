@@ -94,6 +94,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       { status: 500 }
     );
   }
+  // La durée d'une prestation (rendez-vous) : à part, pour qu'une base sans
+  // migration_rendezvous.sql crée quand même le produit.
+  if (b.duree_min != null && b.duree_min !== "" && r.rows[0]) {
+    const d = coerce("duree_min", b.duree_min);
+    await query(`UPDATE camille.products SET duree_min = $1 WHERE id = $2`, [d, r.rows[0].id]).catch(() => {});
+    r.rows[0].duree_min = d;
+  }
   // Le catalogue doit être UNIQUE : un article créé dans Camille part chez
   // Meta sans que le commerçant ait un second geste à faire. En arrière-plan,
   // parce que la création a déjà réussi — la faire échouer parce que Meta n'a

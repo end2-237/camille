@@ -21,4 +21,12 @@ export async function register() {
     tour();
     setInterval(tour, 3600_000);
   }, attente || 60_000);
+
+  // Les rappels de rendez-vous : toutes les 10 minutes.
+  const { rappelerRendezVous } = await import("./lib/rendezvous");
+  setInterval(() => {
+    rappelerRendezVous()
+      .then((n) => { if (n) console.log(`[taches] ${n} rappel(s) de rendez-vous envoyé(s)`); })
+      .catch((e) => console.error("[taches] rappels :", (e as Error).message));
+  }, 10 * 60_000);
 }

@@ -43,6 +43,9 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS idx_rendez_vous_agent_debut ON camille.rendez_vous (agent_id, debut);
 
+-- Le rappel envoyé au client avant un rendez-vous confirmé (une seule fois).
+ALTER TABLE camille.rendez_vous ADD COLUMN IF NOT EXISTS rappel_at TIMESTAMPTZ;
+
 ALTER TABLE camille.products ADD COLUMN IF NOT EXISTS duree_min INTEGER;
 
 -- Le compte de l'application (s'il n'est pas propriétaire du schéma).

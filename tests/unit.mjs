@@ -704,6 +704,12 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("à cheval est un chevauchement", chevauche({ debut: h(9), fin: h(10, 15) }, { debut: h(10), fin: h(11) }));
   const dimanche = creneauxLibres({ horaires: "Lun-Sam 9h-12h", occupes: [], duree: 30, maintenant: new Date(Date.UTC(2026, 9, 4, 7)), n: 3, delai: 60 });
   chk("dimanche fermé : premier créneau lundi", dimanche.length && new Date(dimanche[0].getTime() + 3600_000).getUTCDay() === 1);
+
+  const { heureDuRappel } = await import(`${DIST}/creneaux.js`);
+  const quand = (d) => `${new Date(d.getTime() + 3600_000).getUTCDate()}/${loc(d)}`;
+  eq("RDV 15h : rappel à 12h", quand(heureDuRappel(h(15))), "5/12h00");
+  eq("RDV 10h30 : 3 h avant, soit 7h30", quand(heureDuRappel(h(10, 30))), "5/7h30");
+  eq("RDV 9h : rappel la veille à 19h", quand(heureDuRappel(h(9))), "4/19h00");
 }
 
 // ═══ agent santé — ce que le code tient, quoi que dise le modèle ═══════════

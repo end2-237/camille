@@ -68,3 +68,15 @@ export function creneauxLibres(p: {
   }
   return sortie;
 }
+
+/**
+ * Quand rappeler un rendez-vous, à l'heure de Douala : trois heures avant,
+ * jamais avant 7 h ; un rendez-vous du matin (avant 10 h) se rappelle la
+ * veille à 19 h. Personne n'aime un WhatsApp à 6 h pour un rendez-vous à 9 h.
+ */
+export function heureDuRappel(debut: Date, offset = 1): Date {
+  const local = new Date(debut.getTime() + offset * 3600_000);
+  const jour = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - offset * 3600_000;
+  if (local.getUTCHours() < 10) return new Date(jour - 5 * 3600_000); // la veille, 19 h locale
+  return new Date(Math.max(debut.getTime() - 3 * 3600_000, jour + 7 * 3600_000));
+}

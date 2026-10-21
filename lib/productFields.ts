@@ -27,7 +27,7 @@ const JSON_FIELDS = new Set(["tags", "variants", "images", "available_days", "op
 // coquille — arrivait telle quelle jusqu'à Postgres, qui refusait la requête
 // entière. Mieux vaut la traiter comme une case vide que faire échouer tout
 // l'enregistrement pour un caractère.
-const NUMERIQUES = new Set(["price", "price_max", "stock", "min_order", "rating", "sort_order"]);
+const NUMERIQUES = new Set(["price", "price_max", "stock", "min_order", "rating", "sort_order", "duree_min"]);
 
 /** La valeur à passer à Postgres pour ce champ. */
 export function coerce(key: string, value: unknown): unknown {

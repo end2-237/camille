@@ -8,7 +8,7 @@
 // « pris », et d'autres heures.
 // ─────────────────────────────────────────────────────────────────────────────
 import { query } from "@/lib/db";
-import { creneauxLibres, type Occupe } from "@/lib/creneaux";
+import { creneauxLibres, heureDuRappel, type Occupe } from "@/lib/creneaux";
 import { envoyerMeta } from "@/lib/whatsapp/modeles";
 
 export type Statut = "demande" | "confirme" | "annule" | "termine" | "absent";
@@ -119,4 +119,40 @@ export async function changerStatut(agentId: string, id: string, statut: Statut,
   if (!texte) return { ok: true };
   const envoi = await envoyerMeta(agentId, rdv.phone, texte).catch((e: Error) => ({ ok: false, error: e.message }));
   return { ok: true, envoye: envoi.ok, error: envoi.ok ? undefined : `Statut changé, mais le message n'est pas parti : ${envoi.error}` };
+}
+
+/**
+ * Le tour des rappels (toutes les 10 minutes, instrumentation.ts). Chaque
+ * rendez-vous est marqué AVANT l'envoi : deux instances ne rappellent jamais
+ * deux fois le même client.
+ */
+export async function rappelerRendezVous(maintenant = new Date()): Promise<number> {
+  let candidats: (RendezVous & { business_name: string | null; location: string | null })[];
+  try {
+    candidats = (await query(
+      `SELECT r.*, a.business_name, a.location FROM camille.rendez_vous r
+         JOIN camille.agents a ON a.id = r.agent_id
+        WHERE r.statut = 'confirme' AND r.rappel_at IS NULL
+          AND r.debut > $1 AND r.debut < $1::timestamptz + INTERVAL '16 hours'`,
+      [maintenant.toISOString()]
+    )).rows;
+  } catch {
+    return 0; // colonne rappel_at absente : migration_rendezvous.sql
+  }
+  let envoyes = 0;
+  for (const r of candidats) {
+    if (heureDuRappel(new Date(r.debut)).getTime() > maintenant.getTime()) continue;
+    const pris = await query(
+      `UPDATE camille.rendez_vous SET rappel_at = NOW() WHERE id = $1 AND rappel_at IS NULL RETURNING id`, [r.id]
+    ).catch(() => ({ rows: [] }));
+    if (!pris.rows.length) continue;
+    const texte =
+      `⏰ Petit rappel : votre rendez-vous${r.prestation ? ` (${r.prestation})` : ""} chez ${r.business_name || "nous"} ` +
+      `est prévu ${quandLisible(new Date(r.debut))}.${r.location ? `\n📍 ${r.location}` : ""}\n` +
+      `Un empêchement ? Répondez simplement ici, on trouvera un autre moment 🙏`;
+    const e = await envoyerMeta(r.agent_id, r.phone, texte).catch((x: Error) => ({ ok: false, error: x.message }));
+    if (e.ok) envoyes++;
+    else console.warn(`[rappels] rendez-vous ${r.id} : ${e.error}`);
+  }
+  return envoyes;
 }
