@@ -11,7 +11,9 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# --include=dev : Coolify peut passer NODE_ENV=production pendant la construction,
+# ce qui ferait sauter TypeScript, Tailwind et les autres outils de build.
+RUN npm ci --include=dev --no-audit --no-fund
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
