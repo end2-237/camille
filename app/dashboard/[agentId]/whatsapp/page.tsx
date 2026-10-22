@@ -42,6 +42,14 @@ declare global {
   interface Window { FB?: FBSdk; fbAsyncInit?: () => void }
 }
 
+/**
+ * La fenêtre s'est fermée sans code. Le cas le plus fréquent : la personne
+ * n'était pas connectée à Facebook, Facebook lui a fait créer une « clé
+ * d'accès » puis l'a envoyée sur son fil d'actualité, en oubliant WhatsApp.
+ */
+const INTERROMPUE =
+  "La fenêtre de Meta s'est fermée avant la fin. Si Facebook vous a demandé une clé d'accès ou vous a envoyé sur votre fil d'actualité : ouvrez facebook.com dans un autre onglet de ce navigateur, connectez-vous, puis cliquez de nouveau sur « Connecter mon WhatsApp Business ».";
+
 const APP_ID = process.env.NEXT_PUBLIC_META_APP_ID || "";
 const CONFIG_ID = process.env.NEXT_PUBLIC_META_CONFIG_ID || "";
 const GRAPH = process.env.NEXT_PUBLIC_GRAPH_VERSION || "v26.0";
@@ -116,7 +124,7 @@ export default function WhatsappOfficielPage() {
       const FB = await chargerSdk();
       const code = await new Promise<string>((resolve, reject) => {
         FB.login(
-          (r) => (r.authResponse?.code ? resolve(r.authResponse.code) : reject(new Error("Connexion non terminée."))),
+          (r) => (r.authResponse?.code ? resolve(r.authResponse.code) : reject(new Error(INTERROMPUE))),
           {
             config_id: CONFIG_ID,
             response_type: "code",
@@ -389,6 +397,7 @@ function AConnecter({ test, occupe, bloque, onConnecter }: { test: boolean; occu
 
 /** Le guide du commerçant, là où il en a besoin : juste sous le bouton. */
 const AVANT = [
+  "Connectez-vous d'abord à facebook.com dans ce navigateur (sur ordinateur de préférence) : sinon Facebook peut vous demander une clé d'accès et vous perdre sur votre fil d'actualité.",
   "Mettez à jour WhatsApp Business sur votre téléphone, et gardez-le près de vous : vous scannerez un QR code.",
   "Un compte Facebook suffit. Si votre entreprise n'a pas encore de page, Meta la crée pendant la connexion.",
   "Un autre outil (robot, autre plateforme) répond déjà sur ce numéro ? Débranchez-le d'abord, sinon vos clients recevront deux réponses.",
