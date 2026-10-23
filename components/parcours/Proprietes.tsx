@@ -14,6 +14,7 @@ import {
 } from "@/lib/parcours-regles";
 import { estDeclencheur, indexDecl, renommer, supprimerBloc, supprimerDeclencheur } from "./graphe";
 import { COULEURS, ICONES } from "./Canevas";
+import ChampMedia, { type MediasAccueil } from "./ChampMedia";
 
 type Props = {
   p: Parcours;
@@ -21,12 +22,14 @@ type Props = {
   erreurs: Probleme[];
   changer: (f: (q: Parcours) => void) => void;
   onSelection: (id: string | null) => void;
+  agentId: string;
+  accueil: MediasAccueil;
 };
 
 const copie = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 const nettoyer = (s: string) => s.toLowerCase().replace(/[^a-z0-9_-]/g, "");
 
-export default function Proprietes({ p, selection, erreurs, changer, onSelection }: Props) {
+export default function Proprietes({ p, selection, erreurs, changer, onSelection, agentId, accueil }: Props) {
   if (selection && estDeclencheur(selection)) {
     const i = indexDecl(selection);
     const d = p.declencheurs[i];
@@ -36,7 +39,7 @@ export default function Proprietes({ p, selection, erreurs, changer, onSelection
   const i = selection ? p.blocs.findIndex((b) => b.id === selection) : -1;
   if (i < 0) return <ReglagesParcours p={p} changer={changer} />;
   return (
-    <ReglagesBloc key={p.blocs[i].id} p={p} i={i} changer={changer} onSelection={onSelection}
+    <ReglagesBloc key={p.blocs[i].id} p={p} i={i} changer={changer} onSelection={onSelection} agentId={agentId} accueil={accueil}
       erreurs={erreurs.filter((e) => e.chemin === `blocs[${i}]` || e.chemin.startsWith(`blocs[${i}].`))} />
   );
 }
@@ -140,8 +143,9 @@ function ReglagesDeclencheur({ p, i, d, changer, onSelection }: {
 
 // ── Un bloc ─────────────────────────────────────────────────────────────────
 
-function ReglagesBloc({ p, i, erreurs, changer, onSelection }: {
+function ReglagesBloc({ p, i, erreurs, changer, onSelection, agentId, accueil }: {
   p: Parcours; i: number; erreurs: Probleme[]; changer: Props["changer"]; onSelection: Props["onSelection"];
+  agentId: string; accueil: MediasAccueil;
 }) {
   const b = p.blocs[i];
   const [id, setId] = useState(b.id);
@@ -190,9 +194,11 @@ function ReglagesBloc({ p, i, erreurs, changer, onSelection }: {
       </Champ>
 
       {b.type === "texte" && texte("texte", "Message", { long: true, placeholder: "Bonjour {prenom} 👋" })}
-      {(b.type === "image" || b.type === "video") && <>{texte("url", "Adresse (https://…)")}{texte("legende", choix.length ? "Texte du message (obligatoire avec des boutons)" : "Légende", { long: true })}</>}
-      {b.type === "vocal" && texte("url", "Adresse du vocal", { aide: "https://… ou {audio_accueil}" })}
-      {b.type === "document" && <>{texte("url", "Adresse (https://…)")}{texte("nom", "Nom du fichier")}{texte("legende", "Légende")}</>}
+      {(b.type === "image" || b.type === "video" || b.type === "vocal" || b.type === "document") && (
+        <ChampMedia type={b.type} url={b.url} agentId={agentId} accueil={accueil} onChange={(u) => maj((x) => { x.url = u; })} />
+      )}
+      {(b.type === "image" || b.type === "video") && <>{texte("legende", choix.length ? "Texte du message (obligatoire avec des boutons)" : "Légende", { long: true })}</>}
+      {b.type === "document" && <>{texte("nom", "Nom du fichier")}{texte("legende", "Légende")}</>}
       {b.type === "lien" && <>{texte("url", "Adresse (https://…)")}{texte("texte", "Texte avant le lien", { long: true })}</>}
       {b.type === "bouton_lien" && <>{texte("texte", "Message", { long: true })}{texte("libelle", "Texte du bouton (20 max)")}{texte("url", "Adresse (https://…)")}</>}
       {(b.type === "boutons" || b.type === "liste") && <>

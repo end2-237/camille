@@ -20,6 +20,7 @@ import { MODELE_NOLIMIT, MODELE_VIDE, rendreExplicite, valider, type Parcours } 
 import Proprietes from "@/components/parcours/Proprietes";
 import Telephone from "@/components/parcours/Telephone";
 import { disposer } from "@/components/parcours/graphe";
+import type { MediasAccueil } from "@/components/parcours/ChampMedia";
 
 // Le canevas dépend du navigateur (mesures, glisser) : pas de rendu serveur.
 const Canevas = dynamic(() => import("@/components/parcours/Canevas"), { ssr: false, loading: () => <Squelettes n={1} hauteur={600} /> });
@@ -58,6 +59,7 @@ export default function ParcoursPage() {
   const [occupe, setOccupe] = useState<string | null>(null);
   const [testeur, setTesteur] = useState("");
   const [entreprise, setEntreprise] = useState("");
+  const [accueil, setAccueil] = useState<MediasAccueil>({});
 
   const charger = useCallback(async () => {
     const r = await fetch(`/api/agents/${agentId}/parcours`, { headers: { ...authHeaders() } });
@@ -71,7 +73,11 @@ export default function ParcoursPage() {
   useEffect(() => { charger(); }, [charger]);
   useEffect(() => {
     fetch(`/api/agents/${agentId}`, { headers: { ...authHeaders() } })
-      .then((r) => r.json()).then((j) => setEntreprise(j?.agent?.business_name || j?.business_name || j?.agent?.name || ""))
+      .then((r) => r.json()).then((j) => {
+        setEntreprise(j?.agent?.business_name || j?.business_name || j?.agent?.name || "");
+        const caps = j?.agent?.capabilities || {};
+        setAccueil({ audio_accueil: caps.welcome_audio_url || "", video_accueil: caps.welcome_video_url || "" });
+      })
       .catch(() => {});
   }, [agentId]);
 
@@ -237,8 +243,8 @@ export default function ParcoursPage() {
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                   {panneau === "apercu"
-                    ? <Telephone p={p} entreprise={entreprise} onActifs={setActifs} onBloc={(id) => setSelection(id)} />
-                    : <Proprietes p={p} selection={selection} erreurs={verdict?.erreurs || []} changer={changer} onSelection={choisir} />}
+                    ? <Telephone p={p} entreprise={entreprise} accueil={accueil} onActifs={setActifs} onBloc={(id) => setSelection(id)} />
+                    : <Proprietes p={p} selection={selection} erreurs={verdict?.erreurs || []} changer={changer} onSelection={choisir} agentId={agentId} accueil={accueil} />}
                 </div>
               </aside>
             </div>

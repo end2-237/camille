@@ -25,7 +25,10 @@ type Ligne =
   | { de: "agent"; id: number; bloc: Bloc }
   | { de: "note"; id: number; texte: string };
 
-type Props = { p: Parcours; entreprise: string; onBloc?: (id: string) => void; onActifs?: (ids: Set<string>) => void };
+type Props = {
+  p: Parcours; entreprise: string; accueil?: { audio_accueil?: string; video_accueil?: string };
+  onBloc?: (id: string) => void; onActifs?: (ids: Set<string>) => void;
+};
 
 const domaine = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const heure = () => new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -46,7 +49,7 @@ function Format({ texte }: { texte: string }) {
   );
 }
 
-export default function Telephone({ p, entreprise, onBloc, onActifs }: Props) {
+export default function Telephone({ p, entreprise, accueil = {}, onBloc, onActifs }: Props) {
   const [prenom, setPrenom] = useState("Awa");
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const [etat, setEtat] = useState<EtatClient>({ attente: null, mode: null });
@@ -157,7 +160,7 @@ export default function Telephone({ p, entreprise, onBloc, onActifs }: Props) {
             );
             const actif = derniereAgent?.id === l.id && etat.attente === l.bloc.id;
             return (
-              <Bulle key={l.id} b={l.bloc} t={t} actif={actif} onBloc={onBloc}
+              <Bulle key={l.id} b={l.bloc} t={t} actif={actif} onBloc={onBloc} accueil={accueil}
                 onChoix={(c) => envoyer(c.titre, { choixId: c.id })}
                 onListe={() => setListeOuverte(l.bloc)}
                 onPosition={() => envoyer("📍 Position envoyée", { position: true })} />
@@ -195,19 +198,22 @@ export default function Telephone({ p, entreprise, onBloc, onActifs }: Props) {
   );
 }
 
-function Bulle({ b, t, actif, onChoix, onListe, onPosition, onBloc }: {
-  b: Bloc; t: (s?: string) => string; actif: boolean;
+function Bulle({ b, t, actif, onChoix, onListe, onPosition, onBloc, accueil }: {
+  b: Bloc; t: (s?: string) => string; actif: boolean; accueil: { audio_accueil?: string; video_accueil?: string };
   onChoix: (c: { id: string; titre: string }) => void; onListe: () => void; onPosition: () => void; onBloc?: (id: string) => void;
 }) {
   const choix = b.type !== "liste" ? choixDe(b) : [];
-  const media = (u: string) => (MEDIA_AGENT.test(u) ? "" : u);
+  const media = (u: string) => {
+    const m = u.match(MEDIA_AGENT);
+    return m ? (m[1] === "audio" ? accueil.audio_accueil : accueil.video_accueil) || "" : u;
+  };
   const corps = (() => {
     switch (b.type) {
       case "texte": return <Format texte={t(b.texte)} />;
-      case "image": return <>{media(b.url) ? <img src={b.url} alt="" className="wa-media" /> : <div className="wa-media wa-media-vide">Image</div>}{b.legende && <p className="mt-1"><Format texte={t(b.legende)} /></p>}</>;
+      case "image": return <>{media(b.url) ? <img src={media(b.url)} alt="" className="wa-media" /> : <div className="wa-media wa-media-vide">Image</div>}{b.legende && <p className="mt-1"><Format texte={t(b.legende)} /></p>}</>;
       case "video": return <>
         <div className="relative">
-          {media(b.url) ? <video src={`${b.url}#t=0.5`} className="wa-media" preload="metadata" muted playsInline /> : <div className="wa-media wa-media-vide">Vidéo d&apos;accueil de l&apos;agent</div>}
+          {media(b.url) ? <video src={`${media(b.url)}#t=0.5`} className="wa-media" preload="metadata" muted playsInline /> : <div className="wa-media wa-media-vide">Vidéo d&apos;accueil de l&apos;agent</div>}
           <span className="wa-play"><Play className="h-5 w-5" fill="currentColor" /></span>
         </div>
         {b.legende && <p className="mt-1"><Format texte={t(b.legende)} /></p>}
@@ -217,7 +223,7 @@ function Bulle({ b, t, actif, onChoix, onListe, onPosition, onBloc }: {
           <span className="wa-vocal-avatar"><Mic className="h-4 w-4" /></span>
           <Play className="h-5 w-5" fill="#54656F" color="#54656F" />
           <span className="flex flex-1 items-center gap-[2px]">{Array.from({ length: 26 }, (_, i) => <span key={i} className="wa-onde" style={{ height: 4 + ((i * 37) % 17) }} />)}</span>
-          <span className="text-[11px]" style={{ color: "#667781" }}>{MEDIA_AGENT.test(b.url) ? "accueil" : "0:24"}</span>
+          <span className="text-[11px]" style={{ color: "#667781" }}>{MEDIA_AGENT.test(b.url) && !media(b.url) ? "non réglé" : "0:24"}</span>
         </div>
       );
       case "document": return (

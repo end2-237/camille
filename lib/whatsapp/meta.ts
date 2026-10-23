@@ -341,6 +341,26 @@ export async function sendVideoRapide(
   });
 }
 
+/** Le plafond de Meta pour une vidéo ou un vocal envoyé comme tel. */
+export const MEDIA_MAX_OCTETS = 16 * 1024 * 1024;
+const POIDS = new Map<string, { n: number | null; expire: number }>();
+
+/**
+ * Le poids d'un fichier distant, lu dans l'en-tête HTTP (sans le
+ * télécharger), gardé une heure. null si le serveur ne le dit pas.
+ */
+export async function tailleMedia(url: string): Promise<number | null> {
+  const g = POIDS.get(url);
+  if (g && g.expire > Date.now()) return g.n;
+  let n: number | null = null;
+  try {
+    const r = await fetch(url, { method: "HEAD" });
+    n = Number(r.headers.get("content-length")) || null;
+  } catch { n = null; }
+  POIDS.set(url, { n, expire: Date.now() + 3600_000 });
+  return n;
+}
+
 /** Une note vocale par identifiant, comme la vidéo : elle arrive dans l'ordre des messages. */
 export async function sendAudioRapide(to: string, url: string): Promise<MetaResult> {
   const ext = (url.split("?")[0].split(".").pop() || "").toLowerCase();

@@ -212,6 +212,16 @@ async function envoyerBloc(ctx: Contexte, b: Bloc, vars: Record<string, string>,
     case "video": {
       const u = adresse(b.url);
       if (!u) return; // {video_accueil} non réglé : on passe
+      // Au-delà de 16 Mo, Meta refuse la vidéo et le client ne reçoit RIEN.
+      // En document (100 Mo admis), elle arrive quand même, à télécharger.
+      const poids = await meta.tailleMedia(u);
+      if (poids && poids > meta.MEDIA_MAX_OCTETS) {
+        console.warn(`[parcours] vidéo « ${b.id} » de ${Math.round(poids / 1048576)} Mo : envoyée comme document`);
+        r = await meta.sendDocument(to, u, u.split("/").pop()?.split("?")[0] || "video.mp4", t(b.legende) || undefined);
+        if (r.ok && b.boutons?.length) r = await meta.sendButtons(to, t(b.legende) || "👆", boutonsMeta(b.boutons));
+        trace = `[vidéo en document, ${Math.round(poids / 1048576)} Mo] ${b.url}${titres(b.boutons)}`;
+        break;
+      }
       r = b.boutons?.length
         ? await meta.sendButtonsMedia(to, { type: "video", url: u }, t(b.legende), boutonsMeta(b.boutons))
         : await meta.sendVideoRapide(to, u, t(b.legende) || undefined);
