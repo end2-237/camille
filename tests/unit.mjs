@@ -1173,6 +1173,34 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   const menu = P.blocs.find((b) => b.id === "menu");
   eq("titre tapé à la main = bouton", R.choixPour(menu, { texte: "parler au DOCTEUR" })?.id, "docteur");
   eq("numéro du choix", R.choixPour(menu, { texte: "1" })?.id, "docteur");
+  // Le chemin : le même code pour le moteur et le téléphone d'aperçu.
+  const accueil = R.aiguiller(P, { attente: null, mode: null }, { texte: "Bonjour" }, true);
+  eq("nouveau contact → accueil", accueil, { depart: "bienvenue" });
+  const d1 = R.derouler(P, "bienvenue");
+  eq("l'accueil s'arrête sur le menu à boutons", d1.fin, { type: "attente", bloc: "menu" });
+  eq("l'accueil envoie 17 blocs (pauses comprises)", d1.blocs.length, 17);
+  eq("bouton docteur pendant le menu → docteur", R.aiguiller(P, { attente: "menu", mode: null }, { choixId: "docteur" }, false), { depart: "docteur" });
+  eq("autre réponse au menu → sinon (silence)", R.aiguiller(P, { attente: "menu", mode: null }, { texte: "merci" }, false), { depart: "silence" });
+  eq("plus tard, un message ordinaire → silence", R.aiguiller(P, { attente: null, mode: null }, { texte: "ok" }, false), { mode: "silence" });
+  eq("le docteur est un transfert", R.derouler(P, "docteur").fin, { type: "humain", bloc: "docteur" });
+  const X = R.rendreExplicite(P);
+  chk("rendu explicite, le parcours reste valide", R.valider(X).ok, JSON.stringify(R.valider(X).erreurs));
+  eq("rendu explicite : même accueil", R.derouler(X, "bienvenue").blocs.map((b) => b.id), d1.blocs.map((b) => b.id));
+  const sansLien = { ...X, blocs: X.blocs.map((b) => (b.id === "pause_3" ? { ...b, suite: undefined } : b)) };
+  eq("explicite : un bloc sans lien s'arrête là", R.derouler(sansLien, "bienvenue").blocs.at(-1).id, "pause_3");
+  chk("les liens dessinés incluent le choix docteur", R.liensDe(X).some((l) => l.de === "menu" && l.sortie === "choix:docteur" && l.vers === "docteur"));
+  // Des interactions sur n'importe quel message.
+  const I = { schema: 1, liens: "explicites", declencheurs: [{ type: "nouveau_contact", vers: "photo" }], blocs: [
+    { id: "photo", type: "image", url: "https://x.cm/a.jpg", legende: "Notre promo", boutons: [{ id: "oui", titre: "J'en veux", vers: "merci" }], sinon: "ia" },
+    { id: "merci", type: "reaction", emoji: "🙏", suite: "pos" },
+    { id: "pos", type: "position", texte: "Où êtes-vous ?", suite: "fin" },
+    { id: "fin", type: "fin" }, { id: "ia", type: "agent" } ] };
+  chk("image avec boutons + réaction + position : valide", R.valider(I).ok, JSON.stringify(R.valider(I).erreurs));
+  eq("une image à boutons attend le client", R.derouler(I, "photo").fin, { type: "attente", bloc: "photo" });
+  eq("bouton sous l'image → sa suite", R.aiguiller(I, { attente: "photo", mode: null }, { choixId: "oui" }, false), { depart: "merci" });
+  eq("réaction puis demande de position", R.derouler(I, "merci").fin, { type: "attente", bloc: "pos" });
+  eq("position reçue → suite", R.aiguiller(I, { attente: "pos", mode: null }, { position: true }, false), { depart: "fin" });
+  chk("image à boutons sans légende refusée", !R.valider({ ...I, blocs: I.blocs.map((b) => (b.id === "photo" ? { ...b, legende: "" } : b)) }).ok);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

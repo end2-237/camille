@@ -18,8 +18,8 @@ import * as meta from "./meta";
 import { prevenirCommercant } from "./boutique";
 import type { Contexte } from "./handle";
 import {
-  ATTENTE, MEDIA_AGENT, PAUSE_MAX, TERMINAUX, choixPour, declencheurPour, prenomDe, remplir, valider,
-  type Bloc, type Parcours,
+  MEDIA_AGENT, PAUSE_MAX, aiguiller, derouler, prenomDe, remplir, valider,
+  type Bloc, type Choix, type Parcours,
 } from "@/lib/parcours-regles";
 
 type Publie = { version: number; parcours: Parcours };
@@ -111,7 +111,6 @@ async function infosAgent(agentId: string): Promise<{ medias: Record<string, str
 
 // ── L'exécution ─────────────────────────────────────────────────────────────
 
-const PAS_MAX = 40;
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Dernière alerte « un client écrit pendant le silence » (agent:téléphone → instant). */
 const ALERTES_SILENCE = new Map<string, number>();
@@ -127,7 +126,7 @@ export async function executerParcours(ctx: Contexte, tracer: Tracer): Promise<I
   const pub = await parcoursPublie(agent.id);
   if (!pub) return "absent";
   const p = pub.parcours;
-  const index = new Map(p.blocs.map((b, i) => [b.id, i]));
+  const ids = new Set(p.blocs.map((b) => b.id));
 
   let etat: Etat;
   try {
@@ -141,47 +140,21 @@ export async function executerParcours(ctx: Contexte, tracer: Tracer): Promise<I
   // Republié entre-temps : un bloc attendu qui n'existe plus est oublié.
   if (e.version !== pub.version) {
     e.version = pub.version;
-    if (e.attente && !index.has(e.attente)) e.attente = null;
+    if (e.attente && !ids.has(e.attente)) e.attente = null;
   }
 
-  const message = { texte: msg.text, choixId: msg.choiceId };
-  let depart: string | null = null;
-
-  // 1. Il répond aux boutons qu'on lui a posés.
-  if (e.attente) {
-    const bloc = p.blocs[index.get(e.attente) ?? -1];
-    const c = bloc ? choixPour(bloc, message) : null;
-    if (bloc && c) {
-      depart = c.vers || p.blocs[(index.get(bloc.id) ?? -1) + 1]?.id || null;
-    } else if (bloc && (bloc.type === "boutons" || bloc.type === "liste") && bloc.sinon && !declencheurPour(p, message)) {
-      depart = bloc.sinon;
-    }
-    e.attente = null;
-  }
-  // 2. Un mot-clé ou un bouton déclencheur, à tout moment.
-  if (!depart) depart = declencheurPour(p, message)?.vers || null;
-  // 3. Un nouveau contact : l'accueil.
-  if (!depart && nouveau) depart = p.declencheurs.find((d) => d.type === "nouveau_contact")?.vers || null;
-  // 4. Sinon : où il en était (l'IA ou le silence), ou le comportement par défaut.
-  if (!depart) {
-    const mode = e.mode || p.par_defaut || "silence";
-    if (mode === "agent") {
-      e.mode = "agent";
-      await ecrireEtat(agent.id, phone, e).catch(() => {});
-      return "deleguer";
-    }
-    if (mode === "silence" || mode === "fin") {
-      await ecrireEtat(agent.id, phone, e).catch(() => {});
-      alerterSilence(ctx);
-      return "traite";
-    }
-    depart = index.has(mode) ? mode : null;
-    if (!depart) {
-      await ecrireEtat(agent.id, phone, e).catch(() => {});
-      return "traite";
-    }
+  // Le chemin est décidé par le même code que le téléphone d'aperçu.
+  const route = aiguiller(p, e, { texte: msg.text, choixId: msg.choiceId, position: msg.type === "location" }, nouveau);
+  e.attente = null;
+  if ("mode" in route) {
+    e.mode = route.mode;
+    await ecrireEtat(agent.id, phone, e).catch(() => {});
+    if (route.mode === "agent") return "deleguer";
+    alerterSilence(ctx);
+    return "traite";
   }
 
+  const { blocs, fin } = derouler(p, route.depart);
   const infos = await infosAgent(agent.id);
   const vars: Record<string, string> = {
     prenom: prenomDe(msg.contactName),
@@ -189,53 +162,35 @@ export async function executerParcours(ctx: Contexte, tracer: Tracer): Promise<I
     entreprise: agent.business_name || "",
     telephone: `+${phone}`,
   };
-  let issue: Issue = "traite";
-  e.mode = null;
 
-  let courant: string | null = depart;
   let pauseTotale = 0;
-  for (let pas = 0; courant && pas < PAS_MAX; pas++) {
-    const i: number = index.get(courant) ?? -1;
-    const b: Bloc | undefined = p.blocs[i];
-    if (!b) break;
-    const suite: string | null = b.suite || p.blocs[i + 1]?.id || null;
-
+  for (const b of blocs) {
     if (b.type === "pause") {
       const s = Math.min(Math.max(Number(b.secondes) || 0, 0), PAUSE_MAX);
       if (pauseTotale + s <= 90) { pauseTotale += s; await dormir(s * 1000); }
-      courant = suite;
-      continue;
-    }
-    if (b.type === "aller") { courant = b.vers; continue; }
-    if (b.type === "fin") { e.mode = null; break; }
-    if (b.type === "silence") { e.mode = "silence"; break; }
-    if (b.type === "agent") {
-      e.mode = "agent";
-      issue = "deleguer";
-      break;
-    }
-    if (b.type === "humain") {
+    } else if (b.type === "humain") {
       await transfererHumain(ctx, b, vars, infos.proprietaire, tracer);
       e.vars = { ...e.vars, attente_envoyee: false, attente_message: b.attente || "" };
-      // Tant que l'humain a la main, handle.ts fait taire Camille ; une fois
-      // la main rendue, le comportement par défaut du parcours reprend.
-      e.mode = null;
-      break;
+    } else {
+      await envoyerBloc(ctx, b, vars, infos.medias, tracer);
     }
-
-    await envoyerBloc(ctx, b, vars, infos.medias, tracer);
-    if (ATTENTE.includes(b.type)) { e.attente = b.id; break; }
-    if (TERMINAUX.includes(b.type)) break;
-    courant = suite;
   }
+
+  // Tant qu'un humain a la main, handle.ts fait taire Camille ; une fois la
+  // main rendue, le comportement par défaut du parcours reprend (mode null).
+  e.mode = fin.type === "agent" ? "agent" : fin.type === "silence" ? "silence" : null;
+  if (fin.type === "attente") e.attente = fin.bloc;
 
   await ecrireEtat(agent.id, phone, e).catch((err) => console.error("[parcours] état non enregistré :", (err as Error).message));
   // Le parcours se tait sur la réponse d'un client connu : l'équipe doit le savoir.
-  if (e.mode === "silence" && !nouveau) alerterSilence(ctx);
-  return issue;
+  if (e.mode === "silence" && !nouveau && blocs.length === 0) alerterSilence(ctx);
+  return fin.type === "agent" ? "deleguer" : "traite";
 }
 
-/** Un bloc qui parle : texte, média, lien, boutons, liste. */
+const boutonsMeta = (l: Choix[]) => l.map((c) => ({ id: c.id, title: c.titre }));
+const titres = (l?: Choix[]) => (l?.length ? ` [${l.map((c) => c.titre).join(" | ")}]` : "");
+
+/** Un bloc qui parle : texte, média, lien, boutons, liste, interaction. */
 async function envoyerBloc(ctx: Contexte, b: Bloc, vars: Record<string, string>, medias: Record<string, string>, tracer: Tracer) {
   const to = ctx.phone;
   const t = (s?: string) => remplir(s || "", vars);
@@ -246,13 +201,26 @@ async function envoyerBloc(ctx: Contexte, b: Bloc, vars: Record<string, string>,
   let r: meta.MetaResult = { ok: true };
   let trace = "";
   switch (b.type) {
-    case "texte": r = await meta.sendText(to, t(b.texte)); trace = t(b.texte); break;
-    case "image": r = await meta.sendImage(to, adresse(b.url), t(b.legende) || undefined); trace = `[image] ${b.url}`; break;
+    case "texte":
+      r = b.boutons?.length ? await meta.sendButtons(to, t(b.texte), boutonsMeta(b.boutons)) : await meta.sendText(to, t(b.texte));
+      trace = t(b.texte) + titres(b.boutons); break;
+    case "image":
+      r = b.boutons?.length
+        ? await meta.sendButtonsMedia(to, { type: "image", url: adresse(b.url) }, t(b.legende), boutonsMeta(b.boutons))
+        : await meta.sendImage(to, adresse(b.url), t(b.legende) || undefined);
+      trace = `[image] ${b.url}${titres(b.boutons)}`; break;
     case "video": {
       const u = adresse(b.url);
       if (!u) return; // {video_accueil} non réglé : on passe
-      r = await meta.sendVideoRapide(to, u, t(b.legende) || undefined); trace = `[vidéo] ${b.url}`; break;
+      r = b.boutons?.length
+        ? await meta.sendButtonsMedia(to, { type: "video", url: u }, t(b.legende), boutonsMeta(b.boutons))
+        : await meta.sendVideoRapide(to, u, t(b.legende) || undefined);
+      trace = `[vidéo] ${b.url}${titres(b.boutons)}`; break;
     }
+    case "position": r = await meta.sendLocationRequest(to, t(b.texte)); trace = `${t(b.texte)} [position demandée]`; break;
+    case "reaction":
+      if (!ctx.msg.messageId) return;
+      r = await meta.sendReaction(to, ctx.msg.messageId, b.emoji); trace = `[réaction ${b.emoji}]`; break;
     case "vocal": {
       const u = adresse(b.url);
       if (!u) return; // {audio_accueil} non réglé : on passe
