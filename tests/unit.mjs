@@ -1142,6 +1142,39 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("numéro invalide", numeroClient("12345"), null);
 }
 
+// ═══ parcours WhatsApp — validation, variables, déclencheurs ═══════════════
+{
+  groupe("parcours — ce qui empêche de publier, et ce qui aiguille");
+  const R = await import(`${DIST}/parcours-regles.js`);
+  chk("le modèle No Limit est valide", R.valider(R.MODELE_NOLIMIT).ok, JSON.stringify(R.valider(R.MODELE_NOLIMIT).erreurs));
+  chk("le modèle vide est valide", R.valider(R.MODELE_VIDE).ok);
+  const avec = (b) => ({ schema: 1, declencheurs: [{ type: "nouveau_contact", vers: "a" }], blocs: [{ id: "a", type: "fin" }, ...b] });
+  chk("titre de bouton > 20 refusé (Meta refuse tout le message)",
+    !R.valider(avec([{ id: "b", type: "boutons", texte: "x", boutons: [{ id: "c", titre: "Un titre beaucoup trop long" }] }])).ok);
+  chk("4 boutons refusés", !R.valider(avec([{ id: "b", type: "boutons", texte: "x", boutons: [1, 2, 3, 4].map((i) => ({ id: `c${i}`, titre: "ok" })) }])).ok);
+  chk("lien vers un bloc inexistant refusé", !R.valider(avec([{ id: "b", type: "aller", vers: "nulle_part" }])).ok);
+  chk("adresse http (pas https) refusée", !R.valider(avec([{ id: "b", type: "image", url: "http://x.cm/a.jpg" }])).ok);
+  chk("{audio_accueil} accepté", R.valider(avec([{ id: "b", type: "vocal", url: "{audio_accueil}" }])).ok);
+  chk("boucle sans attente refusée",
+    !R.valider({ schema: 1, declencheurs: [], blocs: [{ id: "a", type: "texte", texte: "x", suite: "b" }, { id: "b", type: "aller", vers: "a" }] }).ok);
+  chk("identifiant en double refusé", !R.valider(avec([{ id: "a", type: "fin" }])).ok);
+  chk("pause de 60 s refusée", !R.valider(avec([{ id: "b", type: "pause", secondes: 60 }])).ok);
+  chk("type inconnu (code) refusé", !R.valider(avec([{ id: "b", type: "code", js: "require('child_process')" }])).ok);
+  eq("prénom tiré du profil", R.prenomDe("Jean-Paul K."), "Jean-Paul");
+  eq("prénom absent → vide", R.prenomDe("🙂"), "");
+  eq("variable remplie", R.remplir("Bonjour {prenom} !", { prenom: "Awa" }), "Bonjour Awa !");
+  eq("variable vide : pas d'espace orphelin", R.remplir("Bonjour {prenom}, bienvenue", { prenom: "" }), "Bonjour, bienvenue");
+  eq("valeur par défaut", R.remplir("Bonjour {prenom|cher client}", { prenom: "" }), "Bonjour cher client");
+  eq("variable inconnue laissée telle quelle", R.remplir("{inconnu}", {}), "{inconnu}");
+  const P = R.MODELE_NOLIMIT;
+  eq("2356 → docteur", R.declencheurPour(P, { texte: "2356 j'ai mal au ventre" })?.vers, "docteur");
+  eq("bouton docteur → docteur", R.declencheurPour(P, { choixId: "docteur" })?.vers, "docteur");
+  eq("message ordinaire → aucun déclencheur", R.declencheurPour(P, { texte: "bonjour" }), null);
+  const menu = P.blocs.find((b) => b.id === "menu");
+  eq("titre tapé à la main = bouton", R.choixPour(menu, { texte: "parler au DOCTEUR" })?.id, "docteur");
+  eq("numéro du choix", R.choixPour(menu, { texte: "1" })?.id, "docteur");
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log(`\n${"═".repeat(66)}`);
 if (echecs.length) {

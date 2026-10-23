@@ -25,6 +25,7 @@ import { repondreBoutique, prevenirCommercant } from "./boutique";
 import { repondreSante, repondreServices } from "./sante";
 import { garderMedia } from "./photo";
 import { transcrire, VOCAL_MAX_OCTETS } from "./voix";
+import { executerParcours, pendantHumain } from "./parcours";
 
 export type IncomingMessage = {
   messageId: string;
@@ -378,6 +379,8 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
     console.log("[meta] humain en cours pour", phone, "— l'agent se tait");
     const quoi = msg.type === "audio" ? "🎤 (message vocal)" : msg.text || `(${msg.rawType || msg.type})`;
     await tracer(agent.id, phone, "user", quoi);
+    // Un parcours peut prévoir un « pris en charge, patientez » : une fois.
+    await pendantHumain({ agent, msg, phone }, tracer);
     const cle = `${agent.id}:${phone}`;
     if (agent.user_id && Date.now() - (ALERTES_REPRISE.get(cle) || 0) > 10 * 60_000) {
       ALERTES_REPRISE.set(cle, Date.now());
@@ -454,6 +457,16 @@ async function traiterPourAgent(msg: IncomingMessage, agent: Agent, phone: strin
 
   const ctx: Contexte = { agent, msg, phone };
   const mode = modeDeVente(agent);
+
+  // Forfait Entreprise : un parcours publié passe AVANT le flux simple. Il
+  // répond seul, ou confie ce message à l'IA de l'agent (bloc « agent »).
+  if (!(msg.type === "unsupported" && ["reaction", "sticker", "unknown", "system", "ephemeral"].includes(String(msg.rawType)))) {
+    try {
+      if ((await executerParcours(ctx, tracer)) === "traite") return;
+    } catch (e) {
+      console.error("[parcours] échec, flux simple à la place :", (e as Error).message);
+    }
+  }
 
   // Vidéo, document, contact… : Camille ne sait pas les lire. Le média est
   // gardé pour le commerçant, prévenu, et le client sait que c'est transmis.

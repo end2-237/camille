@@ -341,6 +341,15 @@ export async function sendVideoRapide(
   });
 }
 
+/** Une note vocale par identifiant, comme la vidéo : elle arrive dans l'ordre des messages. */
+export async function sendAudioRapide(to: string, url: string): Promise<MetaResult> {
+  const ext = (url.split("?")[0].split(".").pop() || "").toLowerCase();
+  const type = { ogg: "audio/ogg", opus: "audio/ogg", mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", amr: "audio/amr" }[ext] || "audio/ogg";
+  const id = await mediaId(url, type);
+  if (!id) return sendAudio(to, url);
+  return send(to, { type: "audio", audio: { id } });
+}
+
 /**
  * LE composant natif de demande de position.
  *
