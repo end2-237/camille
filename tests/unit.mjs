@@ -1203,6 +1203,49 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("image à boutons sans légende refusée", !R.valider({ ...I, blocs: I.blocs.map((b) => (b.id === "photo" ? { ...b, legende: "" } : b)) }).ok);
 }
 
+// ═══ lib/video-regles — les vidéos d'accueil No Limit refusées par Meta ═════
+{
+  const V = await import(`${DIST}/video-regles.js`);
+  groupe("video-regles — ce que WhatsApp accepte");
+  const ok = { taille: 11 * 1048576, duree: 95, format: "mov,mp4,m4a,3gp,3g2,mj2", codecVideo: "h264", codecAudio: "aac", pistesAudio: 1, pixels: "yuv420p", largeur: 720, hauteur: 1280 };
+  chk("H.264 / AAC / MP4 de 11 Mo : passe", V.verdictVideo(ok).passe);
+  // Les vrais chiffres renvoyés par Meta le 23 octobre.
+  for (const n of [16995946, 19630101, 20128711]) {
+    const v = V.verdictVideo({ ...ok, taille: n });
+    chk(`${n} octets : refusée mais réparable`, !v.passe && v.reparable && v.raisons[0].includes("16 Mo"), JSON.stringify(v));
+  }
+  chk("16 777 216 octets pile : passe", V.verdictVideo({ ...ok, taille: 16777216 }).passe);
+  chk("HEVC d'iPhone : refusée", V.verdictVideo({ ...ok, codecVideo: "hevc" }).raisons.some((r) => r.includes("HEVC")));
+  chk("10 bits : refusée (écran noir Android)", !V.verdictVideo({ ...ok, pixels: "yuv420p10le" }).passe);
+  chk("WebM / VP9 / Opus : refusée", V.verdictVideo({ ...ok, format: "matroska,webm", codecVideo: "vp9", codecAudio: "opus" }).raisons.length === 3);
+  chk("sans son : passe", V.verdictVideo({ ...ok, codecAudio: null, pistesAudio: 0 }).passe);
+  chk("deux pistes son : refusée", !V.verdictVideo({ ...ok, pistesAudio: 2 }).passe);
+  chk("un MP3 n'est pas une vidéo : irréparable", !V.verdictVideo({ ...ok, codecVideo: null }).reparable);
+
+  groupe("video-regles — le débit qui fait tenir sous 16 Mo");
+  // La vidéo PHARMACIE : ~2 min 10, 19 Mo. Compressée à la main à 820k → 11 Mo.
+  const k = V.debitVideo(130);
+  chk("2 min 10 → débit regardable (600-900k)", k >= 600 && k <= 900, String(k));
+  const prevu = ((k + V.AUDIO_KBPS) * 1000 * 130) / 8;
+  chk("taille prévue sous la cible de 14 Mo", prevu <= V.VIDEO_CIBLE_OCTETS, String(prevu));
+  eq("30 s : plafonné à 2500k", V.debitVideo(30), 2500);
+  eq("15 min : impossible, part en document", V.debitVideo(900), null);
+  eq("durée inconnue : impossible", V.debitVideo(0), null);
+  chk("vidéo de 15 min : irréparable", !V.verdictVideo({ ...ok, taille: 80 * 1048576, duree: 900 }).reparable);
+  eq("moins de débit, moins de pixels", [V.coteMax(2000), V.coteMax(800), V.coteMax(300)], [1280, 960, 640]);
+  const a = V.argumentsFfmpeg(800, true);
+  chk("ffmpeg : H.264 main, yuv420p, AAC, faststart", ["libx264", "main", "yuv420p", "aac", "+faststart"].every((x) => a.includes(x)));
+  chk("ffmpeg sans son : -an, pas d'AAC", V.argumentsFfmpeg(800, false).includes("-an") && !V.argumentsFfmpeg(800, false).includes("aac"));
+  chk("HEVC léger : on garde à peu près son débit", V.debitSansContrainte({ ...ok, taille: 5 * 1048576, duree: 60 }) < 700);
+
+  groupe("video-regles — formats lus");
+  chk("mp4 lu", V.formatAdmis("mov,mp4,m4a,3gp,3g2,mj2"));
+  chk("webm lu", V.formatAdmis("matroska,webm"));
+  chk("playlist HLS refusée avant ffmpeg", !V.formatAdmis("hls"));
+  chk("concat refusé avant ffmpeg", !V.formatAdmis("concat"));
+  eq("résumé lisible", V.resumeVideo(ok), "11 Mo · 1 min 35 · H.264 / AAC · 720×1280");
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log(`\n${"═".repeat(66)}`);
 if (echecs.length) {

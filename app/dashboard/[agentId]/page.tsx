@@ -693,7 +693,7 @@ function MediaUploadCard({
 
   const accept = type === "audio"
     ? "audio/ogg,audio/mpeg,audio/mp4,audio/aac,audio/x-m4a"
-    : "video/mp4,video/quicktime";
+    : "video/mp4,video/quicktime,video/webm";
 
   const doUpload = async (file: File) => {
     setErr(null);
@@ -711,7 +711,10 @@ function MediaUploadCard({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erreur upload");
       setUrl(data.url);
-      toast.success(type === "audio" ? "Audio uploadé !" : "Vidéo uploadée !");
+      const c = data.compression as { avant: number; apres: number } | null;
+      toast.success(type === "audio" ? "Audio uploadé !"
+        : c ? `Vidéo compressée pour WhatsApp : ${Math.round(c.avant / 1048576)} → ${Math.round(c.apres / 1048576)} Mo`
+        : "Vidéo uploadée !");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErr(msg);
@@ -810,7 +813,9 @@ function MediaUploadCard({
           {uploading ? (
             <>
               <RefreshCw className="h-5 w-5 animate-spin" style={{ color: "var(--cl-accent)" }} />
-              <p className="text-[13px]" style={{ color: "var(--cl-ink-soft)" }}>Upload en cours…</p>
+              <p className="text-[13px]" style={{ color: "var(--cl-ink-soft)" }}>
+                {type === "video" ? "Envoi et préparation pour WhatsApp (jusqu'à une minute)…" : "Upload en cours…"}
+              </p>
             </>
           ) : (
             <>
@@ -955,7 +960,7 @@ function CapabilitiesTab({ agent, onSave, capabilities }: {
             type="video"
             initialUrl={(agentCaps.welcome_video_url as string) ?? null}
             label="Vidéo d'accueil"
-            formats=".mp4 — max 50 Mo"
+            formats=".mp4 · .mov — compressée automatiquement pour WhatsApp (16 Mo)"
           />
         </div>
         {/* Agents santé : la vidéo et le vocal ci-dessus sont les preuves que l'agent montre

@@ -72,7 +72,7 @@ export type Famille = "message" | "media" | "interaction" | "logique" | "sortie"
 export const TYPES: { type: TypeBloc; libelle: string; famille: Famille; aide: string }[] = [
   { type: "texte", libelle: "Texte", famille: "message", aide: "Variables : {prenom}, {nom}, {entreprise}, {telephone}. Valeur par défaut : {prenom|cher client}. Ajoutez des boutons pour rendre le message interactif." },
   { type: "image", libelle: "Image", famille: "media", aide: "Adresse publique (JPG, PNG). Avec des boutons, la légende devient le texte du message." },
-  { type: "video", libelle: "Vidéo", famille: "media", aide: "MP4, 16 Mo au plus. Avec des boutons, la légende devient le texte du message." },
+  { type: "video", libelle: "Vidéo", famille: "media", aide: "MP4 de préférence. Au-delà de 16 Mo, Camille la compresse pour WhatsApp. Avec des boutons, la légende devient le texte du message." },
   { type: "vocal", libelle: "Vocal", famille: "media", aide: "OGG (note vocale) ou MP3. {audio_accueil} = le vocal réglé dans la configuration de l'agent." },
   { type: "document", libelle: "Document", famille: "media", aide: "PDF ou autre fichier, adresse publique." },
   { type: "lien", libelle: "Lien", famille: "message", aide: "Envoyé avec l'aperçu du site." },

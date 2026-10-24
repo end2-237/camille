@@ -24,12 +24,13 @@ type Props = {
   onSelection: (id: string | null) => void;
   agentId: string;
   accueil: MediasAccueil;
+  onAccueil?: (m: MediasAccueil) => void;
 };
 
 const copie = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 const nettoyer = (s: string) => s.toLowerCase().replace(/[^a-z0-9_-]/g, "");
 
-export default function Proprietes({ p, selection, erreurs, changer, onSelection, agentId, accueil }: Props) {
+export default function Proprietes({ p, selection, erreurs, changer, onSelection, agentId, accueil, onAccueil }: Props) {
   if (selection && estDeclencheur(selection)) {
     const i = indexDecl(selection);
     const d = p.declencheurs[i];
@@ -39,7 +40,7 @@ export default function Proprietes({ p, selection, erreurs, changer, onSelection
   const i = selection ? p.blocs.findIndex((b) => b.id === selection) : -1;
   if (i < 0) return <ReglagesParcours p={p} changer={changer} />;
   return (
-    <ReglagesBloc key={p.blocs[i].id} p={p} i={i} changer={changer} onSelection={onSelection} agentId={agentId} accueil={accueil}
+    <ReglagesBloc key={p.blocs[i].id} p={p} i={i} changer={changer} onSelection={onSelection} agentId={agentId} accueil={accueil} onAccueil={onAccueil}
       erreurs={erreurs.filter((e) => e.chemin === `blocs[${i}]` || e.chemin.startsWith(`blocs[${i}].`))} />
   );
 }
@@ -143,9 +144,9 @@ function ReglagesDeclencheur({ p, i, d, changer, onSelection }: {
 
 // ── Un bloc ─────────────────────────────────────────────────────────────────
 
-function ReglagesBloc({ p, i, erreurs, changer, onSelection, agentId, accueil }: {
+function ReglagesBloc({ p, i, erreurs, changer, onSelection, agentId, accueil, onAccueil }: {
   p: Parcours; i: number; erreurs: Probleme[]; changer: Props["changer"]; onSelection: Props["onSelection"];
-  agentId: string; accueil: MediasAccueil;
+  agentId: string; accueil: MediasAccueil; onAccueil?: (m: MediasAccueil) => void;
 }) {
   const b = p.blocs[i];
   const [id, setId] = useState(b.id);
@@ -195,7 +196,7 @@ function ReglagesBloc({ p, i, erreurs, changer, onSelection, agentId, accueil }:
 
       {b.type === "texte" && texte("texte", "Message", { long: true, placeholder: "Bonjour {prenom} 👋" })}
       {(b.type === "image" || b.type === "video" || b.type === "vocal" || b.type === "document") && (
-        <ChampMedia type={b.type} url={b.url} agentId={agentId} accueil={accueil} onChange={(u) => maj((x) => { x.url = u; })} />
+        <ChampMedia type={b.type} url={b.url} agentId={agentId} accueil={accueil} onAccueil={onAccueil} onChange={(u) => maj((x) => { x.url = u; })} />
       )}
       {(b.type === "image" || b.type === "video") && <>{texte("legende", choix.length ? "Texte du message (obligatoire avec des boutons)" : "Légende", { long: true })}</>}
       {b.type === "document" && <>{texte("nom", "Nom du fichier")}{texte("legende", "Légende")}</>}

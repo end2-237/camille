@@ -247,9 +247,19 @@ export async function mediaId(url: string, type = "video/mp4"): Promise<string |
   if (!jeton() || !numero()) return null;
 
   try {
-    const src = await fetch(url);
+    // Une vidéo de plus de 16 Mo est d'abord allégée (une seule fois, gardée
+    // sur core) : Meta la refuserait et le client ne recevrait rien.
+    let source = url;
+    if (type.startsWith("video/")) {
+      const n = await tailleMedia(url);
+      if (n && n > MEDIA_MAX_OCTETS) {
+        const { versionWhatsApp } = await import("../video");
+        source = (await versionWhatsApp(url)) || url;
+      }
+    }
+    const src = await fetch(source);
     if (!src.ok) {
-      console.error(`[meta] média injoignable (${src.status}) : ${url}`);
+      console.error(`[meta] média injoignable (${src.status}) : ${source}`);
       return null;
     }
     const octets = await src.arrayBuffer();

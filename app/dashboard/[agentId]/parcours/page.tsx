@@ -244,7 +244,7 @@ export default function ParcoursPage() {
                 <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                   {panneau === "apercu"
                     ? <Telephone p={p} entreprise={entreprise} accueil={accueil} onActifs={setActifs} onBloc={(id) => setSelection(id)} />
-                    : <Proprietes p={p} selection={selection} erreurs={verdict?.erreurs || []} changer={changer} onSelection={choisir} agentId={agentId} accueil={accueil} />}
+                    : <Proprietes p={p} selection={selection} erreurs={verdict?.erreurs || []} changer={changer} onSelection={choisir} agentId={agentId} accueil={accueil} onAccueil={setAccueil} />}
                 </div>
               </aside>
             </div>

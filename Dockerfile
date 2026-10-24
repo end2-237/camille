@@ -31,6 +31,12 @@ COPY . .
 RUN npm run build
 
 FROM node:22-bookworm-slim
+# ffmpeg : Camille recompresse elle-même les vidéos trop lourdes ou mal
+# encodées pour WhatsApp (16 Mo, H.264/AAC). Lancé sans root, sans shell, sur
+# des fichiers locaux seulement (voir lib/video.ts).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
 COPY --from=build --chown=node:node /app ./

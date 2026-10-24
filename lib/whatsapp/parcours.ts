@@ -15,6 +15,7 @@
 import { query } from "@/lib/db";
 import { notifyUser } from "@/lib/fcm";
 import * as meta from "./meta";
+import { versionWhatsApp } from "@/lib/video";
 import { prevenirCommercant } from "./boutique";
 import type { Contexte } from "./handle";
 import {
@@ -210,10 +211,13 @@ async function envoyerBloc(ctx: Contexte, b: Bloc, vars: Record<string, string>,
         : await meta.sendImage(to, adresse(b.url), t(b.legende) || undefined);
       trace = `[image] ${b.url}${titres(b.boutons)}`; break;
     case "video": {
-      const u = adresse(b.url);
-      if (!u) return; // {video_accueil} non réglé : on passe
+      const u0 = adresse(b.url);
+      if (!u0) return; // {video_accueil} non réglé : on passe
       // Au-delà de 16 Mo, Meta refuse la vidéo et le client ne reçoit RIEN.
-      // En document (100 Mo admis), elle arrive quand même, à télécharger.
+      // Camille l'allège (une fois, gardée sur core) ; si c'est impossible
+      // (vidéo interminable, ffmpeg absent), elle part en document (100 Mo
+      // admis), à télécharger.
+      const u = (await versionWhatsApp(u0)) || u0;
       const poids = await meta.tailleMedia(u);
       if (poids && poids > meta.MEDIA_MAX_OCTETS) {
         console.warn(`[parcours] vidéo « ${b.id} » de ${Math.round(poids / 1048576)} Mo : envoyée comme document`);

@@ -14,6 +14,7 @@ import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { peut } from "@/lib/equipe";
 import { fichierDeLAgent } from "@/lib/fichiers";
+import { ffmpegDisponible, preparerVideo } from "@/lib/video";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,7 +23,9 @@ type RouteContext = { params: Promise<{ agentId: string }> };
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const MAX_AUDIO_MB = 10;
-const MAX_VIDEO_MB = 50;
+// Une vidéo plus lourde est acceptée : elle est recompressée sous les 16 Mo
+// de WhatsApp avant d'être stockée (voir lib/video.ts).
+const MAX_VIDEO_MB = 300;
 const MAX_AUDIO_B  = MAX_AUDIO_MB * 1024 * 1024;
 const MAX_VIDEO_B  = MAX_VIDEO_MB * 1024 * 1024;
 
@@ -131,28 +134,44 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     );
   }
 
-  const maxBytes = type === "audio" ? MAX_AUDIO_B : MAX_VIDEO_B;
+  // Sans ffmpeg (développement local), pas de compression : on garde l'ancien plafond.
+  const compression = type === "video" && (await ffmpegDisponible());
+  const maxBytes = type === "audio" ? MAX_AUDIO_B : compression ? MAX_VIDEO_B : 50 * 1024 * 1024;
   if (file.size > maxBytes) {
     return NextResponse.json(
-      { error: `Fichier trop lourd — max ${type === "audio" ? MAX_AUDIO_MB : MAX_VIDEO_MB} Mo` },
+      { error: `Fichier trop lourd — max ${Math.round(maxBytes / 1048576)} Mo` },
       { status: 400 }
     );
   }
 
   try {
-    const ext      = MIME_TO_EXT[file.type] ?? (type === "audio" ? "ogg" : "mp4");
+    let octets: Buffer = Buffer.from(await file.arrayBuffer());
+    let mime = file.type;
+    let compression_info: { avant: number; apres: number } | null = null;
+    // Une vidéo trop lourde ou mal encodée pour WhatsApp (HEVC, MOV, 10 bits…)
+    // est recompressée ICI : ce qui est stocké part tel quel chez Meta.
+    if (compression) {
+      try {
+        const prep = await preparerVideo(octets);
+        if (prep.compressee) {
+          compression_info = { avant: prep.avant.taille, apres: prep.apres.taille };
+          octets = prep.octets;
+          mime = "video/mp4";
+        }
+      } catch (e) {
+        return NextResponse.json({ error: (e as Error).message }, { status: 422 });
+      }
+    }
+
+    const ext      = MIME_TO_EXT[mime] ?? (type === "audio" ? "ogg" : "mp4");
     // Nom de fichier unique : agentId_type_timestamp.ext
     const filename = `${agentId.replace(/-/g, "")}_welcome_${type}_${Date.now()}.${ext}`;
-
-    // Lire le fichier et encoder en base64
-    const arrayBuffer = await file.arrayBuffer();
-    const base64      = Buffer.from(arrayBuffer).toString("base64");
 
     // Envoyer vers Camille Core
     const uploadRes = await fetch(`${coreUrl()}/api/media/upload`, {
       method:  "POST",
       headers: coreHeaders(),
-      body:    JSON.stringify({ name: filename, data: base64, mimeType: file.type }),
+      body:    JSON.stringify({ name: filename, data: octets.toString("base64"), mimeType: mime }),
     });
 
     if (!uploadRes.ok) {
@@ -180,7 +199,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     caps[`welcome_${type}_url`] = url;
     await writeCapabilities(agentId, caps);
 
-    return NextResponse.json({ url, filename });
+    return NextResponse.json({ url, filename, compression: compression_info });
 
   } catch (err) {
     console.error("[POST /api/agents/:id/media]", err);

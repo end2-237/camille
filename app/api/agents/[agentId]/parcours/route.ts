@@ -12,7 +12,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { query } from "@/lib/db";
 import { peut } from "@/lib/equipe";
-import { valider } from "@/lib/parcours-regles";
+import { type Parcours, valider } from "@/lib/parcours-regles";
+import { prechaufferVideos } from "@/lib/video";
 import { oublierParcours, reinitialiserContact } from "@/lib/whatsapp/parcours";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
@@ -145,6 +146,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         [agentId, version]
       );
       oublierParcours(agentId);
+      // Les vidéos trop lourdes sont allégées dès maintenant, en arrière-plan :
+      // le premier client n'attend pas la compression.
+      const caps = await query(`SELECT capabilities FROM camille.agents WHERE id = $1`, [agentId]).then((x) => x.rows[0]?.capabilities || {}, () => ({}));
+      const accueil = typeof caps === "string" ? (JSON.parse(caps || "{}").welcome_video_url as string | undefined) : (caps.welcome_video_url as string | undefined);
+      prechaufferVideos((brouillon as Parcours).blocs
+        .filter((b) => b.type === "video")
+        .map((b) => (b.url === "{video_accueil}" ? accueil || "" : b.url)));
       return NextResponse.json({ ok: true, version, avertissements: verdict.avertissements });
     }
   } catch (e) {
