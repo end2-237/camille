@@ -129,10 +129,16 @@ export default function WhatsappOfficielPage() {
             config_id: CONFIG_ID,
             response_type: "code",
             override_default_response_type: true,
+            // Embedded Signup v5 (20 octobre 2026). Les v2/v3 sont dépréciées
+            // depuis le 15 octobre : Meta servait la v4 et ignorait notre
+            // `featureType`, d'où une fenêtre qui ne proposait que SMS/appel.
+            // En v5, garder l'application (coexistence) est le comportement par
+            // défaut ; on ne la désactive que pour « transférer ».
             extras: {
               setup: {},
-              featureType: mode === "garder" ? "whatsapp_business_app_onboarding" : "",
+              version: "v5",
               sessionInfoVersion: "3",
+              ...(mode === "transferer" ? { features: [{ name: "whatsapp_business_app_onboarding", enabled: false }] } : {}),
             },
           }
         );
