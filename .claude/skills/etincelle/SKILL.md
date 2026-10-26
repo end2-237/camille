@@ -8,11 +8,10 @@ description: >
   Snl / No Limit, Yoosfood, DIP, buyfacturation. Interroge d'abord, bannit les idées banales,
   provoque des connexions inattendues, fait s'affronter plusieurs rôles, chiffre la réalité,
   fait un pré-mortem, puis tranche : trois décisions dont une vraiment audacieuse, chacune
-  avec un test à 0 FCFA cette semaine. À utiliser dès que l'utilisateur demande « quelle est
-  la meilleure façon de… », « comment se démarquer / être rentable / innover », « réfléchis à
-  fond », « brainstorm », « sois original », « analyse ce projet / ce code sous tous les
-  angles », « qu'est-ce qu'on peut améliorer », ou hésite entre plusieurs directions — même
-  sans prononcer le mot « brainstorming ».
+  avec un test à 0 FCFA cette semaine. À utiliser dès que l'utilisateur demande « la meilleure
+  façon de… », « comment se démarquer / être rentable / innover », « réfléchis à fond »,
+  « brainstorm », « sois original », « analyse sous tous les angles », « que peut-on
+  améliorer », ou hésite entre plusieurs directions.
 ---
 
 # Étincelle
