@@ -118,6 +118,17 @@ export async function connecter(
     if (!reg.ok) avertissements.push(`Enregistrement du numéro : ${erreurMeta(reg)}`);
   }
 
+  // 4 bis. Coexistence : contacts puis historique de l'application, à lancer
+  //    dans les 24 h, UNE seule fois (sinon il faut tout refaire). Un échec
+  //    n'empêche pas les messages de circuler : on le signale seulement.
+  if (opts.coexistence) {
+    for (const sync_type of ["smb_app_state_sync", "history"]) {
+      const s = await graph(`${phoneId}/smb_app_data`, { token, method: "POST", body: { messaging_product: "whatsapp", sync_type } });
+      if (!s.ok) avertissements.push(`Synchronisation ${sync_type === "history" ? "de l'historique" : "des contacts"} : ${erreurMeta(s)}`);
+      else console.log(`[inscription] ${sync_type} demandé (request_id ${String(s.json.request_id || "?")})`);
+    }
+  }
+
   // 5. Ce qu'on affiche, et le catalogue.
   const info = await graph(`${phoneId}?fields=display_phone_number,verified_name`, { token });
   const cat = await graph(`${wabaId}/product_catalogs`, { token });

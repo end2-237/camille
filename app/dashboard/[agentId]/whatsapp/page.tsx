@@ -80,7 +80,7 @@ export default function WhatsappOfficielPage() {
   const [etat, setEtat] = useState<Etat | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; texte: string; details?: string[] } | null>(null);
-  const session = useRef<{ waba_id?: string; phone_number_id?: string }>({});
+  const session = useRef<{ waba_id?: string; phone_number_id?: string; fin?: string }>({});
 
   const charger = useCallback(async () => {
     try {
@@ -105,6 +105,7 @@ export default function WhatsappOfficielPage() {
         if (d.event === "CANCEL") setMsg({ ok: false, texte: "Connexion annulée dans la fenêtre de Meta." });
         if (d.data?.waba_id) session.current.waba_id = String(d.data.waba_id);
         if (d.data?.phone_number_id) session.current.phone_number_id = String(d.data.phone_number_id);
+        if (String(d.event || "").startsWith("FINISH")) session.current.fin = String(d.event);
       } catch { /* message d'une autre nature : ignoré */ }
     };
     window.addEventListener("message", ecoute);
@@ -148,7 +149,17 @@ export default function WhatsappOfficielPage() {
       const r = await fetch(`/api/agents/${agentId}/meta`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ code, ...session.current, coexistence: mode === "garder" }),
+        // En v5, le bouton vert propose la coexistence mais Meta bascule sur
+        // le parcours classique si le numéro n'est pas dans l'application.
+        // C'est l'événement de fin qui dit ce qui s'est vraiment passé.
+        body: JSON.stringify({
+          code,
+          waba_id: session.current.waba_id,
+          phone_number_id: session.current.phone_number_id,
+          coexistence: session.current.fin
+            ? session.current.fin === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
+            : mode === "garder",
+        }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Connexion refusée");
