@@ -113,7 +113,7 @@ export default function WhatsappOfficielPage() {
 
   /**
    * `garder` : coexistence — le commerçant garde son application WhatsApp
-   * Business sur son téléphone, et scanne un QR code. `transferer` : le numéro
+   * Business sur son téléphone, et confirme la liaison dans l'application. `transferer` : le numéro
    * passe entièrement sur l'API (il quitte l'application).
    */
   const connecter = async (mode: "garder" | "transferer") => {
@@ -315,7 +315,7 @@ const ATOUTS = [
 const ETAPES: { titre: string; texte: string; doodle: NomDoodle }[] = [
   { titre: "Ouvrez la fenêtre Meta", texte: "Connectez-vous avec le compte Facebook de votre entreprise.", doodle: "reading" },
   { titre: "Choisissez votre compte", texte: "Sélectionnez votre compte WhatsApp Business, ou laissez Meta le créer pour vous.", doodle: "sitting-reading" },
-  { titre: "Scannez le QR code", texte: "Avec l'application WhatsApp Business de votre téléphone : Camille répond, et vous gardez la main.", doodle: "meditating" },
+  { titre: "Confirmez sur votre téléphone", texte: "WhatsApp Business reçoit un message de Facebook Business : appuyez sur « Connecter », puis saisissez le code affiché. Camille répond, et vous gardez la main.", doodle: "meditating" },
 ];
 
 function AConnecter({ test, occupe, bloque, onConnecter }: { test: boolean; occupe: boolean; bloque: boolean; onConnecter: (mode: "garder" | "transferer") => void }) {
@@ -356,7 +356,7 @@ function AConnecter({ test, occupe, bloque, onConnecter }: { test: boolean; occu
             </span>
           </div>
           <p className="mt-4 max-w-[56ch] text-[12.5px] leading-relaxed" style={{ color: "var(--cl-ink-faint)" }}>
-            Vous scannerez un QR code avec l&apos;application WhatsApp Business (version à jour) : vos discussions,
+            Vous confirmerez la liaison dans l&apos;application WhatsApp Business (version 2.24.17 ou plus) : vos discussions,
             vos contacts et votre catalogue restent en place, et vous pouvez toujours répondre depuis votre téléphone.
             Pas d&apos;application WhatsApp Business, ou vous voulez tout gérer depuis Camille ?{" "}
             <button type="button" onClick={() => onConnecter("transferer")} disabled={occupe || bloque}
@@ -404,7 +404,7 @@ function AConnecter({ test, occupe, bloque, onConnecter }: { test: boolean; occu
 /** Le guide du commerçant, là où il en a besoin : juste sous le bouton. */
 const AVANT = [
   "Connectez-vous d'abord à facebook.com dans ce navigateur (sur ordinateur de préférence) : sinon Facebook peut vous demander une clé d'accès et vous perdre sur votre fil d'actualité.",
-  "Mettez à jour WhatsApp Business sur votre téléphone, et gardez-le près de vous : vous scannerez un QR code.",
+  "Mettez à jour WhatsApp Business sur votre téléphone, et gardez-le près de vous : vous y confirmerez la liaison et saisirez un code.",
   "Un compte Facebook suffit. Si votre entreprise n'a pas encore de page, Meta la crée pendant la connexion.",
   "Un autre outil (robot, autre plateforme) répond déjà sur ce numéro ? Débranchez-le d'abord, sinon vos clients recevront deux réponses.",
   "Vos clients, votre catalogue et vos discussions restent dans l'application. Les messages que vous envoyez depuis le téléphone apparaissent dans Camille.",
