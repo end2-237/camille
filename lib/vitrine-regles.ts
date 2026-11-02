@@ -14,6 +14,20 @@ export function slugDe(nom: string): string {
     .slice(0, 40) || "boutique";
 }
 
+/**
+ * Un site du marchand hébergé ailleurs (ex. m7goat.vps.buyticle.com) a-t-il le
+ * droit d'appeler sa vitrine depuis le navigateur ? Oui si son domaine est l'un
+ * de ceux qu'il a déclarés (adresse du site, domaines des clés d'API). On compare
+ * l'hôte seul : « https://x.com/boutique » déclare x.com, « x.com » aussi.
+ */
+export function originePermise(origine: string, declares: string[]): boolean {
+  const hote = (u: string) => {
+    try { return new URL(u.includes("://") ? u : `https://${u}`).host.toLowerCase(); } catch { return ""; }
+  };
+  const h = hote(origine);
+  return Boolean(h) && declares.some((d) => hote(String(d || "").trim()) === h);
+}
+
 /** Une adresse de vitrine acceptable : 3 à 40 caractères, minuscules, chiffres, tirets. */
 export const slugValide = (s: string) => /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/.test(s);
 

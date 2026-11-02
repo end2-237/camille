@@ -4,9 +4,11 @@
 // Public : pas de clé, puisque c'est le navigateur du client qui appelle. Le
 // montant est entièrement recalculé en base (lib/vitrine.ts) et le débit est
 // limité par adresse IP, pour qu'un robot ne remplisse pas le tableau de bord.
+// Le site du marchand hébergé ailleurs peut aussi l'appeler, depuis un domaine
+// qu'il a déclaré (voir enTetesVitrine).
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
-import { commanderSurVitrine, type CommandeVitrine } from "@/lib/vitrine";
+import { commanderSurVitrine, enTetesVitrine, vitrineParSlug, type CommandeVitrine } from "@/lib/vitrine";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -20,15 +22,23 @@ function tropDEssais(ip: string): boolean {
   return recents.length > 6;
 }
 
+export async function OPTIONS(req: NextRequest, { params }: RouteContext) {
+  const { slug } = await params;
+  const v = await vitrineParSlug(slug);
+  return new NextResponse(null, { status: 204, headers: await enTetesVitrine(v?.agentId ?? null, req.headers.get("origin")) });
+}
+
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const { slug } = await params;
+  const v = await vitrineParSlug(slug);
+  const headers = await enTetesVitrine(v?.agentId ?? null, req.headers.get("origin"));
   const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "inconnu";
   if (tropDEssais(ip)) {
-    return NextResponse.json({ error: "Trop de commandes en peu de temps. Réessayez dans quelques minutes." }, { status: 429 });
+    return NextResponse.json({ error: "Trop de commandes en peu de temps. Réessayez dans quelques minutes." }, { status: 429, headers });
   }
   const b = (await req.json().catch(() => null)) as CommandeVitrine | null;
-  if (!b) return NextResponse.json({ error: "Commande illisible." }, { status: 400 });
+  if (!b) return NextResponse.json({ error: "Commande illisible." }, { status: 400, headers });
   const r = await commanderSurVitrine(slug, b);
-  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  return NextResponse.json(r, { status: 201 });
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status, headers });
+  return NextResponse.json(r, { status: 201, headers });
 }
