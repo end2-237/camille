@@ -15,12 +15,14 @@ import { lireSemaine, ouvertA, prochaineOuverture, resumeSemaine } from "@/lib/h
 import { normaliserOptions, type GroupeOptions } from "@/lib/whatsapp/restaurant";
 import { servieAujourdhui, zonesDe } from "@/lib/whatsapp/livraison";
 import { envoyerTexte } from "@/lib/whatsapp/envoi";
-import { numeroClient, prixAvecOptions } from "@/lib/vitrine-regles";
+import { numeroClient, originePermise, prixAvecOptions } from "@/lib/vitrine-regles";
 
 export type ProduitVitrine = {
   id: string; nom: string; description: string; prix: number | null; prixMax: number | null; devise: string;
   categorie: string | null; image: string | null; images: string[]; epuise: boolean;
   options: GroupeOptions[]; duJour: boolean;
+  /** Le lien produit déclaré par le marchand : sert au site externe à retrouver sa fiche. */
+  lien: string | null;
 };
 
 export type Vitrine = {
@@ -82,6 +84,7 @@ export async function vitrineParSlug(slug: string): Promise<Vitrine | null> {
         image: (p.image_url as string) || images[0] || null, images,
         epuise: p.stock != null && Number(p.stock) <= 0,
         options: normaliserOptions(lire(p.options)), duJour: Boolean(p.daily_menu),
+        lien: (p.product_url as string) || null,
       };
     });
 
@@ -172,4 +175,31 @@ export async function commanderSurVitrine(slug: string, c: CommandeVitrine): Pro
   const r = await envoyerTexte(v.agentId, phone, created.clientText).catch(() => ({ ok: false }));
   if (created.ownerChatId) await envoyerTexte(v.agentId, created.ownerChatId, created.ownerText).catch(() => {});
   return { ok: true, ref: created.ref, total: created.total, devise: created.currency, whatsapp: Boolean(r.ok) };
+}
+
+/**
+ * Les domaines d'où le site du marchand peut appeler sa vitrine : l'adresse de
+ * son site et les domaines de ses clés d'API encore valides. Sans déclaration,
+ * seule la vitrine servie par Camille elle-même passe.
+ */
+export async function domainesDeclares(agentId: string): Promise<string[]> {
+  const out: string[] = [];
+  try {
+    const a = (await query(`SELECT website_url FROM camille.agents WHERE id = $1`, [agentId])).rows[0];
+    if (a?.website_url) out.push(String(a.website_url));
+  } catch {}
+  try {
+    const k = await query(
+      `SELECT origins FROM camille.api_keys WHERE agent_id = $1 AND revoked_at IS NULL`, [agentId]
+    );
+    for (const r of k.rows) if (Array.isArray(r.origins)) out.push(...r.origins.map(String));
+  } catch {}
+  return out;
+}
+
+/** En-têtes CORS d'une réponse de vitrine : l'origine n'est renvoyée que si elle est déclarée. */
+export async function enTetesVitrine(agentId: string | null, origine: string | null): Promise<Record<string, string>> {
+  const base = { "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", Vary: "Origin" };
+  if (!origine || !agentId) return base;
+  return originePermise(origine, await domainesDeclares(agentId)) ? { ...base, "Access-Control-Allow-Origin": origine } : base;
 }

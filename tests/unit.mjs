@@ -1125,7 +1125,13 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
 // ═══ vitrine en ligne — adresse, options, numéro ═══════════════════════════
 {
   groupe("vitrine — adresse, prix des options, numéro du client");
-  const { slugDe, slugValide, prixAvecOptions, numeroClient } = await import(`${DIST}/vitrine-regles.js`);
+  const { slugDe, slugValide, prixAvecOptions, numeroClient, originePermise } = await import(`${DIST}/vitrine-regles.js`);
+  chk("site externe déclaré accepté", originePermise("https://m7goat.vps.buyticle.com", ["https://m7goat.vps.buyticle.com/"]));
+  chk("domaine déclaré sans https accepté", originePermise("https://m7goat.vps.buyticle.com", ["m7goat.vps.buyticle.com"]));
+  chk("autre domaine refusé", !originePermise("https://pirate.example", ["m7goat.vps.buyticle.com"]));
+  chk("sous-domaine voisin refusé", !originePermise("https://x.m7goat.vps.buyticle.com", ["m7goat.vps.buyticle.com"]));
+  chk("rien de déclaré : refusé", !originePermise("https://m7goat.vps.buyticle.com", []));
+  chk("origine illisible : refusée", !originePermise("null", ["m7goat.vps.buyticle.com"]));
   eq("adresse tirée du nom", slugDe("Yoos Food — Bonamoussadi !"), "yoos-food-bonamoussadi");
   eq("accents retirés", slugDe("Pâtisserie Élégance"), "patisserie-elegance");
   chk("adresse valide", slugValide("yoos-food"));
