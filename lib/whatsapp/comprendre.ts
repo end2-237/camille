@@ -41,6 +41,7 @@ export type Action =
   | { faire: "accueil" }
   | { faire: "flyers" }
   | { faire: "visite" }
+  | { faire: "orienter" }
   | { faire: "animations"; activer: boolean };
 
 export type Comprehension = {
@@ -64,6 +65,13 @@ export type ProduitConnu = {
   stock: number | null;
   /** Les variations proposées, lisibles : « Couleur : Noir, Bleu ». */
   options?: string | null;
+  /**
+   * La description officielle du commerçant (mode d'emploi, contenance…).
+   * Transmise seulement en cosmétique et beauté : c'est là que le client
+   * demande « comment je l'utilise ? », et la réponse doit venir du
+   * commerçant, mot pour mot, jamais de l'imagination du modèle.
+   */
+  usage?: string | null;
 };
 
 /** Les faits vérifiables du commerce. Rien ici n'est négociable par le modèle. */
@@ -170,6 +178,7 @@ export function faitsNumeriques(
       p.price != null ? String(p.price) : "",
       p.stock != null ? String(p.stock) : "",
       p.name, // « Oraimo Watch 6 » autorise le 6
+      p.usage || "", // « 2 à 3 minutes de massage » vient du commerçant
     ]),
   ].filter(Boolean);
 }
@@ -184,8 +193,8 @@ export function faitsNumeriques(
  */
 // ── La santé : jamais de promesse de guérison ───────────────────────────────
 
-const VERBE_SOIN = /\b(guerit|guerir|gueri|guerison|soigne|soigner|soignent|traite|traiter|traitement|elimine|eliminer|combat|combattre|vient a bout|remede|stoppe|stopper|regle|regler|fait disparaitre|fait partir|debarrasse)\b/;
-const MALADIE = /\b(diabete|hepatite|cancer|fibrome|hypertension|tension|vih|sida|paludisme|palu|hemorroide|prostate|infertilite|sterilite|ulcere|asthme|insuffisance|kyste|tumeur|typhoide|cholesterol|avc|arthrose|rhumatisme|impuissance|faiblesse sexuelle|maladie|infection|mst|ist|covid|acne|eczema|psoriasis|vitiligo)s?\b/;
+const VERBE_SOIN = /\b(guerit|guerir|gueri|guerison|soigne|soigner|soignent|traite|traiter|traitement|elimine|eliminer|combat|combattre|vient a bout|remede|stoppe|stopper|regle|regler|fait disparaitre|fait partir|debarrasse|arrete|arreter|freine|freiner|fait repousser|faire repousser)\b/;
+const MALADIE = /\b(diabete|hepatite|cancer|fibrome|hypertension|tension|vih|sida|paludisme|palu|hemorroide|prostate|infertilite|sterilite|ulcere|asthme|insuffisance|kyste|tumeur|typhoide|cholesterol|avc|arthrose|rhumatisme|impuissance|faiblesse sexuelle|maladie|infection|mst|ist|covid|acne|eczema|psoriasis|vitiligo|chute|calvitie|alopecie|pelade|teigne|dermatite|mycose)s?\b/;
 
 /**
  * Le texte promet-il de soigner une maladie ? « Ce thé guérit le diabète »,
@@ -201,6 +210,8 @@ export function promesseMedicale(texte: string): boolean {
 }
 
 const SECTEURS_SANTE = new Set(["healthcare", "cosmetics", "beauty_wellness"]);
+/** Les secteurs où Camille vend sans conseiller : le conseil revient à l'experte du commerce. */
+export const SECTEURS_BEAUTE = new Set(["cosmetics", "beauty_wellness"]);
 export const REPONSE_SANTE =
   "Je ne peux pas donner d'avis médical : pour une maladie ou des symptômes, le mieux est d'en parler à un médecin ou à un pharmacien. Je transmets ta question à l'équipe, qui te répondra ici.";
 
@@ -238,6 +249,11 @@ export function valider(
       case "visite":
         // Immobilier seulement : ailleurs, une « visite » n'a pas d'agenda.
         if (faits.secteur === "real_estate") actions.push({ faire: "visite" });
+        break;
+
+      case "orienter":
+        // Cosmétique et beauté seulement : ailleurs, il n'y a pas d'experte à qui orienter.
+        if (SECTEURS_BEAUTE.has(String(faits.secteur || ""))) actions.push({ faire: "orienter" });
         break;
 
       case "flyers":
@@ -454,24 +470,31 @@ function reglesDuSecteur(secteur?: string | null): string {
 `;
   }
   if (secteur === "cosmetics" || secteur === "beauty_wellness") {
-    return `COSMÉTIQUE — règles absolues
-• Aucune promesse médicale ni de résultat garanti : pas de « guérit l'acné », pas d'« éclaircit à coup sûr ».
-• Pour conseiller, demande le type de peau ou de cheveux, puis montre les produits du catalogue qui correspondent.
-• Allergie, grossesse, peau irritée : conseille de demander l'avis d'un pharmacien ou d'un dermatologue avant usage.
+    return `COSMÉTIQUE — tu es VENDEUSE, pas conseillère. Le conseil appartient à l'experte du commerce.
+• Le client SAIT ce qu'il veut (« un démêlant », « l'élixir », « un shampooing ») → montre directement le ou les produits du catalogue qui correspondent, avec montrer. Aucun conseil, aucune question en plus : il achète.
+• Le client décrit un BESOIN ou un problème sans nommer de produit (« mes cheveux sont secs », « ça casse », « mes pointes ») et ne dit pas ce qu'il veut → demande d'abord, avec repondre : « Tu sais déjà ce que tu cherches, ou tu veux un conseil ? »
+• Il veut un conseil (ou il répond « conseil », « je ne sais pas ») → montre 1 ou 2 produits du catalogue SOUVENT UTILISÉS dans ce cas (montrer), en précisant avec repondre que ce n'est pas un diagnostic, puis termine TOUJOURS par {"faire":"orienter"} : il reçoit les boutons « Parler à l'experte » et « Prendre rendez-vous ».
+• « Comment je l'utilise ? », « ça se met comment ? » → réponds avec repondre en reprenant la colonne « usage » du catalogue, sans rien ajouter ni inventer. Pas d'usage indiqué → dis que l'experte précisera, et ajoute orienter.
+• SANTÉ — chute brutale ou par plaques, démangeaisons, plaies, boutons, irritation, allergie, grossesse, allaitement, enfant en bas âge : ne montre AUCUN produit. Dis avec repondre qu'il vaut mieux en parler à l'experte, et à un professionnel de santé si ça dure, puis utilise orienter.
+• Aucune promesse de résultat ni de délai : pas de « ça fait repousser », pas de « résultat en 2 semaines », pas de « guérit ». Même si le client insiste.
+• Tu ne compares jamais avec d'autres marques et tu ne critiques pas ce que le client utilise.
 
 `;
   }
   return "";
 }
 
-function consigne(prods: ProduitConnu[], faits: FaitsCommerce, resto: boolean): string {
+export function consigne(prods: ProduitConnu[], faits: FaitsCommerce, resto: boolean): string {
+  const beaute = SECTEURS_BEAUTE.has(String(faits.secteur || ""));
   const liste = prods
     .slice(0, 60)
     .map(
       (p) =>
         `- ${p.id} | ${p.name}${p.category ? ` | ${p.category}` : ""}${
           p.price != null ? ` | ${p.price} ${p.currency}` : ""
-        }${p.options ? ` | existe en ${p.options}` : ""}`
+        }${p.options ? ` | existe en ${p.options}` : ""}${
+          beaute && p.usage ? ` | usage : ${p.usage.replace(/\s+/g, " ").slice(0, 260)}` : ""
+        }`
     )
     .join("\n");
 
@@ -490,6 +513,7 @@ Tu as une boîte à outils. Chaque outil PRODUIT quelque chose chez le client �
 {"faire":"alerter","sujet":"..."} → prévient le commerçant, et TU CONTINUES à parler. C'est l'outil des engagements : tu promets que l'équipe confirmera quelque chose, et quelqu'un est réellement averti. Préfère-le à humain partout où tu peux encore être utile.
 {"faire":"accueil"} → une salutation, rien de plus à faire.
 ${faits.secteur === "real_estate" ? `{"faire":"visite"} → envoie les créneaux libres de l'agence pour programmer une visite.
+` : ""}${beaute ? `{"faire":"orienter"} → envoie au client deux boutons : « Parler à l'experte » (elle reprend la conversation) et « Prendre rendez-vous » (il choisit un créneau). À mettre EN DERNIER, après les produits.
 ` : ""}${faits.affiches?.length ? `{"faire":"flyers"} → envoie nos affiches du moment en carrousel (voir AFFICHES). Quand il demande les promos, les offres, les nouveautés, « vous avez quoi en ce moment ? ».
 ` : ""}{"faire":"animations","activer":false} → il ne veut plus des autocollants animés (« trop de gifs », « arrête les stickers »). "activer":true s'il les redemande. Confirme-lui avec repondre.
 
@@ -526,7 +550,7 @@ Livraison : ${
 
 ${faits.affiches?.length ? `AFFICHES (flyers envoyables) — ${faits.affiches.map((a) => a || "sans légende").join(" · ")}
 
-` : ""}CATALOGUE — id | nom | catégorie | prix | variations
+` : ""}CATALOGUE — id | nom | catégorie | prix | variations${beaute ? " | usage" : ""}
 ${liste || "(vide)"}
 
 COMMANDE EN COURS (dans « CE CLIENT ») : son étape est un FAIT. « Ça vient quand ? », « elle en est où ? » → réponds avec repondre en donnant cette étape, sans inventer de durée ; si la durée compte pour lui, ajoute {"faire":"alerter","sujet":"délai commande <réf>"}. Commande en RETRAIT : ne parle JAMAIS de livraison ni de frais de livraison — dis qu'on le prévient dès qu'elle est prête à récupérer.

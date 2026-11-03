@@ -105,6 +105,12 @@ const B = {
   plustard: "cam:plustard",
   /** Préfixe d'un créneau de visite (immobilier) : « cam:visite:<ms> ». */
   visite: "cam:visite:",
+  /** Cosmétique : le client veut parler à l'experte du commerce. */
+  experte: "cam:experte",
+  /** Cosmétique : le client veut un rendez-vous conseil. */
+  rdvConseil: "cam:rdvconseil",
+  /** Préfixe d'un créneau de conseil choisi (cosmétique) : « cam:conseil:<ms> ». */
+  conseil: "cam:conseil:",
   /** Préfixe d'un bouton de flyer : « cam:flyer:<id>:cmd|info ». */
   flyer: "cam:flyer:",
   /** Préfixe d'un créneau choisi : « cam:heure:<ms> ». */
@@ -139,6 +145,8 @@ export type Produit = {
   variants?: AxeVariante[] | null;
   /** Les valeurs de variation à reconnaître dans une demande (« Noir », « 42 »). */
   options?: string[];
+  /** La description du commerçant : le mode d'emploi que Camille peut citer. */
+  usage?: string | null;
   /** Les mêmes, lisibles pour le modèle : « Couleur : Noir, Bleu ». */
   optionsTexte?: string;
   /** Chaque variante envoyable : la fiche à montrer quand le client en nomme une. */
@@ -214,6 +222,7 @@ async function catalogue(agentId: string, tous = false): Promise<Produit[]> {
     const r = await query(
       `SELECT id, name, price, COALESCE(currency,'XAF') AS currency, category, stock, image_url,
               COALESCE(active, true) AS actif,
+              to_jsonb(p)->>'description' AS description,
               to_jsonb(p)->>'meta_retailer_id' AS retailer,
               COALESCE(to_jsonb(p)->'variants', '[]'::jsonb) AS variants,
               COALESCE(to_jsonb(p)->'options', '[]'::jsonb) AS options,
@@ -235,6 +244,7 @@ async function catalogue(agentId: string, tous = false): Promise<Produit[]> {
         category: (x.category as string) || null,
         stock: x.stock != null ? Number(x.stock) : null,
         image_url: (x.image_url as string) || null,
+        usage: (x.description as string) || null,
         deCamille: true,
         actif: x.actif !== false,
         menuDuJour: x.menu_du_jour === true,
@@ -1385,7 +1395,8 @@ async function executer(
   // `mode_emploi` répond à la question : il passe donc devant, et il ABSORBE
   // tout ce qui montre des articles — la vidéo explique et enchaîne elle-même
   // sur la vitrine. Ce qui alerte l'équipe, lui, n'est jamais absorbé.
-  const ordre = { mode_emploi: 0, repondre: 1, infos: 2, montrer: 3, vitrine: 4 } as Record<string, number>;
+  // `orienter` ferme la marche : les boutons vers l'experte viennent APRÈS les produits.
+  const ordre = { mode_emploi: 0, repondre: 1, infos: 2, montrer: 3, vitrine: 4, orienter: 9 } as Record<string, number>;
   const triees = [...actions].sort((a, b) => (ordre[a.faire] ?? 5) - (ordre[b.faire] ?? 5));
   const ABSORBEES = new Set(["repondre", "montrer", "vitrine", "accueil"]);
   const tuto = triees.some((a) => a.faire === "mode_emploi");
@@ -1454,6 +1465,7 @@ async function executer(
 
       case "flyers":      await montrerFlyers(ctx, resto); break;
       case "visite":      await proposerVisite(ctx); break;
+      case "orienter":    await orienterVersExperte(ctx); break;
       case "mode_emploi": await envoyerTuto(ctx, resto); break;
       case "infos":       await donnerInfos(ctx); break;
       case "humain":      await passerLaMain(ctx); break;
@@ -1597,6 +1609,73 @@ async function reserverVisite(ctx: Contexte, quand: Date) {
     `C'est noté pour ${quandLisible(quand)} 🏠\nL'agence vous confirme la visite ici très vite. Vous pourrez préciser le bien qui vous intéresse en répondant à ce message.`
   );
   await tracer(agent.id, phone, "assistant", `[visite demandée] ${quandLisible(quand)}`);
+}
+
+// ── Cosmétique : Camille vend, l'experte conseille ─────────────────────────
+//
+// Camille ne fait pas de diagnostic. Quand un client décrit un problème, elle
+// montre ce qui est souvent utilisé, puis propose de parler à l'experte du
+// commerce, tout de suite ou sur rendez-vous. Le conseil reste au commerçant ;
+// Camille lui amène un client qui sait déjà ce qu'il a vu.
+
+async function orienterVersExperte(ctx: Contexte) {
+  const { agent, phone } = ctx;
+  await meta.sendButtons(
+    phone,
+    "Pour une routine vraiment adaptée à toi, le mieux est d'en parler à notre experte 💬\nTu préfères échanger maintenant ou prendre rendez-vous ?",
+    [
+      { id: B.experte, title: "Parler à l'experte" },
+      { id: B.rdvConseil, title: "Prendre rendez-vous" },
+    ],
+    agent.business_name || undefined
+  );
+  await tracer(agent.id, phone, "assistant", "[orientation experte] boutons proposés");
+}
+
+/** Le client veut l'experte : elle reprend la main, et on lui dit QUAND, sans rien promettre de plus. */
+async function confierAExperte(ctx: Contexte) {
+  const { agent, msg, phone } = ctx;
+  await tracer(agent.id, phone, "user", "[bouton] parler à l'experte");
+  const horaires = agent.business_hours ? `\n_Elle répond pendant nos horaires : ${agent.business_hours}._` : "";
+  await passerLaMain(ctx, {
+    titre: `💬 Conseil demandé — ${msg.contactName || "+" + phone}`,
+    contenu: { kind: "talk_to_human", motif: "conseil", message: "Le client veut l'avis de l'experte", contact: phone },
+    message: `C'est noté 🙏 Je transmets à notre experte : elle reprend la suite **ici même**, tu n'as rien à faire.${horaires}`,
+  });
+}
+
+async function proposerConseil(ctx: Contexte, intro = "Choisis le moment qui t'arrange pour échanger avec notre experte 👇") {
+  const { agent, phone } = ctx;
+  const libres = await proposer(agent.id, agent.business_hours, undefined, 9);
+  if (!libres.length) {
+    // Agenda vide ou complet : on ne laisse pas le client sans suite.
+    return confierAExperte(ctx);
+  }
+  await meta.sendList(phone, `${intro}\nElle te confirme ensuite ici même.`, "Choisir l'heure", [
+    { title: "Créneaux libres", rows: libres.map((d) => ({ id: `${B.conseil}${d.getTime()}`, title: libelleCreneau(d) })) },
+  ]);
+  await tracer(agent.id, phone, "assistant", "[conseil] créneaux proposés");
+}
+
+async function reserverConseil(ctx: Contexte, quand: Date) {
+  const { agent, msg, phone } = ctx;
+  const r = await reserver({ agentId: agent.id, phone, nom: msg.contactName || null, debut: quand, prestation: "Conseil", source: "whatsapp" });
+  if (!r.ok) {
+    if (r.raison === "pris") return proposerConseil(ctx, "Ce créneau vient d'être pris 🙏 En voici d'autres 👇");
+    if (r.raison === "passe") return proposerConseil(ctx, "Ce créneau est déjà passé. Choisis-en un autre 👇");
+    await alerterSansSeTaire(ctx, `rendez-vous conseil (${quandLisible(quand)}) non enregistré`);
+    return;
+  }
+  await prevenirCommercant(ctx, {
+    titre: `💬 Rendez-vous conseil — ${msg.contactName || "+" + phone}`,
+    corps: `${quandLisible(quand)} · à confirmer dans Rendez-vous`,
+    contenu: { kind: "rendez_vous", id: r.rdv.id, quand: quand.toISOString(), contact: phone, nom: msg.contactName || "" },
+  }, { toujours: true });
+  await meta.sendText(
+    phone,
+    `C'est noté pour ${quandLisible(quand)} 💬\nNotre experte te confirme le rendez-vous ici très vite. Tu peux déjà lui décrire tes cheveux en répondant à ce message.`
+  );
+  await tracer(agent.id, phone, "assistant", `[conseil demandé] ${quandLisible(quand)}`);
 }
 
 /** Les flyers de la médiathèque, en carrousel. false s'il n'y en a aucun. */
@@ -1761,6 +1840,11 @@ export async function repondreBoutique(
 
     // Un créneau de visite choisi (immobilier).
     if (id.startsWith(B.visite)) return reserverVisite(ctx, new Date(Number(id.slice(B.visite.length))));
+
+    // Cosmétique : l'orientation vers l'experte du commerce.
+    if (id === B.experte) return confierAExperte(ctx);
+    if (id === B.rdvConseil) return proposerConseil(ctx);
+    if (id.startsWith(B.conseil)) return reserverConseil(ctx, new Date(Number(id.slice(B.conseil.length))));
 
     // Un bouton d'une carte de flyer : commander (le catalogue) ou en savoir plus.
     if (id.startsWith(B.flyer)) {
@@ -1950,6 +2034,7 @@ export async function repondreBoutique(
         id: p.id, name: p.name, price: p.price,
         currency: p.currency, category: p.category, stock: p.stock,
         options: p.optionsTexte || null,
+        usage: p.usage || null,
       })),
       { ...faitsDe(agent), affiches: (await flyersDe(agent.id)).map((f) => f.legende) },
       resto,

@@ -284,6 +284,47 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
       .raisonnement.includes("non ancré"));
 }
 
+// ═══ comprendre — cosmétique : Camille vend, l'experte conseille ═══════════
+{
+  const { valider, consigne, faitsNumeriques, phraseAncree } = await import(`${DIST}/whatsapp/comprendre.js`);
+  groupe("comprendre — cosmétique : vendeuse, orientation vers l'experte");
+  const ELIXIR = {
+    id: "e1", name: "Élixir capillaire", price: 12500, currency: "XAF", category: "Soin racine", stock: null,
+    usage: "Quelques gouttes sur le cuir chevelu, raie après raie, puis 2 à 3 minutes de massage. Chaque jour.",
+  };
+  const COSMO = { nom: "M7 GOAT", adresse: "Douala", fraisLivraison: 1000, livraison: true, devise: "XAF", secteur: "cosmetics" };
+  const BOUTIQUE = { ...COSMO, nom: "BUYTICLE", secteur: "ecommerce" };
+  const o = { actions: [{ faire: "montrer", produits: ["e1"] }, { faire: "orienter" }], certitude: 0.9 };
+  eq("cosmétique : orienter est gardé après les produits",
+    valider(o, [ELIXIR], COSMO, "mes cheveux sont secs")?.actions,
+    [{ faire: "montrer", produits: ["e1"] }, { faire: "orienter" }]);
+  eq("hors beauté : orienter n'existe pas",
+    valider(o, [ELIXIR], BOUTIQUE, "mes cheveux sont secs")?.actions,
+    [{ faire: "montrer", produits: ["e1"] }]);
+  eq("beauté / bien-être : orienter aussi",
+    valider({ actions: [{ faire: "orienter" }], certitude: 0.9 }, [ELIXIR], { ...COSMO, secteur: "beauty_wellness" }, "un conseil")?.actions,
+    [{ faire: "orienter" }]);
+  // Le mode d'emploi vient du commerçant : ses chiffres sont des faits.
+  const ancres = faitsNumeriques([ELIXIR], COSMO, "comment je l'utilise ?");
+  chk("« 2 à 3 minutes » du mode d'emploi passe", phraseAncree("Masse 2 à 3 minutes, chaque jour.", ancres));
+  chk("un délai de résultat inventé est rejeté", !phraseAncree("Résultat visible en 14 jours", ancres));
+  // La promesse de guérison ne part jamais, même déguisée en conseil.
+  const sante = valider({ actions: [{ faire: "repondre", texte: "Cet élixir guérit la chute de cheveux" }], certitude: 0.9 }, [ELIXIR], COSMO, "ça guérit ?");
+  chk("promesse médicale remplacée par la réponse prudente",
+    sante && !sante.actions.some((a) => a.faire === "repondre" && /guérit/.test(a.texte)));
+  const repousse = valider({ actions: [{ faire: "repondre", texte: "Il fait repousser les cheveux et arrête la chute" }], certitude: 0.9 }, [ELIXIR], COSMO, "ça marche ?");
+  chk("« arrête la chute » remplacé aussi",
+    repousse && !repousse.actions.some((a) => a.faire === "repondre" && /chute/.test(a.texte)));
+  const neutre = valider({ actions: [{ faire: "repondre", texte: "On livre à Douala, oui" }], certitude: 0.9 }, [ELIXIR], COSMO, "vous livrez ?");
+  chk("une phrase sans promesse passe", neutre?.actions[0]?.texte === "On livre à Douala, oui");
+  const c = consigne([ELIXIR], COSMO, false);
+  chk("la consigne cosmétique donne le mode d'emploi", c.includes("usage : Quelques gouttes sur le cuir chevelu"));
+  chk("la consigne cosmétique a l'outil orienter", c.includes('{"faire":"orienter"}'));
+  chk("la consigne cosmétique : vendeuse, pas conseillère", c.includes("tu es VENDEUSE, pas conseillère"));
+  const b = consigne([ELIXIR], BOUTIQUE, false);
+  chk("hors beauté : ni mode d'emploi ni orienter", !b.includes("usage :") && !b.includes('{"faire":"orienter"}'));
+}
+
 // ═══ comprendre — le cache qui économise le quota ══════════════════════════
 {
   const { cleCache, empreinte, statsCache, vidangerCache } =
