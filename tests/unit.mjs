@@ -1233,6 +1233,22 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   const X = R.rendreExplicite(P);
   chk("rendu explicite, le parcours reste valide", R.valider(X).ok, JSON.stringify(R.valider(X).erreurs));
   eq("rendu explicite : même accueil", R.derouler(X, "bienvenue").blocs.map((b) => b.id), d1.blocs.map((b) => b.id));
+  // Production : un « bonjour » relançait les 8 messages et 4 vidéos de l'accueil, 4 fois dans la journée.
+  const B = { ...P, declencheurs: [...P.declencheurs, { type: "mot_cle", mots: ["bonjour"], mode: "commence", vers: "bienvenue" }] };
+  const H = 3600_000, t0 = Date.parse("2026-11-07T08:00:00Z");
+  const lourds = (l) => l.filter((b) => ["image", "video", "vocal", "document", "pause"].includes(b.type)).length;
+  chk("l'accueil complet contient des médias", lourds(d1.blocs) > 0);
+  const premier = R.allegerAccueil(B, "bienvenue", d1.blocs, 0, t0);
+  eq("premier accueil : complet", [premier.allege, premier.blocs.length], [false, d1.blocs.length]);
+  const rejoue = R.allegerAccueil(B, "bienvenue", d1.blocs, t0, t0 + 3 * H);
+  eq("« bonjour » 3 h après : accueil allégé", rejoue.allege, true);
+  eq("allégé : aucun média ni pause", lourds(rejoue.blocs), 0);
+  chk("allégé : les textes et le menu restent", rejoue.blocs.some((b) => b.id === "menu") && rejoue.blocs.length > 0);
+  eq("allégé : il s'arrête toujours sur le menu", R.derouler(B, "bienvenue").fin, { type: "attente", bloc: "menu" });
+  eq("« bonjour » 25 h après : accueil complet", R.allegerAccueil(B, "bienvenue", d1.blocs, t0, t0 + 25 * H).allege, false);
+  eq("autre départ que l'accueil : jamais allégé", R.allegerAccueil(B, "docteur", R.derouler(B, "docteur").blocs, t0, t0 + H).allege, false);
+  eq("horloge en arrière : complet (pas de blocage)", R.allegerAccueil(B, "bienvenue", d1.blocs, t0, t0 - H).allege, false);
+  eq("le mot-clé « bonjour » mène bien à l'accueil", R.aiguiller(B, { attente: null, mode: null }, { texte: "Bonjour !" }, false), { depart: "bienvenue" });
   const sansLien = { ...X, blocs: X.blocs.map((b) => (b.id === "pause_3" ? { ...b, suite: undefined } : b)) };
   eq("explicite : un bloc sans lien s'arrête là", R.derouler(sansLien, "bienvenue").blocs.at(-1).id, "pause_3");
   chk("les liens dessinés incluent le choix docteur", R.liensDe(X).some((l) => l.de === "menu" && l.sortie === "choix:docteur" && l.vers === "docteur"));

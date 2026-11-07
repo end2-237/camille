@@ -431,6 +431,28 @@ export function choixPour(b: Bloc, message: Message): Choix | null {
 export type EtatClient = { attente: string | null; mode: string | null };
 
 /**
+ * L'accueil rejoué dans les 24 h (un « bonjour » de plus, un mot-clé qui y
+ * mène) ne renvoie pas ses médias : en production, un client a reçu quatre fois
+ * dans la même journée les 8 messages et 4 vidéos de l'accueil, de quoi se
+ * faire bloquer. Les textes et les boutons repartent : le client retrouve le menu.
+ */
+export const ACCUEIL_ALLEGE_MS = 24 * 3600_000;
+const LOURDS = new Set(["image", "video", "vocal", "document", "pause"]);
+
+/** Le bloc où mène l'accueil d'un nouveau contact, s'il y en a un. */
+export function departAccueil(p: Parcours): string | null {
+  const d = p.declencheurs.find((x) => x.type === "nouveau_contact");
+  return d && d.type === "nouveau_contact" ? d.vers : null;
+}
+
+/** Les blocs à envoyer : sans les médias si l'accueil complet est parti il y a moins de 24 h. */
+export function allegerAccueil(p: Parcours, depart: string, blocs: Bloc[], accueilLe: number, maintenant: number): { blocs: Bloc[]; allege: boolean } {
+  const recent = accueilLe > 0 && maintenant - accueilLe >= 0 && maintenant - accueilLe < ACCUEIL_ALLEGE_MS;
+  if (!recent || depart !== departAccueil(p)) return { blocs, allege: false };
+  return { blocs: blocs.filter((b) => !LOURDS.has(b.type)), allege: true };
+}
+
+/**
  * Où va ce message ? Dans l'ordre : la réponse aux boutons posés ; un
  * déclencheur (mot-clé, bouton) ; l'accueil d'un nouveau contact ; puis le
  * mode où il en était (l'IA, le silence) ou le comportement par défaut.
