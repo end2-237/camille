@@ -211,9 +211,12 @@ export function contexteCommande(o: CommandeSuivie): string {
   const articles = (Array.isArray(o.items) ? o.items : [])
     .map((it) => `${Number(it.qty) || 1}× ${it.name || "article"}${it.variant ? ` — ${it.variant}` : ""}`)
     .join(", ");
+  const terminee = o.status === "livree" || o.status === "annulee";
   return [
-    `COMMANDE EN COURS ${o.ref}`,
+    terminee ? `DERNIÈRE COMMANDE ${o.ref} (terminée)` : `COMMANDE EN COURS ${o.ref}`,
     `étape : ${etape}`,
+    o.created_at && heure(o.created_at) ? `passée le ${heure(o.created_at)}` : "",
+    o.status === "en_livraison" && o.dispatched_at && heure(o.dispatched_at) ? `partie en livraison le ${heure(o.dispatched_at)}` : "",
     retrait(o) ? "RETRAIT en boutique (pas de livraison, pas de frais de livraison)" : `livraison${o.place_label || o.address ? ` à ${o.place_label || o.address}` : ""}`,
     articles,
     o.total != null ? `total ${Math.round(Number(o.total))} ${o.currency || "XAF"}` : "",

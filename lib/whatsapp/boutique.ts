@@ -2085,7 +2085,10 @@ export async function repondreBoutique(
     ]);
     // La commande en cours fait partie de ce que le modèle doit savoir — et
     // ses chiffres (référence, total) deviennent des faits qu'il peut citer.
-    const ligneCommande = enCours ? contexteCommande(enCours) : "";
+    // Sans commande en cours, la dernière (livrée ou annulée) : « où en est-elle ? »
+    // après la livraison restait sans réponse, le modèle ne savait rien.
+    const derniere = enCours ? null : await commandeEnCours(agent.id, phone, { terminees: true });
+    const ligneCommande = enCours ? contexteCommande(enCours) : derniere ? contexteCommande(derniere) : "";
     const c = await comprendre(
       msg.text,
       prods.map((p) => ({

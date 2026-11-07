@@ -121,17 +121,21 @@ async function annoncerPour(o: CommandeComplete): Promise<EnvoiResult> {
 }
 
 /** La dernière commande non terminée de ce client (14 jours au plus), ou null. */
-export async function commandeEnCours(agentId: string, phone: string): Promise<CommandeSuivie | null> {
+export async function commandeEnCours(agentId: string, phone: string, opts: { terminees?: boolean } = {}): Promise<CommandeSuivie | null> {
+  // `terminees` : la dernière commande, même livrée ou annulée (30 jours). Le client
+  // qui demande « elle en est où ? » après la livraison doit avoir une réponse.
   try {
     const r = await query(
       `SELECT ref, status, fulfillment, items, delivery_fee, total, currency, address,
               to_jsonb(o)->>'place_label' AS place_label,
-              to_jsonb(o)->>'scheduled_at' AS scheduled_at
+              to_jsonb(o)->>'scheduled_at' AS scheduled_at,
+              to_jsonb(o)->>'created_at' AS created_at,
+              to_jsonb(o)->>'dispatched_at' AS dispatched_at
          FROM camille.orders o
         WHERE agent_id = $1
           AND regexp_replace(COALESCE(contact_phone, ''), '[^0-9]', '', 'g') = $2
-          AND status NOT IN ('livree', 'annulee')
-          AND created_at > now() - interval '14 days'
+          AND (${opts.terminees ? "TRUE" : "status NOT IN ('livree', 'annulee')"})
+          AND created_at > now() - interval '${opts.terminees ? "30" : "14"} days'
         ORDER BY created_at DESC LIMIT 1`,
       [agentId, chiffres(phone)]
     );
