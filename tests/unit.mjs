@@ -80,6 +80,22 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("le welcome contient le jeton {b}", sectorProfile("ecommerce").welcome.includes("{b}"));
 }
 
+// ═══ lib/commande-regles — une commande ne s'enregistre qu'une fois ═════════
+{
+  const { signatureArticles, estDoublon, FENETRE_DOUBLON_MS } = await import(`${DIST}/commande-regles.js`);
+  groupe("commande — pas de doublon (JJ9HZA puis LRBWL5 en deux minutes)");
+  const panier = [{ productId: "p1", variant: "Noir", qty: 1 }, { productId: "p2", qty: 2 }];
+  const t0 = Date.parse("2026-10-20T10:00:00Z");
+  eq("l'ordre des lignes ne compte pas", signatureArticles(panier), signatureArticles([...panier].reverse()));
+  chk("même panier 2 min après : doublon", estDoublon(panier, { items: panier, creeLe: t0 }, t0 + 2 * 60_000));
+  chk("même panier 30 min après : nouvelle commande", !estDoublon(panier, { items: panier, creeLe: t0 }, t0 + 30 * 60_000));
+  chk("autre quantité : nouvelle commande", !estDoublon([{ productId: "p1", variant: "Noir", qty: 2 }, { productId: "p2", qty: 2 }], { items: panier, creeLe: t0 }, t0 + 60_000));
+  chk("autre variante : nouvelle commande", !estDoublon([{ productId: "p1", variant: "Rouge", qty: 1 }, { productId: "p2", qty: 2 }], { items: panier, creeLe: t0 }, t0 + 60_000));
+  chk("aucune commande récente : jamais doublon", !estDoublon(panier, null, t0));
+  chk("horloge en arrière : pas de blocage", !estDoublon(panier, { items: panier, creeLe: t0 }, t0 - 1000));
+  eq("fenêtre de 10 minutes", FENETRE_DOUBLON_MS, 600000);
+}
+
 // ═══ lib/whatsapp/recherche — les bugs signalés par le marchand ═════════════
 {
   const { chercher, formatPour, veutToutVoir, estUneQuestion } =
