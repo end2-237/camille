@@ -14,6 +14,7 @@
 // l'éditeur : ce que l'on voit dans l'aperçu est ce que le client recevra.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { prenomDe as prenomProfil } from "./whatsapp/accueil";
 export type Choix = { id: string; titre: string; description?: string; vers?: string };
 
 /** Des boutons de réponse posés sous un message (texte, image ou vidéo). */
@@ -372,8 +373,9 @@ export function normaliser(s: string): string {
 
 /** Le prénom tiré du nom de profil WhatsApp (« Jean-Paul K. » → « Jean-Paul »). */
 export function prenomDe(nom: string | undefined | null): string {
-  const n = String(nom || "").replace(/[^\p{L}\p{M}\s'-]/gu, " ").trim();
-  return n.split(/\s+/)[0] || "";
+  // Une seule règle pour tout Camille : celle de l'accueil, qui écarte titres,
+  // pseudos de commerce et numéros (« Merci Mr », « Merci Meta » en production).
+  return prenomProfil(nom);
 }
 
 /** Remplace {prenom}, {nom|défaut}… ; une variable vide sans défaut disparaît proprement. */

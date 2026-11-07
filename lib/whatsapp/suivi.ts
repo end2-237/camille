@@ -18,6 +18,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Préfixe de nos boutons de suivi, distinct de « cam: » et des identifiants de catalogue. */
+import { prenomDe } from "./accueil";
+
 export const PREFIXE_SUIVI = "cmd:";
 
 export const ACTIONS_SUIVI = [
@@ -80,7 +82,8 @@ export function annonce(
   opts: { boutique?: string; avecLivreur?: boolean } = {}
 ): { texte: string; boutons: { id: string; title: string }[] } | null {
   const ref = o.ref;
-  const prenom = String(o.customer_name || "").trim().split(/\s+/)[0] || "";
+  // Le même prénom prudent que l'accueil : « Merci Meta » ou « Merci Mr » ne disent rien de bon.
+  const prenom = prenomDe(o.customer_name);
   const shop = opts.boutique || "Nous";
   const recap = { id: idSuivi("recap", ref), title: "Récapitulatif" };
   const aide = { id: idSuivi("aide", ref), title: "Une question" };
