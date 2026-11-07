@@ -19,7 +19,7 @@ import { versionWhatsApp } from "@/lib/video";
 import { prevenirCommercant } from "./boutique";
 import type { Contexte } from "./handle";
 import {
-  MEDIA_AGENT, PAUSE_MAX, aiguiller, derouler, prenomDe, remplir, valider,
+  MEDIA_AGENT, PAUSE_MAX, aiguiller, allegerAccueil, departAccueil, derouler, prenomDe, remplir, valider,
   type Bloc, type Choix, type Parcours,
 } from "@/lib/parcours-regles";
 
@@ -155,7 +155,12 @@ export async function executerParcours(ctx: Contexte, tracer: Tracer): Promise<I
     return "traite";
   }
 
-  const { blocs, fin } = derouler(p, route.depart);
+  const deroule = derouler(p, route.depart);
+  const { fin } = deroule;
+  // L'accueil rejoué dans les 24 h part sans ses vidéos ni ses vocaux (lib/parcours-regles.ts).
+  const maintenant = Date.now();
+  const { blocs, allege } = allegerAccueil(p, route.depart, deroule.blocs, Number(e.vars?.accueil_le) || 0, maintenant);
+  if (route.depart === departAccueil(p) && !allege) e.vars = { ...e.vars, accueil_le: maintenant };
   const infos = await infosAgent(agent.id);
   const vars: Record<string, string> = {
     prenom: prenomDe(msg.contactName),
