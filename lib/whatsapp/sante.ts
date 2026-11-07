@@ -601,7 +601,7 @@ async function repondreConversation(ctx: Contexte, profil: Profil): Promise<void
         contenu: { kind: "rendez_vous", id: r.rdv.id, quand: quand.toISOString(), libelle, contact: phone, nom: msg.contactName || "" },
       }, { toujours: true });
       entree = `CRÉNEAU RÉSERVÉ : ${libelle}${prest ? ` (${prest.nom})` : ""}. C'est une DEMANDE enregistrée : l'équipe la confirme ici sur WhatsApp. Remercie chaleureusement, dis que le créneau est bien noté et que l'équipe confirme ici très vite ; ne dis PAS « c'est confirmé » ni « nous vous attendons ». Propose la carte s'il ne l'a pas encore.`;
-    } else if (r.raison === "pris" && (await dejaReserve(agent.id, phone, quand))) {
+    } else if (r.raison === "sien" || (r.raison === "pris" && (await dejaReserve(agent.id, phone, quand)))) {
       // Il a touché deux fois le même créneau : c'est déjà le sien.
       entree = `CE CRÉNEAU (${libelle}) EST DÉJÀ RÉSERVÉ POUR CETTE PERSONNE (elle a touché deux fois). Rassure-la simplement : c'est bien noté, l'équipe confirme ici. Ne propose pas d'autres créneaux.`;
     } else if (r.raison === "pris") {

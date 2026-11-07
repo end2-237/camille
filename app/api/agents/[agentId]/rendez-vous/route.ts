@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     prestation: b.prestation, note: b.note, source: "tableau",
   });
   if (!r.ok) {
-    const msg = r.raison === "pris" ? "Ce créneau chevauche un rendez-vous existant." : r.raison === "passe" ? "Ce créneau est déjà passé." : "Rendez-vous non enregistré.";
+    const msg = r.raison === "sien" ? "Ce client a déjà un rendez-vous sur ce créneau." : r.raison === "pris" ? "Ce créneau chevauche un rendez-vous existant." : r.raison === "passe" ? "Ce créneau est déjà passé." : "Rendez-vous non enregistré.";
     return NextResponse.json({ error: msg, detail: "detail" in r ? r.detail : undefined }, { status: r.raison === "erreur" ? 500 : 409 });
   }
   // Saisi par le commerçant : confirmé d'office, et le client est prévenu.

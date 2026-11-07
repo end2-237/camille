@@ -1594,6 +1594,11 @@ async function reserverVisite(ctx: Contexte, quand: Date) {
   const { agent, msg, phone } = ctx;
   const r = await reserver({ agentId: agent.id, phone, nom: msg.contactName || null, debut: quand, prestation: "Visite", source: "whatsapp" });
   if (!r.ok) {
+    // Le créneau est déjà le sien (il a redemandé) : on le lui confirme, sans « pris par un autre ».
+    if (r.raison === "sien") {
+      await meta.sendText(phone, `C'est déjà noté pour toi : ${quandLisible(new Date(r.rdv.debut))} ✅\nL'agence te confirme ici très vite.`);
+      return;
+    }
     if (r.raison === "pris") return proposerVisite(ctx, "Ce créneau vient d'être pris 🙏 En voici d'autres 👇");
     if (r.raison === "passe") return proposerVisite(ctx, "Ce créneau est déjà passé. Choisissez-en un autre 👇");
     await alerterSansSeTaire(ctx, `demande de visite (${quandLisible(quand)}) non enregistrée`);
@@ -1661,6 +1666,11 @@ async function reserverConseil(ctx: Contexte, quand: Date) {
   const { agent, msg, phone } = ctx;
   const r = await reserver({ agentId: agent.id, phone, nom: msg.contactName || null, debut: quand, prestation: "Conseil", source: "whatsapp" });
   if (!r.ok) {
+    // Le créneau est déjà le sien (il a redemandé) : on le lui confirme, sans « pris par un autre ».
+    if (r.raison === "sien") {
+      await meta.sendText(phone, `C'est déjà noté pour toi : ${quandLisible(new Date(r.rdv.debut))} ✅\nNotre experte te confirme ici très vite.`);
+      return;
+    }
     if (r.raison === "pris") return proposerConseil(ctx, "Ce créneau vient d'être pris 🙏 En voici d'autres 👇");
     if (r.raison === "passe") return proposerConseil(ctx, "Ce créneau est déjà passé. Choisis-en un autre 👇");
     await alerterSansSeTaire(ctx, `rendez-vous conseil (${quandLisible(quand)}) non enregistré`);
