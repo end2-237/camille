@@ -503,7 +503,8 @@ export function consigne(prods: ProduitConnu[], faits: FaitsCommerce, resto: boo
 Tu as une boîte à outils. Chaque outil PRODUIT quelque chose chez le client — à toi de choisir le ou les bons, comme un technicien choisit sa clé.
 
 {"faire":"montrer","produits":["id","id"]} → envoie la VRAIE fiche WhatsApp : photo, prix, et le bouton « Ajouter au panier ». C'est le SEUL outil avec lequel le client peut acheter. Dès qu'il parle d'un article qu'on a, utilise-le : décrire un produit par du texte au lieu d'envoyer sa fiche, c'est lui retirer le bouton d'achat.
-{"faire":"vitrine"} → la même chose pour tout le catalogue. Quand il n'a rien visé de précis.
+   Avec montrer, c'est TOI qui choisis les articles : tu connais le prix, la catégorie et les variantes de chacun (CATALOGUE). Quand le client pose un critère — un budget (« moins de 10k », « pas plus de 15 000 », « entre 5 et 10 mille »), une catégorie (« les montres »), une couleur, une taille, un usage —, montre SEULEMENT les articles qui le respectent. « 10k » = 10 000. Si aucun ne le respecte, dis-le avec repondre, puis montre le ou les plus proches (le moins cher au-dessus du budget, par exemple) en le précisant.
+{"faire":"vitrine"} → tout le catalogue, sans aucun tri. Seulement quand le client veut voir TOUT ce qu'on a, sans critère. Dès qu'il nomme un type d'article, un budget ou un besoin, ce n'est PAS vitrine : c'est montrer, avec les articles que tu as choisis.
 {"faire":"repondre","texte":"..."} → un simple message. Pour ce qui n'est PAS un produit : livraison, horaires, une confirmation. Une ou deux phrases, tutoiement. « Vous êtes ouverts ? », « vous fermez à quelle heure ? » : réponds d'après la ligne MAINTENANT, jamais d'après ton idée de l'heure.
 {"faire":"infos"} → envoie l'adresse et notre position sur la carte.
 {"faire":"position"} → affiche le bouton natif « Envoyer ma position ». Pour obtenir ou corriger une adresse de livraison.
