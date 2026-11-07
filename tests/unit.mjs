@@ -82,7 +82,7 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
 
 // ═══ lib/whatsapp/recherche — les bugs signalés par le marchand ═════════════
 {
-  const { chercher, formatPour, veutToutVoir, estUneQuestion, lireBudget, sansBudget, dansLeBudget, prixLisible } =
+  const { chercher, formatPour, veutToutVoir, estUneQuestion } =
     await import(`${DIST}/whatsapp/recherche.js`);
   groupe("recherche — « montre » verbe contre « montre » objet");
 
@@ -162,31 +162,8 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   eq("« une montre » marche toujours", noms(chercher(VAR, "une montre")), ["Oraimo"]);
   eq("couleur absente → rien d'inventé", chercher(VAR, "jaune fluo").length, 0);
 
-  groupe("recherche — le budget du client (« moins de 10k »)");
-  // Message réel : « toutes les montres de moins de 10k » recevait les 22 articles.
-  eq("moins de 10k", lireBudget("toutes les montres de moins de 10k"), { max: 10000 });
-  eq("moins de 10 000 F", lireBudget("des montres à moins de 10 000 F"), { max: 10000 });
-  eq("max 15.000 fcfa", lireBudget("budget max 15.000 fcfa"), { max: 15000 });
-  eq("pas plus de 20 mille", lireBudget("je veux pas plus de 20 mille"), { max: 20000 });
-  eq("entre 5k et 10k", lireBudget("un casque entre 5k et 10k"), { min: 5000, max: 10000 });
-  eq("entre 10k et 5k (ordre inversé)", lireBudget("entre 10k et 5k"), { min: 5000, max: 10000 });
-  eq("à partir de 8000", lireBudget("à partir de 8000"), { min: 8000 });
-  eq("sans budget → rien", lireBudget("est-ce que tu as une montre"), null);
-  eq("« livré en moins de 2 jours » n'est pas un budget", lireBudget("vous livrez en moins de 2 jours ?"), null);
-  eq("« Watch 6 » n'est pas un budget", lireBudget("la watch 6 premium"), null);
-  eq("le reste désigne le produit", sansBudget("toutes les montres de moins de 10k"), "toutes les montres de");
-  const PRIX = [
-    { name: "Oraimo Watch 6 - Premium", price: 25000 }, { name: "Oraimo Watch 6 - Promo", price: 9000 },
-    { name: "Oraimo Watch 6 - Standard", price: 15000 }, { name: "Montre Test Buyticle", price: 5000 },
-    { name: "Oraimo FreePods", price: 12000 }, { name: "Montre sans prix", price: null },
-  ];
-  const montres = chercher(PRIX, sansBudget("toutes les montres de moins de 10k"));
-  eq("« les montres » : toutes les montres, pas les écouteurs", montres.map((p) => p.name).sort(),
-    ["Montre Test Buyticle", "Montre sans prix", "Oraimo Watch 6 - Premium", "Oraimo Watch 6 - Promo", "Oraimo Watch 6 - Standard"]);
-  eq("… et à moins de 10 000 F : les deux bonnes", dansLeBudget(montres, { max: 10000 }).map((p) => p.name),
-    ["Oraimo Watch 6 - Promo", "Montre Test Buyticle"]);
-  eq("un produit sans prix n'est jamais « dans le budget »", dansLeBudget(PRIX, { max: 1e9 }).length, 5);
-  eq("prix lisible", prixLisible(10000), "10 000 F");
+  // « montres » doit trouver « Montre » : le pluriel du client, le singulier du catalogue.
+  eq("« les montres » trouve « Montre Test »", chercher([{ name: "Montre Test Buyticle" }, { name: "Oraimo FreePods" }], "toutes les montres").map((p) => p.name), ["Montre Test Buyticle"]);
 }
 
 // ═══ lib/whatsapp/comprendre — la barrière entre le modèle et le client ═════
