@@ -62,7 +62,7 @@ export async function proposer(agentId: string, horaires: string | null | undefi
 export async function reserver(p: {
   agentId: string; phone: string; nom?: string | null; debut: Date; duree?: number;
   prestation?: string | null; productId?: string | null; source?: string; note?: string | null;
-}): Promise<{ ok: true; rdv: RendezVous } | { ok: false; raison: "pris" | "passe" | "erreur"; detail?: string }> {
+}): Promise<{ ok: true; rdv: RendezVous } | { ok: false; raison: "pris" | "passe" | "erreur"; detail?: string } | { ok: false; raison: "sien"; rdv: RendezVous }> {
   const duree = p.duree || (await reglagesRdv(p.agentId)).duree;
   const fin = new Date(p.debut.getTime() + duree * 60_000);
   if (p.debut.getTime() < Date.now() - 5 * 60_000) return { ok: false, raison: "passe" };
@@ -77,13 +77,35 @@ export async function reserver(p: {
        RETURNING *`,
       [p.agentId, p.phone, p.nom || null, p.prestation || null, p.productId || null, p.debut.toISOString(), fin.toISOString(), p.source || "whatsapp", p.note || null]
     );
-    if (!r.rows.length) return { ok: false, raison: "pris" };
+    if (!r.rows.length) return (await chevaucheSien(p.agentId, p.phone, p.debut, fin)) || { ok: false, raison: "pris" };
     return { ok: true, rdv: r.rows[0] as RendezVous };
   } catch (e) {
     const err = e as { code?: string; message?: string };
-    if (err.code === "23P01") return { ok: false, raison: "pris" }; // exclusion : course perdue
+    // exclusion : course perdue — mais peut-être contre lui-même (il a touché deux fois)
+    if (err.code === "23P01") return (await chevaucheSien(p.agentId, p.phone, p.debut, fin)) || { ok: false, raison: "pris" };
     return { ok: false, raison: "erreur", detail: err.message };
   }
+}
+
+/**
+ * Le créneau est pris… par ce même client ? Cas réel : il réserve « demain 8 h »,
+ * redemande une minute plus tard, et s'entend dire « réservé par un autre client »
+ * — c'était sa propre réservation. Si TOUS les rendez-vous qui chevauchent sont
+ * les siens, ce n'est pas un conflit : on lui rend le sien.
+ */
+async function chevaucheSien(agentId: string, phone: string, debut: Date, fin: Date): Promise<{ ok: false; raison: "sien"; rdv: RendezVous } | null> {
+  try {
+    const r = await query(
+      `SELECT * FROM camille.rendez_vous
+        WHERE agent_id = $1 AND statut IN ('demande','confirme')
+          AND tstzrange(debut, fin, '[)') && tstzrange($2::timestamptz, $3::timestamptz, '[)')
+        ORDER BY debut`,
+      [agentId, debut.toISOString(), fin.toISOString()]
+    );
+    const rows = r.rows as RendezVous[];
+    if (rows.length && rows.every((x) => x.phone === phone)) return { ok: false, raison: "sien", rdv: rows[0] };
+  } catch { /* on retombe sur « pris » */ }
+  return null;
 }
 
 /** Ce créneau est-il déjà un rendez-vous actif de ce client ? (il a touché deux fois) */
