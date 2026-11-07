@@ -66,6 +66,7 @@ import { chargerCommande, commandeEnCours, envoyerAnimation, reglerAnimations } 
 import { sendOrderDocument } from "@/lib/facturation";
 import { notify } from "@/lib/webhooks";
 import { sansAccent, chercher, veutToutVoir, estUneQuestion } from "./recherche";
+import { estDoublon, type LigneSignee } from "@/lib/commande-regles";
 import { lirePrix } from "./prix";
 import {
   appliquerChoix, creneaux, libelleCreneau, lignesListe, lireChoixTexte, lireHeureDemandee,
@@ -1126,6 +1127,53 @@ async function finaliserPanier(
   }
   items.splice(0, items.length, ...ajuste);
 
+  // Une commande ne s'enregistre qu'une fois (lib/commande-regles.ts) : deux
+  // messages presque simultanés ne créent plus deux commandes du même panier.
+  const cle = `${agent.id}:${phone}`;
+  if (COMMANDES_EN_COURS.has(cle)) return;
+  COMMANDES_EN_COURS.add(cle);
+  try {
+    const recente = await derniereCommande(agent.id, phone);
+    if (estDoublon(items, recente, Date.now())) {
+      await oublierPanier(agent.id, phone);
+      await meta.sendText(phone, `Ta commande${recente?.ref ? ` *${recente.ref}*` : ""} est déjà enregistrée ✅ Rien à refaire. Tu veux ajouter autre chose ? Envoie un nouveau panier.`);
+      return;
+    }
+    await enregistrerCommande(ctx, panier, opts, items, quand, livraison, fraisZone);
+  } finally {
+    COMMANDES_EN_COURS.delete(cle);
+  }
+}
+
+/** Les commandes en train d'être enregistrées, par agent et client (un seul processus Node). */
+const COMMANDES_EN_COURS = new Set<string>();
+
+/** La dernière commande de ce client chez cet agent, pour reconnaître un doublon. */
+async function derniereCommande(agentId: string, phone: string): Promise<{ ref: string; items: LigneSignee[]; creeLe: number } | null> {
+  try {
+    const r = await query(
+      `SELECT ref, items, created_at FROM camille.orders
+        WHERE agent_id = $1 AND contact_phone = $2 AND status <> 'annulee'
+        ORDER BY created_at DESC LIMIT 1`,
+      [agentId, phone]
+    );
+    const o = r.rows[0];
+    return o ? { ref: String(o.ref || ""), items: (o.items || []) as LigneSignee[], creeLe: new Date(o.created_at).getTime() } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function enregistrerCommande(
+  ctx: Contexte,
+  panier: PanierEnAttente,
+  opts: { mode: "livraison" | "retrait"; lat?: number; lng?: number; adresse?: string },
+  items: LignePanier[],
+  quand: string | null,
+  livraison: boolean,
+  fraisZone: number | undefined
+) {
+  const { agent, phone } = ctx;
   const res = await createOrder({
     agentId: agent.id,
     items,
