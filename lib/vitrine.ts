@@ -113,6 +113,8 @@ export type CommandeVitrine = {
   lignes: { id: string; qty: number; choix?: number[] }[];
   nom: string; telephone: string; mode: "livraison" | "retrait";
   zone?: string; adresse?: string; note?: string; paiement?: string;
+  /** Position du client (bouton « Me localiser » du site) : vérifiée et géocodée par createOrder. */
+  lat?: number; lng?: number;
 };
 
 /**
@@ -167,6 +169,8 @@ export async function commanderSurVitrine(slug: string, c: CommandeVitrine): Pro
   const created = await createOrder({
     agentId: v.agentId, items, phone, customerName: String(c.nom || "").slice(0, 80),
     address: adresse, note: String(c.note || "").slice(0, 300), deliveryFee: frais,
+    // La position n'a de sens que pour une livraison ; createOrder rejette les coordonnées hors bornes.
+    lat: c.mode === "livraison" ? c.lat : undefined, lng: c.mode === "livraison" ? c.lng : undefined,
     source: "site", fulfillment: c.mode, paymentMethod: c.paiement ? String(c.paiement).slice(0, 40) : null,
   });
   if (!created.ok) return { ok: false, error: "La commande n'a pas pu être enregistrée. Réessayez.", status: 500 };
