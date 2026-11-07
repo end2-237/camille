@@ -972,6 +972,11 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("commande programmée : l'heure dans le récap (heure de Douala)", recapCommande(prog).includes("Pour : 08/10 13:00"));
   chk("commande programmée : l'heure dans le contexte du modèle", /programmée pour 08\/10 13:00/.test(contexteCommande(prog)));
   chk("contexte : livraison avec l'adresse", /livraison à Bonamoussadi/.test(contexteCommande({ ...base, status: "en_livraison" })));
+  // Cas réel : J2DVH6 « en route » depuis 5 jours, et « où en est-elle ? » après la livraison sans réponse.
+  chk("contexte : depuis quand elle est partie", /partie en livraison le 08\/10/.test(contexteCommande({ ...base, status: "en_livraison", dispatched_at: "2026-10-08T12:00:00Z" })));
+  chk("contexte : date de la commande", /passée le 07\/10/.test(contexteCommande({ ...base, status: "nouvelle", created_at: "2026-10-07T09:00:00Z" })));
+  chk("livrée : présentée comme terminée", /^DERNIÈRE COMMANDE .* \(terminée\) · étape : livrée/.test(contexteCommande({ ...base, status: "livree" })));
+  chk("en cours : reste « COMMANDE EN COURS »", /^COMMANDE EN COURS/.test(contexteCommande({ ...base, status: "en_traitement" })));
   chk("aucun bouton ne porte d'émoji (trop chargé)", ["en_traitement", "en_livraison", "livree", "annulee"].every((s) =>
     titres(annonce({ ...base, status: s }, { avecLivreur: true })).every((t) => !/\p{Extended_Pictographic}/u.test(t))));
 
