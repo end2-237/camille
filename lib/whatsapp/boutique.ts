@@ -65,7 +65,7 @@ import { contexteCommande, idSuivi, lireIdSuivi, recapCommande, etapesCommande, 
 import { chargerCommande, commandeEnCours, envoyerAnimation, reglerAnimations } from "./suivi-envoi";
 import { sendOrderDocument } from "@/lib/facturation";
 import { notify } from "@/lib/webhooks";
-import { sansAccent, chercher, veutToutVoir, estUneQuestion } from "./recherche";
+import { sansAccent, chercher, veutToutVoir, estUneQuestion, lireBudget, sansBudget, dansLeBudget, prixLisible, type Budget } from "./recherche";
 import { lirePrix } from "./prix";
 import {
   appliquerChoix, creneaux, libelleCreneau, lignesListe, lireChoixTexte, lireHeureDemandee,
@@ -1380,6 +1380,28 @@ async function derniersTours(agentId: string, phone: string) {
  * Les actions purement textuelles passent d'abord : répondre à la question
  * avant de montrer les articles, c'est l'ordre dans lequel un vendeur parle.
  */
+/**
+ * Montre ce qui tient dans le budget du client, ou dit qu'il n'y a rien et montre
+ * le plus proche. Message réel : « toutes les montres de moins de 10k » recevait
+ * les 22 articles du catalogue, sans filtre. Renvoie false s'il n'y a rien à montrer.
+ */
+async function montrerSelonBudget(ctx: Contexte, base: Produit[], budget: Budget): Promise<boolean> {
+  const dedans = dansLeBudget(base, budget);
+  const borne = budget.min != null && budget.max != null
+    ? `entre ${prixLisible(budget.min)} et ${prixLisible(budget.max)}`
+    : budget.max != null ? `à ${prixLisible(budget.max)} maximum` : `à partir de ${prixLisible(budget.min ?? 0)}`;
+  if (dedans.length) {
+    await montrerVitrine(ctx, dedans, dedans.length > 1 ? "Dans ton budget" : "", dedans.length > 1 ? `Voilà ce que j'ai ${borne} 👇` : "");
+    return true;
+  }
+  const proches = base.filter((p) => p.price != null)
+    .sort((x, y) => (budget.max != null ? (x.price as number) - (y.price as number) : (y.price as number) - (x.price as number)));
+  if (!proches.length) return false;
+  await meta.sendText(ctx.phone, `Je n'ai rien ${borne} pour l'instant 🙏 Le plus proche : ${proches[0].name} à ${prixLisible(proches[0].price as number)} 👇`);
+  await montrerVitrine(ctx, [proches[0]], "", "");
+  return true;
+}
+
 async function executer(
   ctx: Contexte, actions: Action[], prods: Produit[], resto: boolean, nouveau: boolean,
   souvenir: Souvenir = { achats: [], notes: [] }
@@ -1441,6 +1463,8 @@ async function executer(
           ctx.msg.text || "", ...dits
         );
         if (!choisis.length) break;
+        const budgetM = lireBudget(ctx.msg.text || "");
+        if (budgetM && (await montrerSelonBudget(ctx, choisis, budgetM))) break;
         await montrerVitrine(
           ctx, choisis,
           choisis.length > 1 ? (resto ? "Notre carte" : "Nos articles") : "",
@@ -1454,6 +1478,14 @@ async function executer(
         // catalogue annule le travail de ciblage. Le modèle demande parfois
         // les deux ; on n'en fait qu'un.
         if (faits.has("montrer")) break;
+        {
+          // « vos articles à moins de 5000 » : la vitrine, mais seulement ce qui tient dans le budget.
+          const budgetV = lireBudget(ctx.msg.text || "");
+          if (budgetV) {
+            const nommes = chercher(prods, sansBudget(ctx.msg.text || ""));
+            if (await montrerSelonBudget(ctx, nommes.length ? nommes : prods, budgetV)) break;
+          }
+        }
         await montrerVitrine(
           ctx, prods,
           resto ? "Notre carte" : "Notre boutique",
@@ -2081,6 +2113,15 @@ export async function repondreBoutique(
   // 8. Infos boutique.
   if (/ou (etes|est)|adresse|vous etes ou|horaire|ouvert|ferme|localisation|c est ou/.test(t)) {
     return donnerInfos(ctx);
+  }
+
+  // 8 bis. Un budget : « les montres de moins de 10k », « vos articles à moins de 5000 ».
+  const budget = lireBudget(msg.text);
+  if (budget) {
+    const prods = await catalogue(agent.id);
+    const reste = sansBudget(msg.text);
+    const nommes = veutToutVoir(reste, resto) ? prods : chercher(prods, reste);
+    if (await montrerSelonBudget(ctx, nommes.length ? nommes : prods, budget)) return;
   }
 
   // 9. Le catalogue, demandé de mille façons.
