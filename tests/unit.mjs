@@ -1232,6 +1232,11 @@ const DIST = pathToFileURL(resolve(process.cwd(), process.argv[2] || ".test-buil
   chk("pause de 60 s refusée", !R.valider(avec([{ id: "b", type: "pause", secondes: 60 }])).ok);
   chk("type inconnu (code) refusé", !R.valider(avec([{ id: "b", type: "code", js: "require('child_process')" }])).ok);
   eq("prénom tiré du profil", R.prenomDe("Jean-Paul K."), "Jean-Paul");
+  // Production : « Merci Mr … », « Merci M7 » — un titre ou un sigle n'est pas un prénom.
+  eq("« Mr Kamga » → Kamga", R.prenomDe("Mr Kamga"), "Kamga");
+  eq("« M7 » → rien", R.prenomDe("M7"), "");
+  eq("« 237699000000 » → rien", R.prenomDe("237699000000"), "");
+  eq("« Ets Boutique » → rien", R.prenomDe("Ets Boutique"), "");
   eq("prénom absent → vide", R.prenomDe("🙂"), "");
   eq("variable remplie", R.remplir("Bonjour {prenom} !", { prenom: "Awa" }), "Bonjour Awa !");
   eq("variable vide : pas d'espace orphelin", R.remplir("Bonjour {prenom}, bienvenue", { prenom: "" }), "Bonjour, bienvenue");

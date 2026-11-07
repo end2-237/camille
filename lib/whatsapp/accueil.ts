@@ -25,7 +25,8 @@ export function prenomDe(nomProfil?: string | null): string {
     .filter((m) => m.length >= 2 && !PAS_UN_PRENOM.test(m));
   const p = mots[0];
   if (!p || p.length > 20) return "";
-  return p.charAt(0).toLocaleUpperCase("fr") + p.slice(1).toLocaleLowerCase("fr");
+  // Chaque partie d'un prénom composé garde sa majuscule : « jean-paul » → « Jean-Paul ».
+  return p.toLocaleLowerCase("fr").replace(/(^|[-'])(\p{L})/gu, (_, sep: string, l: string) => sep + l.toLocaleUpperCase("fr"));
 }
 
 /** « Bonjour » jusqu'à 18 h, « Bonsoir » ensuite ; heure locale décimale. */
