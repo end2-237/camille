@@ -55,11 +55,13 @@ export async function POST(req: NextRequest) {
 
     if (it.id) {
       const r = await query(
-        "SELECT name, price, currency, image_url, stock FROM camille.products WHERE id = $1 AND agent_id = $2",
+        "SELECT name, price, currency, image_url, stock FROM camille.products WHERE id = $1 AND agent_id = $2 AND COALESCE(active, true)",
         [it.id, auth.key.agent_id]
       ).catch(() => ({ rows: [] as any[] }));
       const p = r.rows[0];
-      if (!p) return json({ error: `Produit introuvable dans ce catalogue : ${it.id}` }, 400, req);
+      // Introuvable ou retiré de la vente : un panier resté ouvert ne peut pas
+      // commander un produit que le marchand a désactivé.
+      if (!p) return json({ error: `Produit introuvable ou retiré de la vente : ${it.id}` }, 400, req);
 
       // Le stock était décompté mais jamais vérifié : on continuait de vendre
       // des articles épuisés, et le commerçant découvrait la commande sans
