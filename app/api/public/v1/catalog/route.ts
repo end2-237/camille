@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
   const offset = Math.max(0, parseInt(p.get("offset") || "0", 10) || 0);
 
   const params: unknown[] = [auth.key.agent_id];
-  let where = "WHERE agent_id = $1";
+  // Un produit désactivé (retiré de la vente) ne doit jamais apparaître sur le
+  // site d'un client : la vitrine le filtrait déjà, l'API publique non.
+  let where = "WHERE agent_id = $1 AND COALESCE(active, true)";
 
   if (q) {
     params.push(`%${q}%`);
@@ -160,7 +162,7 @@ export async function GET(req: NextRequest) {
                 (ARRAY_AGG(image_url ORDER BY sort_order ASC, created_at DESC)
                    FILTER (WHERE image_url IS NOT NULL AND image_url <> ''))[1] AS image
            FROM camille.products
-          WHERE agent_id = $1 AND category IS NOT NULL AND category <> ''
+          WHERE agent_id = $1 AND COALESCE(active, true) AND category IS NOT NULL AND category <> ''
           GROUP BY category
           ORDER BY MIN(sort_order), category`,
         [auth.key.agent_id]
